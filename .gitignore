@@ -1,0 +1,62 @@
+## .NET build / publish output
+bin/
+obj/
+out/
+publish/
+artifacts/
+
+## Visual Studio / VS Code / Rider
+.vs/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.cache
+*.csproj.user
+*.pubxml
+*.pubxml.user
+
+## NuGet
+*.nupkg
+**/packages/*
+!**/packages/build/
+project.lock.json
+project.assets.json
+*.nuget.props
+*.nuget.targets
+
+## Avalonia / XAML designer
+*.axaml.g.cs
+*.xaml.g.cs
+*.Designer.cs
+*.designer.cs
+
+## OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+## Test / coverage
+TestResults/
+coverage/
+*.coverage
+*.trx
+
+## Logs / temp
+*.log
+logs/
+tmp/
+temp/
+
+## ReSharper / dotCover / dotTrace
+*_ReSharper.*
+*.dotCover
+*.dotSettings.user
+
+## Build scripts / local secrets
+*.local.json
+secrets.json
+.env
+
+.idea/

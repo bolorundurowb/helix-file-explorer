@@ -1,0 +1,96 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:HelixExplorer.ViewModels"
+        xmlns:views="using:HelixExplorer.Views"
+        x:Class="HelixExplorer.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="Helix Explorer"
+        Width="1280" Height="800"
+        MinWidth="800" MinHeight="500"
+        Background="{DynamicResource HelixSurfaceBrush}">
+
+    <Window.KeyBindings>
+        <KeyBinding Gesture="Ctrl+Shift+P" Command="{Binding ToggleCommandPaletteCommand}" />
+        <KeyBinding Gesture="Ctrl+T" Command="{Binding OpenNewTabCommand}" />
+        <KeyBinding Gesture="Ctrl+W" Command="{Binding CloseTabCommand}" />
+        <KeyBinding Gesture="Ctrl+B" Command="{Binding ToggleSidebarCommand}" />
+        <KeyBinding Gesture="Ctrl+D" Command="{Binding ToggleDualPaneCommand}" />
+        <KeyBinding Gesture="Ctrl+Shift+T" Command="{Binding ToggleThemeCommand}" />
+    </Window.KeyBindings>
+
+    <Grid>
+        <DockPanel LastChildFill="True">
+            <Menu DockPanel.Dock="Top">
+                <MenuItem Header="📁 _File">
+                    <MenuItem Header="🆕 New Tab" InputGesture="Ctrl+T" Command="{Binding OpenNewTabCommand}" />
+                    <MenuItem Header="❌ Close Tab" InputGesture="Ctrl+W" Command="{Binding CloseTabCommand}" />
+                    <Separator />
+                    <MenuItem Header="🚪 Exit" Click="OnExit" />
+                </MenuItem>
+                <MenuItem Header="✏️ _Edit">
+                    <MenuItem Header="📋 Copy Path" Command="{Binding CopyActivePathCommand}" />
+                </MenuItem>
+                <MenuItem Header="👁 _View">
+                    <MenuItem Header="📑 Toggle Sidebar" InputGesture="Ctrl+B" Command="{Binding ToggleSidebarCommand}" IsChecked="{Binding IsSidebarOpen}" />
+                    <MenuItem Header="⧉ Toggle Dual Pane" InputGesture="Ctrl+D" Command="{Binding ToggleDualPaneCommand}" />
+                    <Separator />
+                    <MenuItem Header="🌗 Toggle Theme" InputGesture="Ctrl+Shift+T" Command="{Binding ToggleThemeCommand}" />
+                    <MenuItem Header="⚙️ Settings..." Command="{Binding OpenSettingsCommand}" />
+                    <MenuItem Header="⌨️ Command Palette" InputGesture="Ctrl+Shift+P" Command="{Binding ToggleCommandPaletteCommand}" />
+                </MenuItem>
+            </Menu>
+
+            <!-- Tab strip / workspace container -->
+            <TabControl x:Name="TabsControl"
+                        DockPanel.Dock="Top"
+                        ItemsSource="{Binding Tabs}"
+                        SelectedItem="{Binding ActiveTab, Mode=TwoWay}"
+                        Margin="0,0,0,2">
+                <TabControl.ItemTemplate>
+                    <DataTemplate DataType="vm:TabViewModel">
+                        <TextBlock Text="{Binding Title}" />
+                    </DataTemplate>
+                </TabControl.ItemTemplate>
+            </TabControl>
+
+            <!-- Path omnibar -->
+            <views:Omnibar DockPanel.Dock="Top" DataContext="{Binding ActiveTab.ActivePane}" />
+
+            <!-- Status bar -->
+            <Border DockPanel.Dock="Bottom" Padding="8,4" Background="{DynamicResource HelixPaneBackgroundBrush}">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                    <TextBlock Grid.Column="0" Text="{Binding ActiveTab.ActivePane.RepositoryStatus.Display}" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding ActiveTab.ActivePane.CurrentPath}"
+                               VerticalAlignment="Center"
+                               Margin="12,0,0,0"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Column="2" Text="{Binding ActiveTab.ActivePane.StatusText}" VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+
+            <!-- Workspace body: sidebar, splitter, active pane content -->
+            <Grid ColumnDefinitions="240,5,*">
+                <Border Grid.Column="0"
+                        IsVisible="{Binding IsSidebarOpen, FallbackValue=True}"
+                        Background="{DynamicResource HelixPaneBackgroundBrush}"
+                        BorderBrush="{DynamicResource HelixAccentBrush}"
+                        BorderThickness="0,0,1,0">
+                    <views:SidebarTreeView x:Name="Sidebar" DataContext="{Binding Sidebar}" />
+                </Border>
+
+                <GridSplitter Grid.Column="1" Background="{DynamicResource HelixAccentBrush}" ResizeDirection="Columns" Width="5" />
+
+                <ContentControl Grid.Column="2"
+                                Content="{Binding ActiveTab}"
+                                HorizontalAlignment="Stretch"
+                                VerticalAlignment="Stretch" />
+            </Grid>
+        </DockPanel>
+
+        <!-- Command palette overlay -->
+        <views:CommandPaletteOverlay IsVisible="{Binding IsCommandPaletteOpen, FallbackValue=False}"
+                                      IsHitTestVisible="{Binding IsCommandPaletteOpen, FallbackValue=False}"
+                                      DataContext="{Binding}" />
+    </Grid>
+</Window>

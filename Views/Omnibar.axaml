@@ -1,0 +1,25 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HelixExplorer.ViewModels"
+             xmlns:controls="using:HelixExplorer.Controls"
+             x:Class="HelixExplorer.Views.Omnibar"
+             x:DataType="vm:PaneViewModel"
+             Background="{DynamicResource HelixSurfaceBrush}">
+    <Border Background="{DynamicResource HelixPaneBackgroundBrush}"
+            BorderBrush="{DynamicResource HelixAccentBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="4">
+        <Grid ColumnDefinitions="*,Auto">
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                <StackPanel x:Name="BreadcrumbHost" Orientation="Horizontal" Spacing="2" />
+            </ScrollViewer>
+            <TextBox x:Name="PathBox"
+                     Grid.Column="1"
+                     Text="{Binding CurrentPath, Mode=TwoWay}"
+                     KeyDown="OnPathBoxKeyDown"
+                     Watermark="Type a path and press Enter…"
+                     Width="320"
+                     Margin="8,0,0,0" />
+        </Grid>
+    </Border>
+</UserControl>

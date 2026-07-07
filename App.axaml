@@ -1,0 +1,53 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HelixExplorer"
+             xmlns:views="using:HelixExplorer.Views"
+             xmlns:vm="using:HelixExplorer.ViewModels"
+             xmlns:conv="using:HelixExplorer.Converters"
+             x:Class="HelixExplorer.App"
+             RequestedThemeVariant="Dark">
+
+    <Application.DataTemplates>
+        <DataTemplate DataType="vm:TabViewModel">
+            <views:TabView />
+        </DataTemplate>
+    </Application.DataTemplates>
+
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="HelixSurfaceBrush">#1E1E24</SolidColorBrush>
+                    <SolidColorBrush x:Key="HelixPaneBackgroundBrush">#25252C</SolidColorBrush>
+                    <SolidColorBrush x:Key="HelixForegroundBrush">#FFFFFF</SolidColorBrush>
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="HelixSurfaceBrush">#F5F5F5</SolidColorBrush>
+                    <SolidColorBrush x:Key="HelixPaneBackgroundBrush">#FFFFFF</SolidColorBrush>
+                    <SolidColorBrush x:Key="HelixForegroundBrush">#1E1E24</SolidColorBrush>
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+            <Color x:Key="HelixAccent">#FF8C00</Color>
+            <SolidColorBrush x:Key="HelixAccentBrush" Color="{StaticResource HelixAccent}" />
+            <conv:FileSizeConverter x:Key="FileSizeConverter" />
+        </ResourceDictionary>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme />
+        <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
+
+        <Style Selector="Menu">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Padding" Value="4,2" />
+            <Setter Property="Background" Value="{DynamicResource HelixSurfaceBrush}" />
+        </Style>
+        <Style Selector="MenuItem">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Padding" Value="8,3" />
+        </Style>
+        <Style Selector="MenuItem > TextBlock">
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+    </Application.Styles>
+</Application>

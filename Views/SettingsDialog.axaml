@@ -1,0 +1,49 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:HelixExplorer.ViewModels"
+        x:Class="HelixExplorer.Views.SettingsDialog"
+        x:DataType="vm:SettingsViewModel"
+        Title="Settings — Helix Explorer"
+        Width="640" Height="520"
+        CanResize="True"
+        Background="{DynamicResource HelixSurfaceBrush}">
+    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" Margin="16">
+        <StackPanel Orientation="Horizontal" Spacing="12" Grid.Row="0">
+            <TextBlock Text="Theme:" VerticalAlignment="Center" />
+            <ToggleSwitch IsChecked="{Binding IsDarkTheme}" Content="Dark" />
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" Spacing="12" Grid.Row="1" Margin="0,12,0,0">
+            <TextBlock Text="Accent:" VerticalAlignment="Center" />
+            <ColorPicker Color="{Binding Accent, Mode=TwoWay}" />
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" Spacing="12" Grid.Row="2" Margin="0,12,0,0">
+            <TextBlock Text="File sizes:" VerticalAlignment="Center" />
+            <ComboBox ItemsSource="{Binding SizeDisplayModes}"
+                      SelectedItem="{Binding FileSizeDisplayMode, Mode=TwoWay}"
+                      VerticalAlignment="Center" />
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="3" Margin="0,12,0,0">
+            <StackPanel Spacing="6">
+                <TextBlock Text="Folder Colours" FontWeight="Bold" />
+                <ItemsControl ItemsSource="{Binding FolderColors}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:SettingsViewModel+FolderColorEntry">
+                            <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,2">
+                                <ColorPicker Grid.Column="0" Color="{Binding Color, Mode=TwoWay}" Width="120" />
+                                <TextBlock Grid.Column="1" Text="{Binding Path}" Margin="12,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                <Button Grid.Column="2" Content="Remove" Command="{Binding $parent[Window].((vm:SettingsViewModel)DataContext).RemoveFolderColorCommand}" CommandParameter="{Binding}" Padding="6,2" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,12,0,0">
+            <Button Content="Close" Click="OnClose" />
+        </StackPanel>
+    </Grid>
+</Window>

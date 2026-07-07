@@ -1,0 +1,24 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HelixExplorer.ViewModels"
+             xmlns:views="using:HelixExplorer.Views"
+             xmlns:models="using:HelixExplorer.Models"
+             xmlns:controls="using:HelixExplorer.Controls"
+             x:Class="HelixExplorer.Views.DualPaneView"
+             x:Name="Root"
+             x:CompileBindings="False">
+    <Grid ColumnDefinitions="*,4,*">
+        <views:PaneView Grid.Column="0"
+                        x:Name="LeftPane"
+                        DataContext="{Binding Left}" />
+        <GridSplitter Grid.Column="1"
+                      Background="{DynamicResource HelixAccentBrush}"
+                      ResizeDirection="Columns"
+                      Width="4"
+                      IsVisible="{Binding #Root.DataContext.IsDualPane}" />
+        <views:PaneView Grid.Column="2"
+                        x:Name="RightPane"
+                        DataContext="{Binding Right}"
+                        IsVisible="{Binding #Root.DataContext.IsDualPane}" />
+    </Grid>
+</UserControl>

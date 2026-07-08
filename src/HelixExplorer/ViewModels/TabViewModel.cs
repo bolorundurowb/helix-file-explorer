@@ -7,6 +7,7 @@ using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Infrastructure;
 using System.Diagnostics;
 using HelixExplorer.Core.Models;
+using HelixExplorer.Core.Settings;
 using HelixExplorer.Core.Session;
 
 namespace HelixExplorer.ViewModels;
@@ -21,6 +22,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     private readonly IUiHost _uiHost;
     private readonly IGitProvider _git;
     private readonly IArchiveProvider _archive;
+    private readonly IFolderColorService _folderColors;
     private readonly Func<IFileChangeWatcher> _watcherFactory;
     private bool _disposed;
 
@@ -33,6 +35,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         IUiHost uiHost,
         IGitProvider git,
         IArchiveProvider archive,
+        IFolderColorService folderColors,
         Func<IFileChangeWatcher> watcherFactory)
     {
         _fileSystem = fileSystem;
@@ -43,6 +46,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         _uiHost = uiHost;
         _git = git;
         _archive = archive;
+        _folderColors = folderColors;
         _watcherFactory = watcherFactory;
         LeftPane = CreatePane();
         _activePane = LeftPane;
@@ -87,6 +91,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         var pane = new PaneViewModel(
             _fileSystem,
             _archive,
+            _folderColors,
             _fileOps,
             _clipboard,
             _osClipboard,
@@ -196,6 +201,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         else
         {
             var right = CreatePane();
+            right.IsSelectionActive = LeftPane.IsSelectionActive;
             RightPane = right;
             IsDualPane = true;
             right.RestoreFrom(new PaneSnapshot
@@ -309,6 +315,19 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         pane.EntryActivated -= OnEntryActivated;
         pane.OpenInNewTabRequested -= OnOpenInNewTabRequested;
         pane.OpenInNewPaneRequested -= OnOpenInNewPaneRequested;
+    }
+
+    public void RefreshFolderColorBindings()
+    {
+        LeftPane.RefreshFolderColorBindings();
+        RightPane?.RefreshFolderColorBindings();
+    }
+
+    public void SetSelectionActive(bool isActive)
+    {
+        LeftPane.IsSelectionActive = isActive;
+        if (RightPane is not null)
+            RightPane.IsSelectionActive = isActive;
     }
 
     public void Dispose()

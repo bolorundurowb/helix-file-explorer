@@ -8,6 +8,7 @@ using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Filtering;
 using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Infrastructure;
+using HelixExplorer.Core.Settings;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Session;
 using HelixExplorer.Core.Sorting;
@@ -21,6 +22,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
     private readonly IFileSystemProvider _fileSystem;
     private readonly IArchiveProvider _archive;
+    private readonly IFolderColorService _folderColors;
     private readonly IFileOperationService _fileOps;
     private readonly IClipboardService _clipboard;
     private readonly IOsFileClipboard _osClipboard;
@@ -43,6 +45,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     public PaneViewModel(
         IFileSystemProvider fileSystem,
         IArchiveProvider archive,
+        IFolderColorService folderColors,
         IFileOperationService fileOps,
         IClipboardService clipboard,
         IOsFileClipboard osClipboard,
@@ -53,6 +56,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     {
         _fileSystem = fileSystem;
         _archive = archive;
+        _folderColors = folderColors;
         _fileOps = fileOps;
         _clipboard = clipboard;
         _osClipboard = osClipboard;
@@ -62,6 +66,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         _watcher = watcher;
         _watcher.Changed += OnWatcherChanged;
         _clipboard.Changed += OnClipboardChanged;
+        SelectedEntries.CollectionChanged += (_, _) => SyncEntrySelectionFlags();
     }
 
     public event EventHandler? Navigated;
@@ -94,6 +99,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _editablePath = string.Empty;
     [ObservableProperty] private EntryItemViewModel? _selectedEntry;
     [ObservableProperty] private bool _isActive;
+    [ObservableProperty] private bool _isSelectionActive = true;
     [ObservableProperty] private double _thumbnailSize = 72;
     [ObservableProperty] private bool _isRenaming;
     [ObservableProperty] private string _renameText = string.Empty;
@@ -216,6 +222,17 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             SelectedEntry = SelectedEntries[0];
         else
             SelectedEntry = null;
+    }
+
+    private void SyncEntrySelectionFlags()
+    {
+        var selected = new HashSet<EntryItemViewModel>(SelectedEntries);
+        foreach (var entry in Entries)
+        {
+            var isSelected = selected.Contains(entry);
+            if (entry.IsSelected != isSelected)
+                entry.IsSelected = isSelected;
+        }
     }
 
     public void SelectAll()
@@ -356,7 +373,9 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
         try
         {
+            var sw = Stopwatch.StartNew();
             DirectoryListing listing;
+            string? errorMessage = null;
             try
             {
                 if (ArchivePath.IsVirtual(path))
@@ -375,9 +394,13 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             }
             catch (Exception ex)
             {
+                errorMessage = FileSystemError.Describe(ex, path);
                 Debug.WriteLine($"PaneViewModel.RefreshAsync failed for '{path}': {ex.Message}");
                 listing = DirectoryListing.Empty;
             }
+
+            sw.Stop();
+            Debug.WriteLine($"Refresh '{path}' listed {listing.Count} items in {sw.ElapsedMilliseconds} ms");
 
             if (token.IsCancellationRequested || _disposed || generation != _refreshGeneration)
                 return;
@@ -390,6 +413,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
                     return;
 
                 ApplySortAndPublish();
+                if (!string.IsNullOrEmpty(errorMessage))
+                    StatusText = errorMessage;
                 Navigated?.Invoke(this, EventArgs.Empty);
 
                 if (showLoading)
@@ -498,6 +523,15 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             var status = _gitSnapshot.GetStatusForPath(item.FullPath);
             if (item.GitStatus != status)
                 item.GitStatus = status;
+        }
+    }
+
+    public void RefreshFolderColorBindings()
+    {
+        foreach (var item in Entries)
+        {
+            if (item.IsDirectory)
+                item.NotifyFolderColorChanged();
         }
     }
 
@@ -926,6 +960,38 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         }
     }
 
+    [RelayCommand(CanExecute = nameof(CanSetFolderColor))]
+    private void SetFolderColor(string? hex)
+    {
+        if (SelectedEntries.Count != 1 || string.IsNullOrWhiteSpace(hex))
+            return;
+
+        var path = SelectedEntries[0].FullPath;
+        if (!SelectedEntries[0].IsDirectory || ArchivePath.IsVirtual(path))
+            return;
+
+        var color = Avalonia.Media.Color.Parse(hex);
+        _folderColors.SetColor(path, color.ToUInt32());
+        StatusText = $"Colored {SelectedEntries[0].Name}";
+    }
+
+    [RelayCommand(CanExecute = nameof(CanSetFolderColor))]
+    private void ClearFolderColor()
+    {
+        if (SelectedEntries.Count != 1)
+            return;
+
+        var path = SelectedEntries[0].FullPath;
+        _folderColors.RemoveColor(path);
+        StatusText = $"Cleared color for {SelectedEntries[0].Name}";
+    }
+
+    private bool CanSetFolderColor()
+        => CanModifySelection()
+           && SelectedEntries.Count == 1
+           && SelectedEntries[0].IsDirectory
+           && !ArchivePath.IsVirtual(SelectedEntries[0].FullPath);
+
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private void Open()
     {
@@ -1175,6 +1241,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         ShowMoreOptionsCommand.NotifyCanExecuteChanged();
         CompressToZipCommand.NotifyCanExecuteChanged();
         ExtractHereCommand.NotifyCanExecuteChanged();
+        SetFolderColorCommand.NotifyCanExecuteChanged();
+        ClearFolderColorCommand.NotifyCanExecuteChanged();
         OpenCommand.NotifyCanExecuteChanged();
         OpenInNewTabCommand.NotifyCanExecuteChanged();
         OpenInNewWindowCommand.NotifyCanExecuteChanged();

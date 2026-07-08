@@ -21,6 +21,7 @@
     </Window.Styles>
 
     <Window.KeyBindings>
+        <KeyBinding Gesture="Ctrl+Shift+P" Command="{Binding ToggleCommandPaletteCommand}" />
         <KeyBinding Gesture="Ctrl+B" Command="{Binding ToggleSidebarCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+T" Command="{Binding ToggleThemeCommand}" />
         <KeyBinding Gesture="Ctrl+T" Command="{Binding NewTabCommand}" />
@@ -372,13 +373,29 @@
                                                 Padding="0"
                                                 Cursor="Hand"
                                                 PointerPressed="OnSidebarItemPressed">
-                                            <Grid ColumnDefinitions="3,*" MinHeight="36">
+                                            <Border.ContextMenu>
+                                                <ContextMenu IsVisible="{Binding IsNavigable}">
+                                                    <MenuItem Header="Color">
+                                                        <MenuItem Header="Red" Tag="#E81123" Click="OnSidebarSetColorClick" />
+                                                        <MenuItem Header="Orange" Tag="#F7630C" Click="OnSidebarSetColorClick" />
+                                                        <MenuItem Header="Green" Tag="#107C10" Click="OnSidebarSetColorClick" />
+                                                        <MenuItem Header="Blue" Tag="#0078D4" Click="OnSidebarSetColorClick" />
+                                                        <MenuItem Header="Purple" Tag="#8764B8" Click="OnSidebarSetColorClick" />
+                                                    </MenuItem>
+                                                    <MenuItem Header="Clear color" Click="OnSidebarClearColorClick" />
+                                                </ContextMenu>
+                                            </Border.ContextMenu>
+                                            <Grid ColumnDefinitions="3,4,*" MinHeight="36">
                                                 <Border Grid.Column="0"
                                                         Background="{DynamicResource HelixSelectionBarBrush}"
                                                         IsVisible="{Binding IsSelected}"
                                                         CornerRadius="0,2,2,0" />
                                                 <Border Grid.Column="1"
-                                                        Padding="12,8"
+                                                        Background="{Binding Path, Converter={StaticResource FolderColorConverter}}"
+                                                        CornerRadius="2"
+                                                        Margin="0,8,0,8" />
+                                                <Border Grid.Column="2"
+                                                        Padding="8,8"
                                                         Background="{Binding IsSelected, Converter={StaticResource BoolToSidebarBrushConverter}}">
                                                     <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
                                                 </Border>
@@ -422,5 +439,9 @@
                 </Border>
             </DockPanel>
         </Grid>
+
+        <views:CommandPaletteOverlay IsVisible="{Binding IsCommandPaletteOpen}"
+                                      IsHitTestVisible="{Binding IsCommandPaletteOpen}"
+                                      DataContext="{Binding}" />
     </DockPanel>
 </Window>

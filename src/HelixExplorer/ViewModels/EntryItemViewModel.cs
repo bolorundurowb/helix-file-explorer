@@ -16,6 +16,8 @@ public sealed partial class EntryItemViewModel : ObservableObject
     public FileSystemEntry Entry { get; }
 
     public string FullPath => Entry.FullPath;
+
+    internal void NotifyFolderColorChanged() => OnPropertyChanged(nameof(FullPath));
     public string Name => Entry.Name;
     public bool IsDirectory => Entry.IsDirectory;
     public long SizeBytes => Entry.SizeBytes;
@@ -25,4 +27,7 @@ public sealed partial class EntryItemViewModel : ObservableObject
 
     [ObservableProperty]
     private GitFileStatus _gitStatus;
+
+    [ObservableProperty]
+    private bool _isSelected;
 }

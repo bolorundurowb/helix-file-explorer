@@ -57,6 +57,12 @@ public partial class App : Application
             {
                 converter.Mode = settings.SizeDisplay;
             }
+
+            if (Resources.TryGetResource("FolderColorConverter", ActualThemeVariant, out var folderColorObj)
+                && folderColorObj is Converters.FolderColorConverter folderColorConverter)
+            {
+                folderColorConverter.FolderColors = _host.Services.GetRequiredService<IFolderColorService>();
+            }
         }
 
         base.OnFrameworkInitializationCompleted();
@@ -73,6 +79,7 @@ public partial class App : Application
         services.AddSingleton<IUiHost, AvaloniaUiHost>();
         services.AddSingleton<IGitProvider, CliGitProvider>();
         services.AddSingleton<IArchiveProvider, SharpCompressArchiveProvider>();
+        services.AddSingleton<IFolderColorService, FolderColorService>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddTransient<MainWindow>();
     }

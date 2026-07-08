@@ -6,6 +6,7 @@
     <Application.Styles>
         <FluentTheme />
         <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
+        <StyleInclude Source="avares://HelixExplorer/Controls/VirtualizingFileGrid.axaml" />
     </Application.Styles>
 
     <Application.Resources>
@@ -17,7 +18,8 @@
                     <SolidColorBrush x:Key="HelixContentCardBrush" Color="#FFFFFF" />
                     <SolidColorBrush x:Key="HelixSurfaceBrush" Color="#FAFAFA" />
                     <SolidColorBrush x:Key="HelixAccentBrush" Color="#0078D4" />
-                    <SolidColorBrush x:Key="HelixSelectionFillBrush" Color="#200078D4" />
+                    <SolidColorBrush x:Key="HelixSelectionFillBrush" Color="#CCE8FF" />
+                    <SolidColorBrush x:Key="HelixSelectionInactiveFillBrush" Color="#D9D9D9" />
                     <SolidColorBrush x:Key="HelixSelectionBarBrush" Color="#0078D4" />
                     <SolidColorBrush x:Key="HelixFocusBorderBrush" Color="#0078D4" />
                     <SolidColorBrush x:Key="HelixToolbarBrush" Color="#F5F5F5" />
@@ -38,7 +40,8 @@
                     <SolidColorBrush x:Key="HelixContentCardBrush" Color="#1E1E1E" />
                     <SolidColorBrush x:Key="HelixSurfaceBrush" Color="#252525" />
                     <SolidColorBrush x:Key="HelixAccentBrush" Color="#60CDFF" />
-                    <SolidColorBrush x:Key="HelixSelectionFillBrush" Color="#2060CDFF" />
+                    <SolidColorBrush x:Key="HelixSelectionFillBrush" Color="#264F78" />
+                    <SolidColorBrush x:Key="HelixSelectionInactiveFillBrush" Color="#3F3F3F" />
                     <SolidColorBrush x:Key="HelixSelectionBarBrush" Color="#60CDFF" />
                     <SolidColorBrush x:Key="HelixFocusBorderBrush" Color="#60CDFF" />
                     <SolidColorBrush x:Key="HelixToolbarBrush" Color="#2A2A2A" />
@@ -67,6 +70,7 @@
             <conv:BoolToSidebarBrushConverter x:Key="BoolToSidebarBrushConverter" />
             <conv:EntryIconConverter x:Key="EntryIconConverter" />
             <conv:GitFileStatusBrushConverter x:Key="GitFileStatusBrushConverter" />
+            <conv:FolderColorConverter x:Key="FolderColorConverter" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

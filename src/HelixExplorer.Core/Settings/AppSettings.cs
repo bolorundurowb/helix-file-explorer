@@ -8,6 +8,7 @@ public sealed class AppSettings
     public bool SidebarOpen { get; set; } = true;
     public double SidebarWidth { get; set; } = 240;
     public SizeDisplayMode SizeDisplay { get; set; } = SizeDisplayMode.Binary;
+    public Dictionary<string, uint> FolderColors { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 public enum SizeDisplayMode

@@ -18,6 +18,8 @@ public sealed partial class SidebarItemViewModel : ObservableObject
 
     public string Title { get; }
     public string? Path { get; }
+
+    internal void NotifyFolderColorChanged() => OnPropertyChanged(nameof(Path));
     public SidebarItemKind Kind { get; }
     public bool IsSectionHeader { get; }
     public bool IsNavigable => !IsSectionHeader && !string.IsNullOrEmpty(Path);

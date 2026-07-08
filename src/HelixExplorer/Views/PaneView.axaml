@@ -12,6 +12,27 @@
              DragDrop.Drop="OnDrop"
              DragDrop.DragOver="OnDragOver">
 
+    <UserControl.Styles>
+        <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource HelixSelectionFillBrush}" />
+        </Style>
+        <Style Selector="UserControl.inactive ListBoxItem:selected /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource HelixSelectionInactiveFillBrush}" />
+        </Style>
+        <Style Selector="DataGridRow:selected">
+            <Setter Property="Background" Value="{DynamicResource HelixSelectionFillBrush}" />
+        </Style>
+        <Style Selector="UserControl.inactive DataGridRow:selected">
+            <Setter Property="Background" Value="{DynamicResource HelixSelectionInactiveFillBrush}" />
+        </Style>
+        <Style Selector="UserControl.inactive Border.selectionActive">
+            <Setter Property="Opacity" Value="0" />
+        </Style>
+        <Style Selector="UserControl:not(.inactive) Border.selectionInactive">
+            <Setter Property="Opacity" Value="0" />
+        </Style>
+    </UserControl.Styles>
+
     <Grid>
         <!-- Details view -->
         <DataGrid x:Name="DetailsGrid"
@@ -67,6 +88,15 @@
                     <Separator />
                     <MenuItem Header="Compress to ZIP" Command="{Binding CompressToZipCommand}" />
                     <MenuItem Header="Extract here" Command="{Binding ExtractHereCommand}" />
+                    <Separator />
+                    <MenuItem Header="Folder color">
+                        <MenuItem Header="Red" Command="{Binding SetFolderColorCommand}" CommandParameter="#E81123" />
+                        <MenuItem Header="Orange" Command="{Binding SetFolderColorCommand}" CommandParameter="#F7630C" />
+                        <MenuItem Header="Green" Command="{Binding SetFolderColorCommand}" CommandParameter="#107C10" />
+                        <MenuItem Header="Blue" Command="{Binding SetFolderColorCommand}" CommandParameter="#0078D4" />
+                        <MenuItem Header="Purple" Command="{Binding SetFolderColorCommand}" CommandParameter="#8764B8" />
+                        <MenuItem Header="Clear color" Command="{Binding ClearFolderColorCommand}" />
+                    </MenuItem>
                     <Separator />
                     <MenuItem Header="Show more options" Command="{Binding ShowMoreOptionsCommand}" />
                 </ContextMenu>
@@ -164,6 +194,15 @@
                     <MenuItem Header="Compress to ZIP" Command="{Binding CompressToZipCommand}" />
                     <MenuItem Header="Extract here" Command="{Binding ExtractHereCommand}" />
                     <Separator />
+                    <MenuItem Header="Folder color">
+                        <MenuItem Header="Red" Command="{Binding SetFolderColorCommand}" CommandParameter="#E81123" />
+                        <MenuItem Header="Orange" Command="{Binding SetFolderColorCommand}" CommandParameter="#F7630C" />
+                        <MenuItem Header="Green" Command="{Binding SetFolderColorCommand}" CommandParameter="#107C10" />
+                        <MenuItem Header="Blue" Command="{Binding SetFolderColorCommand}" CommandParameter="#0078D4" />
+                        <MenuItem Header="Purple" Command="{Binding SetFolderColorCommand}" CommandParameter="#8764B8" />
+                        <MenuItem Header="Clear color" Command="{Binding ClearFolderColorCommand}" />
+                    </MenuItem>
+                    <Separator />
                     <MenuItem Header="Show more options" Command="{Binding ShowMoreOptionsCommand}" />
                 </ContextMenu>
             </ListBox.ContextMenu>
@@ -195,20 +234,18 @@
 
         <!-- Grid view -->
         <Grid IsVisible="{Binding IsGridView}" RowDefinitions="*,Auto">
-            <ListBox x:Name="GridView"
+            <controls:VirtualizingFileGrid x:Name="GridView"
                      Grid.Row="0"
                      ItemsSource="{Binding Entries}"
-                     SelectionMode="Multiple"
+                     ItemSize="{Binding ThumbnailSize}"
                      Background="Transparent"
                      BorderThickness="0"
-                     DoubleTapped="OnItemActivated"
-                     SelectionChanged="OnSelectionChanged"
                      PointerWheelChanged="OnGridPointerWheel"
                      PointerPressed="OnListPointerPressed"
                      PointerMoved="OnListPointerMoved"
                      PointerReleased="OnListPointerReleased"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                <ListBox.ContextMenu>
+                <controls:VirtualizingFileGrid.ContextMenu>
                     <ContextMenu x:CompileBindings="False"
                                  DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
                         <StackPanel Orientation="Horizontal" Spacing="2" Margin="4,2">
@@ -243,40 +280,59 @@
                         <MenuItem Header="Compress to ZIP" Command="{Binding CompressToZipCommand}" />
                         <MenuItem Header="Extract here" Command="{Binding ExtractHereCommand}" />
                         <Separator />
+                        <MenuItem Header="Folder color">
+                            <MenuItem Header="Red" Command="{Binding SetFolderColorCommand}" CommandParameter="#E81123" />
+                            <MenuItem Header="Orange" Command="{Binding SetFolderColorCommand}" CommandParameter="#F7630C" />
+                            <MenuItem Header="Green" Command="{Binding SetFolderColorCommand}" CommandParameter="#107C10" />
+                            <MenuItem Header="Blue" Command="{Binding SetFolderColorCommand}" CommandParameter="#0078D4" />
+                            <MenuItem Header="Purple" Command="{Binding SetFolderColorCommand}" CommandParameter="#8764B8" />
+                            <MenuItem Header="Clear color" Command="{Binding ClearFolderColorCommand}" />
+                        </MenuItem>
+                        <Separator />
                         <MenuItem Header="Show more options" Command="{Binding ShowMoreOptionsCommand}" />
                     </ContextMenu>
-                </ListBox.ContextMenu>
-                <ListBox.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <WrapPanel Orientation="Horizontal" />
-                    </ItemsPanelTemplate>
-                </ListBox.ItemsPanel>
-                <ListBox.ItemTemplate>
+                </controls:VirtualizingFileGrid.ContextMenu>
+                <controls:VirtualizingFileGrid.ItemTemplate>
                     <DataTemplate x:DataType="vm:EntryItemViewModel" x:CompileBindings="False">
-                        <StackPanel Width="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                    Margin="6" Spacing="4"
-                                    ToolTip.Tip="{Binding Name}">
-                            <PathIcon Data="{Binding Converter={StaticResource EntryIconConverter}}"
-                                      Width="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                      Height="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                      Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}" />
-                            <TextBlock Text="{Binding Name}"
-                                       FontSize="{DynamicResource HelixEntryFontSize}"
-                                       TextAlignment="Center"
-                                       TextWrapping="Wrap"
-                                       MaxLines="2"
-                                       TextTrimming="CharacterEllipsis"
-                                       HorizontalAlignment="Stretch"
-                                       Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}" />
-                        </StackPanel>
+                        <Border Width="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=controls:VirtualizingFileGrid}}"
+                                Margin="6"
+                                Padding="4"
+                                CornerRadius="6"
+                                ClipToBounds="True"
+                                PointerPressed="OnGridItemPointerPressed"
+                                DoubleTapped="OnGridItemDoubleTapped">
+                            <Panel>
+                                <Border CornerRadius="6"
+                                        Background="{Binding FullPath, Converter={StaticResource FolderColorConverter}}" />
+                                <Border CornerRadius="6"
+                                        Classes="selectionActive"
+                                        Background="{DynamicResource HelixSelectionFillBrush}"
+                                        IsVisible="{Binding IsSelected}"
+                                        IsHitTestVisible="False" />
+                                <Border CornerRadius="6"
+                                        Classes="selectionInactive"
+                                        Background="{DynamicResource HelixSelectionInactiveFillBrush}"
+                                        IsVisible="{Binding IsSelected}"
+                                        IsHitTestVisible="False" />
+                                <StackPanel Spacing="4" ToolTip.Tip="{Binding Name}">
+                                <PathIcon Data="{Binding Converter={StaticResource EntryIconConverter}}"
+                                          Width="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=controls:VirtualizingFileGrid}}"
+                                          Height="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=controls:VirtualizingFileGrid}}"
+                                          Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}" />
+                                <TextBlock Text="{Binding Name}"
+                                           FontSize="{DynamicResource HelixEntryFontSize}"
+                                           TextAlignment="Center"
+                                           TextWrapping="Wrap"
+                                           MaxLines="2"
+                                           TextTrimming="CharacterEllipsis"
+                                           HorizontalAlignment="Stretch"
+                                           Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}" />
+                                </StackPanel>
+                            </Panel>
+                        </Border>
                     </DataTemplate>
-                </ListBox.ItemTemplate>
-                <ListBox.Styles>
-                    <Style Selector="ListBoxItem">
-                        <Setter Property="Padding" Value="2" />
-                    </Style>
-                </ListBox.Styles>
-            </ListBox>
+                </controls:VirtualizingFileGrid.ItemTemplate>
+            </controls:VirtualizingFileGrid>
 
             <Border Grid.Row="1"
                     Background="{DynamicResource HelixToolbarBrush}"

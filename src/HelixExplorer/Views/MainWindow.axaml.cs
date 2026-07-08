@@ -11,6 +11,14 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        Activated += (_, _) => SetWindowActive(true);
+        Deactivated += (_, _) => SetWindowActive(false);
+    }
+
+    private void SetWindowActive(bool isActive)
+    {
+        if (DataContext is MainWindowViewModel vm)
+            vm.IsWindowActive = isActive;
     }
 
     private void OnSidebarItemPressed(object? sender, PointerPressedEventArgs e)
@@ -70,5 +78,32 @@ public partial class MainWindow : Window
         await pane.CheckoutBranchCommand.ExecuteAsync(branch);
         if (BranchButton is not null)
             FlyoutBase.GetAttachedFlyout(BranchButton)?.Hide();
+    }
+
+    private void OnSidebarSetColorClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Tag: string hex })
+            return;
+
+        if (DataContext is not MainWindowViewModel vm)
+            return;
+
+        if (((MenuItem)sender).Parent is not ContextMenu { PlacementTarget: Border border }
+            || border.DataContext is not SidebarItemViewModel item)
+            return;
+
+        vm.SetSidebarFolderColor(item, hex);
+    }
+
+    private void OnSidebarClearColorClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+            return;
+
+        if (sender is not MenuItem { Parent: ContextMenu { PlacementTarget: Border border } }
+            || border.DataContext is not SidebarItemViewModel item)
+            return;
+
+        vm.ClearSidebarFolderColor(item);
     }
 }

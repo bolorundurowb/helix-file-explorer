@@ -6,6 +6,7 @@ using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Core.Models;
+using HelixExplorer.Core.Search;
 using HelixExplorer.Core.Session;
 using HelixExplorer.Core.Settings;
 using HelixExplorer.Core.Theming;
@@ -28,10 +29,16 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly IUiHost _uiHost;
     private readonly IGitProvider _git;
     private readonly IArchiveProvider _archive;
+    private readonly IFolderColorService _folderColors;
     private readonly Func<IFileChangeWatcher> _watcherFactory;
     private readonly string _homePath;
+    private readonly List<CommandItem> _allCommands = new();
+    private readonly List<string> _recentPaths = new();
     private CancellationTokenSource? _networkCts;
+    private bool _commandsBuilt;
     private bool _disposed;
+
+    private const int MaxPaletteResults = 24;
 
     public MainWindowViewModel(
         ISettingsStore settingsStore,
@@ -48,6 +55,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         IUiHost uiHost,
         IGitProvider git,
         IArchiveProvider archive,
+        IFolderColorService folderColors,
         Func<IFileChangeWatcher> watcherFactory)
     {
         _settingsStore = settingsStore;
@@ -64,6 +72,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _uiHost = uiHost;
         _git = git;
         _archive = archive;
+        _folderColors = folderColors;
         _watcherFactory = watcherFactory;
 
         _homePath = _quickAccess.GetPath(KnownFolderKind.Home)
@@ -76,11 +85,19 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
         RestoreSession();
         _ = RefreshNetworkLocationsAsync();
+
+        _folderColors.ColorsChanged += OnFolderColorsChanged;
     }
 
     public ObservableCollection<TabViewModel> Tabs { get; } = new();
 
     public ObservableCollection<SidebarItemViewModel> SidebarItems { get; }
+
+    public ObservableCollection<CommandItem> FilteredCommands { get; } = new();
+
+    [ObservableProperty] private bool _isCommandPaletteOpen;
+
+    [ObservableProperty] private string _commandPaletteQuery = string.Empty;
 
     [ObservableProperty]
     private bool _isDiscoveringNetwork;
@@ -134,6 +151,9 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private bool _isSidebarOpen = true;
+
+    [ObservableProperty]
+    private bool _isWindowActive = true;
 
     public PaneViewModel? ActivePane => SelectedTab?.ActivePane;
 
@@ -192,11 +212,19 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             _uiHost,
             _git,
             _archive,
+            _folderColors,
             _watcherFactory);
         tab.CloseRequested += OnTabCloseRequested;
         tab.Navigated += OnTabNavigated;
         tab.OpenInNewTabRequested += OnOpenInNewTabRequested;
+        tab.SetSelectionActive(IsWindowActive);
         return tab;
+    }
+
+    partial void OnIsWindowActiveChanged(bool value)
+    {
+        foreach (var tab in Tabs)
+            tab.SetSelectionActive(value);
     }
 
     private void OnOpenInNewTabRequested(object? sender, string path)
@@ -294,10 +322,142 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         if (!ReferenceEquals(sender, SelectedTab))
             return;
 
+        RecordRecent(SelectedTab?.ActivePane.CurrentPath);
         SyncChromeToActivePane();
     }
 
     partial void OnSelectedTabChanged(TabViewModel? value) => SyncChromeToActivePane();
+
+    partial void OnCommandPaletteQueryChanged(string value) => RefreshCommandPalette(value);
+
+    private void EnsureCommandsBuilt()
+    {
+        if (_commandsBuilt)
+            return;
+
+        _commandsBuilt = true;
+        _allCommands.Add(new CommandItem("New Tab", "File", vm => vm.NewTabCommand.Execute(null), "Ctrl+T"));
+        _allCommands.Add(new CommandItem("Close Tab", "File", vm => vm.CloseSelectedTabCommand.Execute(null), "Ctrl+W"));
+        _allCommands.Add(new CommandItem("Toggle Theme", "Appearance", vm => vm.ToggleThemeCommand.Execute(null), "Ctrl+Shift+T"));
+        _allCommands.Add(new CommandItem("Toggle Sidebar", "View", vm => vm.ToggleSidebarCommand.Execute(null), "Ctrl+B"));
+        _allCommands.Add(new CommandItem("Toggle Dual Pane", "View", vm => vm.ToggleDualPaneCommand.Execute(null), "Ctrl+D"));
+        _allCommands.Add(new CommandItem("Toggle Filter", "View", vm => vm.ToggleFilterCommand.Execute(null), "Ctrl+F"));
+        _allCommands.Add(new CommandItem("Go Back", "Navigation", vm => vm.ActivePane?.GoBackCommand.Execute(null)));
+        _allCommands.Add(new CommandItem("Go Forward", "Navigation", vm => vm.ActivePane?.GoForwardCommand.Execute(null)));
+        _allCommands.Add(new CommandItem("Go Up", "Navigation", vm => vm.ActivePane?.GoUpCommand.Execute(null)));
+        _allCommands.Add(new CommandItem("Refresh", "Navigation", vm => vm.ActivePane?.RefreshCommand.Execute(null), "F5"));
+        _allCommands.Add(new CommandItem("New Folder", "File", vm => vm.NewFolderCommand.Execute(null), "Ctrl+Shift+N"));
+        _allCommands.Add(new CommandItem("Details View", "View", vm => vm.SetViewModeCommand.Execute(LayoutMode.Details)));
+        _allCommands.Add(new CommandItem("List View", "View", vm => vm.SetViewModeCommand.Execute(LayoutMode.List)));
+        _allCommands.Add(new CommandItem("Grid View", "View", vm => vm.SetViewModeCommand.Execute(LayoutMode.Grid)));
+        _allCommands.Add(new CommandItem("Miller Columns", "View", vm => vm.SetViewModeCommand.Execute(LayoutMode.Miller)));
+        _allCommands.Add(new CommandItem("Git: Switch Branch", "Git", vm => _ = vm.ActivePane?.OpenBranchFlyoutCommand.ExecuteAsync(null)));
+    }
+
+    private void RefreshCommandPalette(string query)
+    {
+        EnsureCommandsBuilt();
+        FilteredCommands.Clear();
+
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            foreach (var command in _allCommands)
+                FilteredCommands.Add(command);
+            return;
+        }
+
+        var scored = new List<(int score, CommandItem item)>();
+        foreach (var command in _allCommands)
+        {
+            var score = command.FuzzyScore(query);
+            if (score >= 0)
+                scored.Add((score, command));
+        }
+
+        foreach (var path in _recentPaths)
+        {
+            var score = FuzzyMatcher.Score(path, query);
+            if (score >= 0)
+            {
+                var captured = path;
+                scored.Add((score, new CommandItem(path, "Recent", vm => vm.NavigateActive(captured))));
+            }
+        }
+
+        foreach (var entry in scored.OrderByDescending(t => t.score).Take(MaxPaletteResults))
+            FilteredCommands.Add(entry.item);
+    }
+
+    private void RecordRecent(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+
+        _recentPaths.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+        _recentPaths.Insert(0, path);
+        if (_recentPaths.Count > 12)
+            _recentPaths.RemoveAt(_recentPaths.Count - 1);
+    }
+
+    private void NavigateActive(string path) => SelectedTab?.ActivePane.NavigateTo(path);
+
+    [RelayCommand]
+    private void ToggleCommandPalette()
+    {
+        IsCommandPaletteOpen = !IsCommandPaletteOpen;
+        if (!IsCommandPaletteOpen)
+            return;
+
+        foreach (var tab in Tabs)
+            RecordRecent(tab.ActivePane.CurrentPath);
+
+        CommandPaletteQuery = string.Empty;
+        RefreshCommandPalette(string.Empty);
+    }
+
+    [RelayCommand]
+    private void ExecuteCommand(CommandItem? command)
+    {
+        if (command?.Execute is null)
+            return;
+
+        command.Execute(this);
+        IsCommandPaletteOpen = false;
+    }
+
+    public void SetSidebarFolderColor(SidebarItemViewModel item, string hex)
+    {
+        if (string.IsNullOrEmpty(item.Path))
+            return;
+
+        _folderColors.SetColor(item.Path, ParseColorHex(hex));
+    }
+
+    public void ClearSidebarFolderColor(SidebarItemViewModel item)
+    {
+        if (string.IsNullOrEmpty(item.Path))
+            return;
+
+        _folderColors.RemoveColor(item.Path);
+    }
+
+    private void OnFolderColorsChanged(object? sender, EventArgs e)
+    {
+        foreach (var item in SidebarItems)
+        {
+            if (item.IsNavigable)
+                item.NotifyFolderColorChanged();
+        }
+
+        foreach (var tab in Tabs)
+            tab.RefreshFolderColorBindings();
+    }
+
+    private static uint ParseColorHex(string hex)
+    {
+        var color = Avalonia.Media.Color.Parse(hex);
+        return color.ToUInt32();
+    }
 
     private void SyncChromeToActivePane()
     {
@@ -413,6 +573,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
         _networkCts?.Cancel();
         _networkCts?.Dispose();
+
+        _folderColors.ColorsChanged -= OnFolderColorsChanged;
 
         SaveSession();
 

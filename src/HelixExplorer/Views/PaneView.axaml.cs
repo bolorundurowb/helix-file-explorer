@@ -41,12 +41,16 @@ public sealed partial class PaneView : UserControl
             _pane.PropertyChanged -= OnPanePropertyChanged;
 
         _pane = DataContext as PaneViewModel;
-        if (_pane is not null)
+        if (_pane is null)
         {
-            _pane.PropertyChanged += OnPanePropertyChanged;
-            if (_pane.IsMillerView)
-                RebuildMiller();
+            Classes.Set("inactive", false);
+            return;
         }
+
+        _pane.PropertyChanged += OnPanePropertyChanged;
+        UpdateInactiveClass();
+        if (_pane.IsMillerView)
+            RebuildMiller();
     }
 
     private void OnPanePropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -77,6 +81,15 @@ public sealed partial class PaneView : UserControl
         {
             RebuildMiller();
         }
+        else if (e.PropertyName == nameof(PaneViewModel.IsSelectionActive))
+        {
+            UpdateInactiveClass();
+        }
+    }
+
+    private void UpdateInactiveClass()
+    {
+        Classes.Set("inactive", _pane is not null && !_pane.IsSelectionActive);
     }
 
     private static EntryItemViewModel? ExtractSelected(object? sender) => sender switch
@@ -267,8 +280,41 @@ public sealed partial class PaneView : UserControl
     {
         if (DetailsGrid.IsVisible) return DetailsGrid;
         if (ListView.IsVisible) return ListView;
-        if (GridView.IsVisible) return GridView;
+        if (Pane?.IsGridView == true) return GridView;
         return null;
+    }
+
+    private void OnGridItemPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (Pane is null || sender is not Control { DataContext: EntryItemViewModel entry })
+            return;
+
+        if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
+            return;
+
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            if (Pane.SelectedEntries.Contains(entry))
+                Pane.SelectedEntries.Remove(entry);
+            else
+                Pane.SelectedEntries.Add(entry);
+        }
+        else if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) && Pane.SelectedEntry is not null)
+        {
+            Pane.UpdateSelection([entry]);
+        }
+        else
+        {
+            Pane.UpdateSelection([entry]);
+        }
+
+        Pane.SelectedEntry = entry;
+    }
+
+    private void OnGridItemDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is Control { DataContext: EntryItemViewModel entry })
+            Pane?.ActivateEntry(entry);
     }
 
     // ── Miller columns ───────────────────────────────────────────────────────

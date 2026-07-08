@@ -1,9 +1,11 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="using:HelixExplorer.Converters"
              x:Class="HelixExplorer.App"
              RequestedThemeVariant="Default">
     <Application.Styles>
         <FluentTheme />
+        <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
     </Application.Styles>
 
     <Application.Resources>
@@ -14,30 +16,32 @@
                     <SolidColorBrush x:Key="HelixSidebarBrush" Color="#F3F3F3" />
                     <SolidColorBrush x:Key="HelixContentCardBrush" Color="#FFFFFF" />
                     <SolidColorBrush x:Key="HelixSurfaceBrush" Color="#FAFAFA" />
-                    <SolidColorBrush x:Key="HelixAccentBrush" Color="{DynamicResource SystemAccentColor}" />
+                    <SolidColorBrush x:Key="HelixAccentBrush" Color="#0078D4" />
                     <SolidColorBrush x:Key="HelixSelectionFillBrush" Color="#200078D4" />
-                    <SolidColorBrush x:Key="HelixSelectionBarBrush" Color="{DynamicResource SystemAccentColor}" />
-                    <SolidColorBrush x:Key="HelixFocusBorderBrush" Color="{DynamicResource SystemAccentColor}" />
+                    <SolidColorBrush x:Key="HelixSelectionBarBrush" Color="#0078D4" />
+                    <SolidColorBrush x:Key="HelixFocusBorderBrush" Color="#0078D4" />
                     <SolidColorBrush x:Key="HelixToolbarBrush" Color="#F5F5F5" />
                     <SolidColorBrush x:Key="HelixStatusBarBrush" Color="#F0F0F0" />
                     <SolidColorBrush x:Key="HelixTabStripBrush" Color="#F3F3F3" />
                     <SolidColorBrush x:Key="HelixNavButtonBrush" Color="#E0E0E0" />
                     <SolidColorBrush x:Key="HelixBorderColor" Color="#E0E0E0" />
+                    <SolidColorBrush x:Key="HelixSidebarSelectedBrush" Color="#180078D4" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Dark">
                     <SolidColorBrush x:Key="HelixChromeBrush" Color="#202020" />
                     <SolidColorBrush x:Key="HelixSidebarBrush" Color="#2D2D2D" />
                     <SolidColorBrush x:Key="HelixContentCardBrush" Color="#1E1E1E" />
                     <SolidColorBrush x:Key="HelixSurfaceBrush" Color="#252525" />
-                    <SolidColorBrush x:Key="HelixAccentBrush" Color="{DynamicResource SystemAccentColor}" />
+                    <SolidColorBrush x:Key="HelixAccentBrush" Color="#60CDFF" />
                     <SolidColorBrush x:Key="HelixSelectionFillBrush" Color="#2060CDFF" />
-                    <SolidColorBrush x:Key="HelixSelectionBarBrush" Color="{DynamicResource SystemAccentColor}" />
-                    <SolidColorBrush x:Key="HelixFocusBorderBrush" Color="{DynamicResource SystemAccentColor}" />
+                    <SolidColorBrush x:Key="HelixSelectionBarBrush" Color="#60CDFF" />
+                    <SolidColorBrush x:Key="HelixFocusBorderBrush" Color="#60CDFF" />
                     <SolidColorBrush x:Key="HelixToolbarBrush" Color="#2A2A2A" />
                     <SolidColorBrush x:Key="HelixStatusBarBrush" Color="#252525" />
                     <SolidColorBrush x:Key="HelixTabStripBrush" Color="#2D2D2D" />
                     <SolidColorBrush x:Key="HelixNavButtonBrush" Color="#3A3A3A" />
                     <SolidColorBrush x:Key="HelixBorderColor" Color="#3A3A3A" />
+                    <SolidColorBrush x:Key="HelixSidebarSelectedBrush" Color="#2860CDFF" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 
@@ -46,6 +50,10 @@
             <x:Double x:Key="HelixRowHeight">36</x:Double>
             <x:Double x:Key="HelixSidebarDefaultWidth">240</x:Double>
             <Thickness x:Key="HelixContentPadding">12</Thickness>
+
+            <conv:FileSizeConverter x:Key="FileSizeConverter" />
+            <conv:RelativeTimeConverter x:Key="RelativeTimeConverter" />
+            <conv:BoolToSidebarBrushConverter x:Key="BoolToSidebarBrushConverter" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

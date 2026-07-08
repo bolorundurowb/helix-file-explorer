@@ -1,0 +1,23 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HelixExplorer.ViewModels"
+             x:Class="HelixExplorer.Views.Omnibar"
+             x:DataType="vm:PaneViewModel">
+    <Grid>
+        <ScrollViewer x:Name="BreadcrumbScroll"
+                      IsVisible="{Binding !IsEditingPath}"
+                      Background="Transparent"
+                      PointerPressed="OnBreadcrumbAreaPressed"
+                      HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Disabled">
+            <StackPanel x:Name="BreadcrumbHost" Orientation="Horizontal" Spacing="0" />
+        </ScrollViewer>
+
+        <TextBox x:Name="PathBox"
+                 IsVisible="{Binding IsEditingPath}"
+                 Text="{Binding EditablePath}"
+                 KeyDown="OnPathBoxKeyDown"
+                 LostFocus="OnPathBoxLostFocus"
+                 PlaceholderText="Type a path and press Enter…" />
+    </Grid>
+</UserControl>

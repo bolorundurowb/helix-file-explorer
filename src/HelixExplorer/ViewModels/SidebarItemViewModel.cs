@@ -1,0 +1,94 @@
+using System.Collections.ObjectModel;
+using CommunityToolkit.Mvvm.ComponentModel;
+using HelixExplorer.Core.FileSystem;
+using HelixExplorer.Core.Models;
+
+namespace HelixExplorer.ViewModels;
+
+public sealed partial class SidebarItemViewModel : ObservableObject
+{
+    public SidebarItemViewModel(string title, string? path, SidebarItemKind kind, bool isSectionHeader = false, bool isSelected = false)
+    {
+        Title = title;
+        Path = path;
+        Kind = kind;
+        IsSectionHeader = isSectionHeader;
+        IsSelected = isSelected;
+    }
+
+    public string Title { get; }
+    public string? Path { get; }
+    public SidebarItemKind Kind { get; }
+    public bool IsSectionHeader { get; }
+    public bool IsNavigable => !IsSectionHeader && !string.IsNullOrEmpty(Path);
+
+    [ObservableProperty]
+    private bool _isSelected;
+}
+
+public enum SidebarItemKind
+{
+    Section,
+    Home,
+    Pinned,
+    Drive,
+    Network,
+    Stub
+}
+
+public static class SidebarFactory
+{
+    public static ObservableCollection<SidebarItemViewModel> Build(
+        IQuickAccessProvider quickAccess,
+        IVolumeProvider volumes,
+        string? selectedPath = null)
+    {
+        var items = new ObservableCollection<SidebarItemViewModel>();
+
+        var homePath = quickAccess.GetPath(KnownFolderKind.Home);
+        items.Add(new SidebarItemViewModel(
+            "Home",
+            homePath,
+            SidebarItemKind.Home,
+            isSelected: PathsEqual(homePath, selectedPath)));
+
+        items.Add(new SidebarItemViewModel("Pinned", null, SidebarItemKind.Section, isSectionHeader: true));
+        foreach (var (kind, path, displayName) in quickAccess.GetPinnedDefaults())
+        {
+            _ = kind;
+            items.Add(new SidebarItemViewModel(
+                displayName,
+                path,
+                SidebarItemKind.Pinned,
+                isSelected: PathsEqual(path, selectedPath)));
+        }
+
+        items.Add(new SidebarItemViewModel("Drives", null, SidebarItemKind.Section, isSectionHeader: true));
+        foreach (var volume in volumes.GetVolumes())
+        {
+            items.Add(new SidebarItemViewModel(
+                volume.DisplayName,
+                volume.RootPath,
+                SidebarItemKind.Drive,
+                isSelected: PathsEqual(volume.RootPath, selectedPath)));
+        }
+
+        items.Add(new SidebarItemViewModel("Network", null, SidebarItemKind.Section, isSectionHeader: true));
+        items.Add(new SidebarItemViewModel("Network", null, SidebarItemKind.Network));
+
+        items.Add(new SidebarItemViewModel("Cloud", null, SidebarItemKind.Section, isSectionHeader: true));
+        items.Add(new SidebarItemViewModel("Tags", null, SidebarItemKind.Section, isSectionHeader: true));
+
+        return items;
+    }
+
+    private static bool PathsEqual(string? a, string? b)
+    {
+        if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b))
+            return false;
+        return string.Equals(
+            a.TrimEnd('\\', '/'),
+            b.TrimEnd('\\', '/'),
+            StringComparison.OrdinalIgnoreCase);
+    }
+}

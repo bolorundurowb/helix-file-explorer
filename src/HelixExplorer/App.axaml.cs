@@ -7,13 +7,16 @@ using HelixExplorer.Core.Theming;
 using HelixExplorer.Services;
 using HelixExplorer.ViewModels;
 using HelixExplorer.Views;
+using HelixExplorer.Windows;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace HelixExplorer;
 
 public partial class App : Application
 {
-    private ServiceProvider? _serviceProvider;
+    private IHost? _host;
 
     public override void Initialize()
     {
@@ -24,29 +27,52 @@ public partial class App : Application
     {
         AppPaths.EnsureDirectoriesExist();
 
-        var services = new ServiceCollection();
-        ConfigureServices(services);
-        _serviceProvider = services.BuildServiceProvider();
+        _host = Host.CreateDefaultBuilder()
+            .ConfigureLogging(logging =>
+            {
+                logging.ClearProviders();
+                logging.AddDebug();
+            })
+            .ConfigureServices(ConfigureServices)
+            .Build();
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
-            mainWindow.DataContext = _serviceProvider.GetRequiredService<MainWindowViewModel>();
+            desktop.ShutdownRequested += OnShutdownRequested;
+
+            var mainWindow = _host.Services.GetRequiredService<MainWindow>();
+            mainWindow.DataContext = _host.Services.GetRequiredService<MainWindowViewModel>();
             desktop.MainWindow = mainWindow;
 
-            var themeService = _serviceProvider.GetRequiredService<IThemeService>();
-            var settings = _serviceProvider.GetRequiredService<ISettingsStore>().Load();
+            var themeService = _host.Services.GetRequiredService<IThemeService>();
+            var settings = _host.Services.GetRequiredService<ISettingsStore>().Load();
             themeService.ApplyTheme(settings.Theme);
+
+            if (Resources.TryGetResource("FileSizeConverter", ActualThemeVariant, out var converterObj)
+                && converterObj is Converters.FileSizeConverter converter)
+            {
+                converter.Mode = settings.SizeDisplay;
+            }
         }
 
         base.OnFrameworkInitializationCompleted();
     }
 
-    private static void ConfigureServices(IServiceCollection services)
+    private static void ConfigureServices(HostBuilderContext context, IServiceCollection services)
     {
+        services.AddHelixWindowsServices();
         services.AddSingleton<ISettingsStore, JsonSettingsStore>();
         services.AddSingleton<IThemeService, AvaloniaThemeService>();
         services.AddSingleton<MainWindowViewModel>();
-        services.AddSingleton<MainWindow>();
+        services.AddTransient<MainWindow>();
+    }
+
+    private void OnShutdownRequested(object? sender, ShutdownRequestedEventArgs e)
+    {
+        if (_host?.Services.GetService(typeof(MainWindowViewModel)) is MainWindowViewModel vm)
+            vm.Dispose();
+
+        _host?.Dispose();
+        _host = null;
     }
 }

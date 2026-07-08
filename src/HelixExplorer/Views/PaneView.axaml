@@ -1,0 +1,62 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HelixExplorer.ViewModels"
+             xmlns:models="using:HelixExplorer.Core.Models"
+             x:Class="HelixExplorer.Views.PaneView"
+             x:DataType="vm:PaneViewModel"
+             Focusable="True"
+             KeyDown="OnPaneKeyDown">
+
+    <Grid>
+        <DataGrid x:Name="DetailsGrid"
+                  ItemsSource="{Binding Entries}"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  CanUserSortColumns="True"
+                  CanUserResizeColumns="True"
+                  SelectionMode="Single"
+                  GridLinesVisibility="Horizontal"
+                  HeadersVisibility="Column"
+                  RowHeight="{DynamicResource HelixRowHeight}"
+                  DoubleTapped="OnItemActivated"
+                  SelectionChanged="OnDetailsSelectionChanged"
+                  Sorting="OnDetailsSorting"
+                  Background="Transparent"
+                  BorderThickness="0">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Name"
+                                    Binding="{Binding Name}"
+                                    Width="2*"
+                                    Tag="Name"
+                                    SortMemberPath="Name" />
+                <DataGridTextColumn Header="Date modified"
+                                    Binding="{Binding ModifiedUtc, Converter={StaticResource RelativeTimeConverter}}"
+                                    Width="160"
+                                    Tag="Modified"
+                                    SortMemberPath="ModifiedUtc" />
+                <DataGridTextColumn Header="Type"
+                                    Binding="{Binding TypeLabel}"
+                                    Width="120"
+                                    Tag="Type"
+                                    SortMemberPath="Extension" />
+                <DataGridTemplateColumn Header="Size" Width="100" Tag="Size" SortMemberPath="SizeBytes">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate x:DataType="models:FileSystemEntry">
+                            <TextBlock Text="{Binding Converter={StaticResource FileSizeConverter}}"
+                                       VerticalAlignment="Center" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <Border IsVisible="{Binding IsLoading}"
+                Background="#80FFFFFF"
+                IsHitTestVisible="False">
+            <TextBlock Text="Loading…"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       Opacity="0.7" />
+        </Border>
+    </Grid>
+</UserControl>

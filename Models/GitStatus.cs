@@ -23,7 +23,7 @@ public record GitStatus(
         get
         {
             if (!IsRepository) return string.Empty;
-            string ab = (Ahead > 0 ? $" ↑{Ahead}" : string.Empty) + (Behind > 0 ? $" ↓{Behind}" : string.Empty);
+            var ab = (Ahead > 0 ? $" ↑{Ahead}" : string.Empty) + (Behind > 0 ? $" ↓{Behind}" : string.Empty);
             return $"{Branch} +{Staged} ~{Unstaged} ?{Untracked}{ab}";
         }
     }

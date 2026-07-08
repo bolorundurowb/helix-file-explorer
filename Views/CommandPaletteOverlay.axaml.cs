@@ -17,7 +17,7 @@ public sealed partial class CommandPaletteOverlay : Panel
         LayoutUpdated += OnLayoutUpdated;
     }
 
-    private void OnLayoutUpdated(object? sender, System.EventArgs e)
+    private void OnLayoutUpdated(object? sender, EventArgs e)
     {
         if (!IsVisible || QueryBox is null) return;
         if (!QueryBox.IsFocused)

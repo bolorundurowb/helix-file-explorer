@@ -52,12 +52,12 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     /// <summary>Builds a tab whose panes start at <paramref name="initialPath"/>.</summary>
     public static TabViewModel Create(string initialPath)
     {
-        string path = string.IsNullOrEmpty(initialPath)
+        var path = string.IsNullOrEmpty(initialPath)
             ? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
             : initialPath;
-        if (!path.EndsWith(System.IO.Path.DirectorySeparatorChar))
+        if (!path.EndsWith(Path.DirectorySeparatorChar))
         {
-            path += System.IO.Path.DirectorySeparatorChar;
+            path += Path.DirectorySeparatorChar;
         }
 
         return new TabViewModel(NewPane(path), NewPane(path));
@@ -82,7 +82,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         {
             Title = ActivePane.IsArchive
                 ? "Archive"
-                : System.IO.Path.GetFileName(ActivePane.CurrentPath.TrimEnd('\\', '/'));
+                : Path.GetFileName(ActivePane.CurrentPath.TrimEnd('\\', '/'));
             if (string.IsNullOrEmpty(Title)) Title = ActivePane.CurrentPath;
         }
     }
@@ -91,7 +91,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     {
         try
         {
-            string path = e.FullPath;
+            var path = e.FullPath;
 
             // Files inside an archive must be extracted before the OS can open them.
             if (path.StartsWith(ArchiveService.Scheme, StringComparison.OrdinalIgnoreCase))

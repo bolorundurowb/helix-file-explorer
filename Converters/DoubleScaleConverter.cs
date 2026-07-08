@@ -10,14 +10,14 @@ public sealed class DoubleScaleConverter : IValueConverter
 
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        double v = value switch
+        var v = value switch
         {
             double d => d,
             int i => i,
             _ => 0
         };
         double factor = 1;
-        if (parameter is string s && double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out double f))
+        if (parameter is string s && double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var f))
         {
             factor = f;
         }

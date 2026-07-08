@@ -25,7 +25,7 @@ public sealed class ArchiveService : IArchiveService
     public bool IsArchive(string path)
     {
         if (string.IsNullOrEmpty(path) || !File.Exists(path)) return false;
-        string ext = Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
+        var ext = Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
         foreach (var e in s_extensions)
         {
             if (ext == e) return true;
@@ -42,8 +42,8 @@ public sealed class ArchiveService : IArchiveService
             innerPath = string.Empty;
             return false;
         }
-        string body = path[Scheme.Length..];
-        int bang = body.IndexOf('!');
+        var body = path[Scheme.Length..];
+        var bang = body.IndexOf('!');
         if (bang < 0)
         {
             archivePath = body;
@@ -63,7 +63,7 @@ public sealed class ArchiveService : IArchiveService
 
     public async ValueTask<IReadOnlyList<FileSystemEntry>> EnumerateAsync(string virtualPath, CancellationToken token = default)
     {
-        if (!ParseVirtual(virtualPath, out string archivePath, out string innerPath))
+        if (!ParseVirtual(virtualPath, out var archivePath, out var innerPath))
         {
             return Array.Empty<FileSystemEntry>();
         }
@@ -73,11 +73,11 @@ public sealed class ArchiveService : IArchiveService
 
     public async ValueTask<string?> ExtractEntryAsync(string virtualPath, CancellationToken token = default)
     {
-        if (!ParseVirtual(virtualPath, out string archivePath, out string innerPath) || string.IsNullOrEmpty(innerPath))
+        if (!ParseVirtual(virtualPath, out var archivePath, out var innerPath) || string.IsNullOrEmpty(innerPath))
         {
             return null;
         }
-        string wanted = innerPath.Replace('\\', '/').Trim('/');
+        var wanted = innerPath.Replace('\\', '/').Trim('/');
 
         return await Task.Run(async () =>
         {
@@ -89,13 +89,13 @@ public sealed class ArchiveService : IArchiveService
                 {
                     token.ThrowIfCancellationRequested();
                     if (entry.IsDirectory) continue;
-                    string key = (entry.Key ?? string.Empty).Replace('\\', '/').Trim('/');
+                    var key = (entry.Key ?? string.Empty).Replace('\\', '/').Trim('/');
                     if (!key.Equals(wanted, StringComparison.OrdinalIgnoreCase)) continue;
 
-                    string tempDir = Path.Combine(Path.GetTempPath(), "HelixExplorer",
+                    var tempDir = Path.Combine(Path.GetTempPath(), "HelixExplorer",
                         Path.GetFileNameWithoutExtension(archivePath));
                     Directory.CreateDirectory(tempDir);
-                    string dest = Path.Combine(tempDir, Path.GetFileName(wanted));
+                    var dest = Path.Combine(tempDir, Path.GetFileName(wanted));
 
                     await using var src = entry.OpenEntryStream();
                     await using var fs = File.Create(dest);
@@ -119,8 +119,8 @@ public sealed class ArchiveService : IArchiveService
         using var poolList = ArrayPoolList<FileSystemEntry>.Rent(128);
         // Walk every entry and project onto the immediate children of innerFilter — a
         // virtual directory listing without materialising the whole archive tree.
-        string normalizedFilter = innerFilter.Replace('\\', '/').Trim('/');
-        string filterPrefix = string.IsNullOrEmpty(normalizedFilter) ? string.Empty : normalizedFilter + "/";
+        var normalizedFilter = innerFilter.Replace('\\', '/').Trim('/');
+        var filterPrefix = string.IsNullOrEmpty(normalizedFilter) ? string.Empty : normalizedFilter + "/";
 
         var seenChildren = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -130,15 +130,15 @@ public sealed class ArchiveService : IArchiveService
             foreach (var entry in archive.Entries)
             {
                 token.ThrowIfCancellationRequested();
-                string key = (entry.Key ?? string.Empty).Replace('\\', '/').TrimStart('/');
+                var key = (entry.Key ?? string.Empty).Replace('\\', '/').TrimStart('/');
                 if (string.IsNullOrEmpty(key)) continue;
 
                 if (!key.StartsWith(filterPrefix, StringComparison.OrdinalIgnoreCase)) continue;
 
-                string tail = key[filterPrefix.Length..].TrimEnd('/');
+                var tail = key[filterPrefix.Length..].TrimEnd('/');
                 if (string.IsNullOrEmpty(tail)) continue;
 
-                int slash = tail.IndexOf('/');
+                var slash = tail.IndexOf('/');
                 if (slash < 0)
                 {
                     // Direct child.
@@ -164,7 +164,7 @@ public sealed class ArchiveService : IArchiveService
                 else
                 {
                     // Interior path — synthesise the intermediate directory child.
-                    string child = tail[..slash];
+                    var child = tail[..slash];
                     if (seenChildren.Add(child))
                     {
                         poolList.Add(new FileSystemEntry(

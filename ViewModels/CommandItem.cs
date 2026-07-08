@@ -35,19 +35,19 @@ public sealed partial class CommandItem : ObservableObject
         if (string.IsNullOrEmpty(query)) return 0;
         if (string.IsNullOrEmpty(target)) return -1;
 
-        int score = 0;
-        int ti = 0;
-        int consecutive = 0;
-        bool prevWasSeparator = true;
+        var score = 0;
+        var ti = 0;
+        var consecutive = 0;
+        var prevWasSeparator = true;
 
-        for (int qi = 0; qi < query.Length; qi++)
+        for (var qi = 0; qi < query.Length; qi++)
         {
-            char qc = char.ToLowerInvariant(query[qi]);
-            bool matched = false;
+            var qc = char.ToLowerInvariant(query[qi]);
+            var matched = false;
             while (ti < target.Length)
             {
-                char tc = target[ti];
-                bool boundary = prevWasSeparator;
+                var tc = target[ti];
+                var boundary = prevWasSeparator;
                 prevWasSeparator = tc is ' ' or '/' or '\\' or '_' or '-' or '.';
                 if (char.ToLowerInvariant(tc) == qc)
                 {

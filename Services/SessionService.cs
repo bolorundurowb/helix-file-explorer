@@ -19,7 +19,7 @@ public sealed class SessionService : ISessionService
         try
         {
             if (!File.Exists(s_path)) return new SessionState();
-            string json = File.ReadAllText(s_path);
+            var json = File.ReadAllText(s_path);
             if (string.IsNullOrWhiteSpace(json)) return new SessionState();
             return JsonSerializer.Deserialize<SessionState>(json, s_json) ?? new SessionState();
         }
@@ -34,9 +34,9 @@ public sealed class SessionService : ISessionService
     {
         try
         {
-            string json = JsonSerializer.Serialize(state, s_json);
+            var json = JsonSerializer.Serialize(state, s_json);
             // Write to a temp file then move, so a crash mid-write can't corrupt the session.
-            string tmp = s_path + ".tmp";
+            var tmp = s_path + ".tmp";
             File.WriteAllText(tmp, json);
             File.Move(tmp, s_path, overwrite: true);
         }

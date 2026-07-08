@@ -36,7 +36,7 @@ public sealed partial class PaneView : UserControl
         DataContextChanged += OnDataContextChanged;
     }
 
-    private void OnDataContextChanged(object? sender, System.EventArgs e)
+    private void OnDataContextChanged(object? sender, EventArgs e)
     {
         if (_pane != null) _pane.PropertyChanged -= OnPanePropertyChanged;
         _pane = DataContext as PaneViewModel;
@@ -130,7 +130,7 @@ public sealed partial class PaneView : UserControl
             return;
         }
 
-        int keep = e.ColumnIndex + 1;
+        var keep = e.ColumnIndex + 1;
         while (_millerColumns.Count > keep)
         {
             var last = _millerColumns[^1];
@@ -148,7 +148,7 @@ public sealed partial class PaneView : UserControl
     {
         if (path.StartsWith(ArchiveService.Scheme, StringComparison.OrdinalIgnoreCase))
         {
-            string p = path.EndsWith('/') ? path : path + "/";
+            var p = path.EndsWith('/') ? path : path + "/";
             return await ServiceLocator.Archive.EnumerateAsync(p).ConfigureAwait(true);
         }
         return await ServiceLocator.FileSystem.GetDirectoryContentsAsync(path).ConfigureAwait(true);
@@ -205,7 +205,7 @@ public sealed partial class PaneView : UserControl
         if (Math.Abs(pos.X - _pressPoint.X) < 4 && Math.Abs(pos.Y - _pressPoint.Y) < 4) return;
 
         _mayDrag = false;
-        string path = _dragCandidate.Value.FullPath;
+        var path = _dragCandidate.Value.FullPath;
         if (path.StartsWith(ArchiveService.Scheme, StringComparison.OrdinalIgnoreCase)) return; // can't drag virtual entries
 
         var data = new DataObject();
@@ -221,14 +221,14 @@ public sealed partial class PaneView : UserControl
 
     private void OnDragOver(object? sender, DragEventArgs e)
     {
-        bool copy = (e.KeyModifiers & KeyModifiers.Control) != 0;
+        var copy = (e.KeyModifiers & KeyModifiers.Control) != 0;
         e.DragEffects = copy ? DragDropEffects.Copy : DragDropEffects.Move;
     }
 
     private async void OnDrop(object? sender, DragEventArgs e)
     {
         if (_pane is null) return;
-        bool copy = (e.KeyModifiers & KeyModifiers.Control) != 0;
+        var copy = (e.KeyModifiers & KeyModifiers.Control) != 0;
 
         var paths = new List<string>();
         if (e.Data.Contains(HelixPaths) && e.Data.Get(HelixPaths) is string s && s.Length > 0)
@@ -242,7 +242,7 @@ public sealed partial class PaneView : UserControl
             {
                 foreach (var f in files)
                 {
-                    string? local = f.TryGetLocalPath();
+                    var local = f.TryGetLocalPath();
                     if (!string.IsNullOrEmpty(local)) paths.Add(local!);
                 }
             }
@@ -306,11 +306,11 @@ public sealed partial class PaneView : UserControl
         if (_pane is null || _pane.IsArchive) return;
 
         var topLevel = this.GetVisualRoot() as TopLevel;
-        IntPtr hwnd = topLevel?.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+        var hwnd = topLevel?.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
         if (hwnd == IntPtr.Zero) return;
 
-        PixelPoint pixel = this.PointToScreen(localPoint);
-        string folderPath = _pane.CurrentPath;
+        var pixel = this.PointToScreen(localPoint);
+        var folderPath = _pane.CurrentPath;
         if (string.IsNullOrEmpty(folderPath)) return;
 
         ServiceLocator.ContextMenu.ShowContextMenu(hwnd, folderPath, null, pixel);

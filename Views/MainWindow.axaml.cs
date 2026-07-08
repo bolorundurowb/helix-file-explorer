@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using HelixExplorer.ViewModels;
@@ -99,12 +100,12 @@ public sealed partial class MainWindow : Window
         }
 
         var pos = e.GetPosition(this);
-        bool outside = pos.X < 0 || pos.Y < 0 || pos.X > Bounds.Width || pos.Y > Bounds.Height;
+        var outside = pos.X < 0 || pos.Y < 0 || pos.X > Bounds.Width || pos.Y > Bounds.Height;
         if (outside && DataContext is MainWindowViewModel vm && vm.ActiveTab is not null)
         {
             // Tear out: open a new window at the dragged tab's location.
             // TODO: transparent thumbnail follow + true tab hand-off (see UX spec §1).
-            string path = vm.ActiveTab.ActivePane.CurrentPath;
+            var path = vm.ActiveTab.ActivePane.CurrentPath;
             var newVm = new MainWindowViewModel(restoreSession: false);
             newVm.NavigateActive(path);
             new MainWindow { DataContext = newVm }.Show();

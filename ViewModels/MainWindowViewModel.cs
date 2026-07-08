@@ -95,15 +95,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         var scored = new List<(int score, CommandItem item)>();
         foreach (var c in _allCommands)
         {
-            int s = c.FuzzyScore(query);
+            var s = c.FuzzyScore(query);
             if (s >= 0) scored.Add((s, c));
         }
         foreach (var path in _recentPaths)
         {
-            int s = CommandItem.FuzzyScore(path, query);
+            var s = CommandItem.FuzzyScore(path, query);
             if (s >= 0)
             {
-                string captured = path;
+                var captured = path;
                 scored.Add((s, new CommandItem(path, "Recent", vm => vm.NavigateActive(captured))));
             }
         }
@@ -119,7 +119,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void OpenNewTab()
     {
-        string start = ActiveTab?.ActivePane.CurrentPath ?? string.Empty;
+        var start = ActiveTab?.ActivePane.CurrentPath ?? string.Empty;
         if (string.IsNullOrEmpty(start) || start.StartsWith(ArchiveService.Scheme, StringComparison.OrdinalIgnoreCase))
         {
             start = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
@@ -133,7 +133,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private void CloseTab()
     {
         if (ActiveTab is null) return;
-        int idx = Tabs.IndexOf(ActiveTab);
+        var idx = Tabs.IndexOf(ActiveTab);
         var closing = ActiveTab;
         Tabs.Remove(closing);
         closing.Dispose();
@@ -151,7 +151,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public void CycleTab(int delta)
     {
         if (Tabs.Count == 0 || ActiveTab is null) return;
-        int i = Tabs.IndexOf(ActiveTab);
+        var i = Tabs.IndexOf(ActiveTab);
         i = ((i + delta) % Tabs.Count + Tabs.Count) % Tabs.Count;
         ActiveTab = Tabs[i];
     }
@@ -245,7 +245,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             }
             if (Tabs.Count > 0)
             {
-                int idx = Math.Clamp(session.ActiveTabIndex, 0, Tabs.Count - 1);
+                var idx = Math.Clamp(session.ActiveTabIndex, 0, Tabs.Count - 1);
                 ActiveTab = Tabs[idx];
             }
         }

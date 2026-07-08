@@ -19,7 +19,7 @@ public sealed class GitService : IGitService
     private static string? FindRepoRoot(string? path)
     {
         if (string.IsNullOrEmpty(path)) return null;
-        string? dir = Directory.Exists(path) ? path : Path.GetDirectoryName(path);
+        var dir = Directory.Exists(path) ? path : Path.GetDirectoryName(path);
         while (!string.IsNullOrEmpty(dir))
         {
             if (Directory.Exists(Path.Combine(dir, ".git")) || File.Exists(Path.Combine(dir, ".git")))
@@ -31,12 +31,12 @@ public sealed class GitService : IGitService
 
     public async ValueTask<GitStatus> GetStatusAsync(string path, CancellationToken token = default)
     {
-        string? root = FindRepoRoot(path);
+        var root = FindRepoRoot(path);
         if (root is null) return GitStatus.Empty;
 
         try
         {
-            string output = await RunGitAsync(root, "status --porcelain=v2 --branch", token).ConfigureAwait(false);
+            var output = await RunGitAsync(root, "status --porcelain=v2 --branch", token).ConfigureAwait(false);
             return Parse(output);
         }
         catch (OperationCanceledException)
@@ -53,9 +53,9 @@ public sealed class GitService : IGitService
     /// <summary>Parses <c>git status --porcelain=v2 --branch</c> output.</summary>
     private static GitStatus Parse(string output)
     {
-        string branch = string.Empty;
+        var branch = string.Empty;
         int ahead = 0, behind = 0, staged = 0, unstaged = 0, untracked = 0;
-        bool hasUpstream = false;
+        var hasUpstream = false;
 
         foreach (var line in output.Split('\n'))
         {
@@ -77,8 +77,8 @@ public sealed class GitService : IGitService
                     // Format: "# branch.ab +1 -2"
                     foreach (var part in span["# branch.ab ".Length..].ToString().Split(' ', StringSplitOptions.RemoveEmptyEntries))
                     {
-                        if (part.StartsWith('+') && int.TryParse(part.AsSpan(1), out int a)) ahead = a;
-                        else if (part.StartsWith('-') && int.TryParse(part.AsSpan(1), out int b)) behind = b;
+                        if (part.StartsWith('+') && int.TryParse(part.AsSpan(1), out var a)) ahead = a;
+                        else if (part.StartsWith('-') && int.TryParse(part.AsSpan(1), out var b)) behind = b;
                     }
                 }
                 continue;
@@ -95,8 +95,8 @@ public sealed class GitService : IGitService
                     // "<type> <XY> ..." — XY are the two chars after the leading type + space.
                     if (span.Length >= 4)
                     {
-                        char x = span[2];
-                        char y = span[3];
+                        var x = span[2];
+                        var y = span[3];
                         if (x != '.' && x != ' ') staged++;
                         if (y != '.' && y != ' ') unstaged++;
                     }
@@ -111,15 +111,15 @@ public sealed class GitService : IGitService
 
     public async ValueTask<IReadOnlyList<string>> ListBranchesAsync(string path, CancellationToken token = default)
     {
-        string? root = FindRepoRoot(path);
+        var root = FindRepoRoot(path);
         if (root is null) return Array.Empty<string>();
         try
         {
-            string output = await RunGitAsync(root, "branch --format=%(refname:short)", token).ConfigureAwait(false);
+            var output = await RunGitAsync(root, "branch --format=%(refname:short)", token).ConfigureAwait(false);
             var list = new List<string>();
             foreach (var line in output.Split('\n'))
             {
-                string b = line.Trim();
+                var b = line.Trim();
                 if (b.Length > 0) list.Add(b);
             }
             return list;
@@ -134,7 +134,7 @@ public sealed class GitService : IGitService
 
     public async ValueTask<bool> CheckoutBranchAsync(string path, string branch, CancellationToken token = default)
     {
-        string? root = FindRepoRoot(path);
+        var root = FindRepoRoot(path);
         if (root is null || string.IsNullOrWhiteSpace(branch)) return false;
         try
         {
@@ -183,8 +183,8 @@ public sealed class GitService : IGitService
 
             // Drain BOTH streams concurrently. Reading only stdout while stderr fills its
             // pipe buffer is a classic deadlock; git writes diagnostics to stderr.
-            Task<string> stdout = Process.StandardOutput.ReadToEndAsync(cts.Token);
-            Task<string> stderr = Process.StandardError.ReadToEndAsync(cts.Token);
+            var stdout = Process.StandardOutput.ReadToEndAsync(cts.Token);
+            var stderr = Process.StandardError.ReadToEndAsync(cts.Token);
             await Task.WhenAll(stdout, stderr).ConfigureAwait(false);
             await Process.WaitForExitAsync(cts.Token).ConfigureAwait(false);
             return stdout.Result;

@@ -95,8 +95,8 @@ public sealed partial class SidebarNode : ObservableObject
 
     private static SidebarNode MakeKnownFolder(Environment.SpecialFolder folder, string icon)
     {
-        string path = Environment.GetFolderPath(folder);
-        string name = Path.GetFileName(path);
+        var path = Environment.GetFolderPath(folder);
+        var name = Path.GetFileName(path);
         if (string.IsNullOrEmpty(name)) name = folder.ToString();
         return new SidebarNode
         {
@@ -148,7 +148,7 @@ public sealed partial class SidebarNode : ObservableObject
         {
             try
             {
-                bool any = false;
+                var any = false;
                 foreach (var drive in DriveInfo.GetDrives())
                 {
                     token.ThrowIfCancellationRequested();

@@ -34,8 +34,8 @@ public sealed partial class DualPaneView : UserControl
     /// <summary>Reconfigures the grid for single-pane, side-by-side, or stacked layouts.</summary>
     private void ApplyOrientation()
     {
-        bool dual = _tab?.IsDualPane ?? false;
-        bool vertical = _tab?.VerticalSplit ?? false;
+        var dual = _tab?.IsDualPane ?? false;
+        var vertical = _tab?.VerticalSplit ?? false;
 
         if (!dual)
         {

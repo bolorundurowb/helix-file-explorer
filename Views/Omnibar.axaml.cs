@@ -24,7 +24,7 @@ public sealed partial class Omnibar : UserControl
 
     private PaneViewModel? _pane;
 
-    private void OnDataContextChanged(object? sender, System.EventArgs e)
+    private void OnDataContextChanged(object? sender, EventArgs e)
     {
         if (_pane != null)
         {
@@ -53,7 +53,7 @@ public sealed partial class Omnibar : UserControl
 
         // Split path respecting the archive:// scheme.
         var working = path;
-        if (working.StartsWith(Services.ArchiveService.Scheme, System.StringComparison.OrdinalIgnoreCase))
+        if (working.StartsWith(Services.ArchiveService.Scheme, StringComparison.OrdinalIgnoreCase))
         {
             // Show as a single root segment for the archive host plus ordinary inner splits.
             var bang = working.IndexOf('!');
@@ -101,7 +101,7 @@ public sealed partial class Omnibar : UserControl
         var item = new BreadcrumbItem
         {
             Path = path,
-            Content = System.IO.Path.GetFileName(path.TrimEnd('\\', '/')) is { Length: > 0 } name ? name : path,
+            Content = Path.GetFileName(path.TrimEnd('\\', '/')) is { Length: > 0 } name ? name : path,
         };
         item.Click += OnBreadcrumbClick;
         item.ActionRequested += OnBreadcrumbAction;

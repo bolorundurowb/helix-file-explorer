@@ -84,7 +84,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
     partial void OnThumbnailSizeChanged(double value)
     {
-        double clamped = Math.Clamp(value, 32, 256);
+        var clamped = Math.Clamp(value, 32, 256);
         if (clamped != value) { ThumbnailSize = clamped; return; }
         ServiceLocator.Settings.ThumbnailSize = clamped;
     }
@@ -102,7 +102,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     public void NavigateTo(string path)
     {
         if (string.IsNullOrEmpty(path)) return;
-        string resolved = ResolveDestination(path);
+        var resolved = ResolveDestination(path);
         if (resolved == CurrentPath) return;
         RecordNavigation(resolved);
     }
@@ -123,17 +123,17 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         // Relative .. handling.
         if (path == "..")
         {
-            string cp = CurrentPath;
+            var cp = CurrentPath;
             if (cp.StartsWith(ArchiveService.Scheme, StringComparison.OrdinalIgnoreCase))
             {
-                int bang = cp.IndexOf('!');
+                var bang = cp.IndexOf('!');
                 if (bang < 0)
                 {
                     // archive://X! → leave the archive.
                     return cp[ArchiveService.Scheme.Length..];
                 }
-                string inner = cp[(bang + 1)..].TrimEnd('\\', '/').TrimEnd('/');
-                int lastSlash = inner.LastIndexOfAny(new[] { '\\', '/' });
+                var inner = cp[(bang + 1)..].TrimEnd('\\', '/').TrimEnd('/');
+                var lastSlash = inner.LastIndexOfAny(new[] { '\\', '/' });
                 if (lastSlash < 0)
                 {
                     return ArchiveService.Scheme + cp[ArchiveService.Scheme.Length..bang] + "!";
@@ -144,7 +144,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             return parent != null ? parent.FullName + Path.DirectorySeparatorChar : cp;
         }
 
-        string resolved = _fileSystem.ResolvePath(path);
+        var resolved = _fileSystem.ResolvePath(path);
         if (resolved.EndsWith(':') && resolved.Length == 2)
         {
             resolved += Path.DirectorySeparatorChar;
@@ -198,7 +198,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         var cts = new CancellationTokenSource();
         _refreshCts = cts;
         try { previous?.Cancel(); } catch (ObjectDisposedException) { }
-        CancellationToken token = cts.Token;
+        var token = cts.Token;
 
         await Dispatcher.UIThread.InvokeAsync(() => IsLoading = true);
 
@@ -209,7 +209,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             {
                 if (IsArchive)
                 {
-                    string cp = CurrentPath;
+                    var cp = CurrentPath;
                     if (!cp.EndsWith('/') && !cp.EndsWith('\\')) cp += "/";
                     entries = await _archive.EnumerateAsync(cp, token).ConfigureAwait(false);
                 }
@@ -266,9 +266,9 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             var pool = ArrayPoolList<FileSystemEntry>.Rent(Math.Max(64, _allEntries.Count));
             try
             {
-                string filter = FilterText;
+                var filter = FilterText;
                 var src = _allEntries;
-                for (int i = 0; i < src.Count; i++)
+                for (var i = 0; i < src.Count; i++)
                 {
                     var e = src[i];
                     if (e.Name.Contains(filter, StringComparison.OrdinalIgnoreCase))
@@ -315,14 +315,14 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     private IReadOnlyList<FileSystemEntry> OrderEntries(IReadOnlyList<FileSystemEntry> entries)
     {
         if (entries is not FileSystemEntry[] arr || arr.Length == 0) return entries;
-        string col = SortColumn;
-        bool desc = SortDescending;
+        var col = SortColumn;
+        var desc = SortDescending;
         Array.Sort(arr, (a, b) =>
         {
-            int c = a.IsDirectory.CompareTo(b.IsDirectory);
+            var c = a.IsDirectory.CompareTo(b.IsDirectory);
             if (c != 0) return -c; // directories first, regardless of sort direction
 
-            int r = col switch
+            var r = col switch
             {
                 "Size" => a.Size.CompareTo(b.Size),
                 "Modified" => a.Modified.CompareTo(b.Modified),
@@ -422,7 +422,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     public async Task AcceptDropAsync(IReadOnlyList<string> sourcePaths, bool copy)
     {
         if (IsArchive || string.IsNullOrEmpty(CurrentPath) || sourcePaths.Count == 0) return;
-        string destDir = CurrentPath;
+        var destDir = CurrentPath;
 
         await Task.Run(() =>
         {
@@ -432,14 +432,14 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
                 {
                     if (Directory.Exists(src))
                     {
-                        string name = Path.GetFileName(src.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-                        string target = Path.Combine(destDir, name);
+                        var name = Path.GetFileName(src.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                        var target = Path.Combine(destDir, name);
                         if (copy) CopyDirectory(src, target);
                         else Directory.Move(src, target);
                     }
                     else if (File.Exists(src))
                     {
-                        string target = Path.Combine(destDir, Path.GetFileName(src));
+                        var target = Path.Combine(destDir, Path.GetFileName(src));
                         if (copy) File.Copy(src, target, overwrite: true);
                         else File.Move(src, target, overwrite: true);
                     }

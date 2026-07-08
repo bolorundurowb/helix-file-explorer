@@ -45,10 +45,10 @@ public sealed class FileSystemService : IFileSystemService
         // Preserve archive:// virtual scheme.
         if (path.StartsWith(ArchiveService.Scheme, StringComparison.OrdinalIgnoreCase))
         {
-            int schemeEnd = path.IndexOf('!', StringComparison.Ordinal);
+            var schemeEnd = path.IndexOf('!', StringComparison.Ordinal);
             if (schemeEnd < 0) return Normalize(path);
-            string scheme = path[..schemeEnd];
-            string remainder = path[(schemeEnd + 1)..];
+            var scheme = path[..schemeEnd];
+            var remainder = path[(schemeEnd + 1)..];
             return scheme + "!" + Normalize(remainder).TrimStart('\\', '/');
         }
 
@@ -92,8 +92,8 @@ public sealed class FileSystemService : IFileSystemService
             {
                 token.ThrowIfCancellationRequested();
 
-                bool isDir = (info.Attributes & FileAttributes.Directory) != 0;
-                long size = 0L;
+                var isDir = (info.Attributes & FileAttributes.Directory) != 0;
+                var size = 0L;
                 DateTime modified;
                 try
                 {
@@ -106,7 +106,7 @@ public sealed class FileSystemService : IFileSystemService
                     modified = DateTime.MinValue;
                 }
 
-                string ext = isDir ? string.Empty : info.Extension;
+                var ext = isDir ? string.Empty : info.Extension;
                 entries.Add(new FileSystemEntry(info.FullName, info.Name, isDir, size, modified, ext));
             }
         }

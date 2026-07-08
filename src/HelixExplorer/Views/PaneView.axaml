@@ -65,6 +65,9 @@
                     <MenuItem Header="Copy path" Command="{Binding CopyPathCommand}" />
                     <MenuItem Header="Paste" Command="{Binding PasteCommand}" />
                     <Separator />
+                    <MenuItem Header="Compress to ZIP" Command="{Binding CompressToZipCommand}" />
+                    <MenuItem Header="Extract here" Command="{Binding ExtractHereCommand}" />
+                    <Separator />
                     <MenuItem Header="Show more options" Command="{Binding ShowMoreOptionsCommand}" />
                 </ContextMenu>
             </DataGrid.ContextMenu>
@@ -158,6 +161,9 @@
                     <MenuItem Header="Copy path" Command="{Binding CopyPathCommand}" />
                     <MenuItem Header="Paste" Command="{Binding PasteCommand}" />
                     <Separator />
+                    <MenuItem Header="Compress to ZIP" Command="{Binding CompressToZipCommand}" />
+                    <MenuItem Header="Extract here" Command="{Binding ExtractHereCommand}" />
+                    <Separator />
                     <MenuItem Header="Show more options" Command="{Binding ShowMoreOptionsCommand}" />
                 </ContextMenu>
             </ListBox.ContextMenu>
@@ -233,6 +239,9 @@
                         <Separator />
                         <MenuItem Header="Copy path" Command="{Binding CopyPathCommand}" />
                         <MenuItem Header="Paste" Command="{Binding PasteCommand}" />
+                        <Separator />
+                        <MenuItem Header="Compress to ZIP" Command="{Binding CompressToZipCommand}" />
+                        <MenuItem Header="Extract here" Command="{Binding ExtractHereCommand}" />
                         <Separator />
                         <MenuItem Header="Show more options" Command="{Binding ShowMoreOptionsCommand}" />
                     </ContextMenu>

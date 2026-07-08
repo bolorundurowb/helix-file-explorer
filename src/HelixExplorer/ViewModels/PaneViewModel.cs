@@ -148,6 +148,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         DeleteCommand.NotifyCanExecuteChanged();
         BeginRenameCommand.NotifyCanExecuteChanged();
         ShowMoreOptionsCommand.NotifyCanExecuteChanged();
+        CompressToZipCommand.NotifyCanExecuteChanged();
+        ExtractHereCommand.NotifyCanExecuteChanged();
         _ = RefreshAsync(showLoading: true);
     }
 
@@ -831,6 +833,99 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         }
     }
 
+    [RelayCommand(CanExecute = nameof(CanCompressSelection))]
+    private async Task CompressToZip()
+    {
+        var sources = SelectedEntries
+            .Select(e => e.FullPath)
+            .Where(path => !ArchivePath.IsVirtual(path))
+            .ToList();
+        if (sources.Count == 0 || string.IsNullOrEmpty(CurrentPath))
+            return;
+
+        var hostDir = GetPhysicalHostDirectory();
+        if (string.IsNullOrEmpty(hostDir))
+            return;
+
+        var zipName = sources.Count == 1
+            ? Path.GetFileNameWithoutExtension(sources[0].TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)) + ".zip"
+            : "Archive.zip";
+        var destination = GetUniquePath(Path.Combine(hostDir, zipName));
+
+        try
+        {
+            IsLoading = true;
+            await _archive.CreateZipAsync(sources, destination).ConfigureAwait(true);
+            await RefreshAsync(showLoading: false).ConfigureAwait(true);
+            StatusText = $"Created {Path.GetFileName(destination)}";
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"CompressToZip failed: {ex.Message}");
+            StatusText = "Could not create archive";
+            IsLoading = false;
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanExtractSelection))]
+    private async Task ExtractHere()
+    {
+        var physicalArchives = SelectedEntries
+            .Select(e => e.FullPath)
+            .Where(path => !ArchivePath.IsVirtual(path) && _archive.IsArchiveFile(path))
+            .ToList();
+        var virtualPaths = SelectedEntries
+            .Select(e => e.FullPath)
+            .Where(ArchivePath.IsVirtual)
+            .ToList();
+
+        if (physicalArchives.Count == 0 && virtualPaths.Count == 0)
+            return;
+
+        try
+        {
+            IsLoading = true;
+
+            foreach (var archivePath in physicalArchives)
+            {
+                var hostDir = Path.GetDirectoryName(archivePath);
+                if (string.IsNullOrEmpty(hostDir))
+                    continue;
+
+                var destination = GetUniqueDirectory(Path.Combine(
+                    hostDir,
+                    Path.GetFileNameWithoutExtension(archivePath)));
+                await _archive.ExtractArchiveToDirectoryAsync(archivePath, destination).ConfigureAwait(true);
+            }
+
+            if (virtualPaths.Count > 0)
+            {
+                var hostDir = GetPhysicalHostDirectory();
+                if (string.IsNullOrEmpty(hostDir))
+                {
+                    StatusText = "Could not determine extract location";
+                    IsLoading = false;
+                    return;
+                }
+
+                await _archive.ExtractVirtualEntriesAsync(virtualPaths, hostDir).ConfigureAwait(true);
+            }
+
+            if (!IsArchive)
+                await RefreshAsync(showLoading: false).ConfigureAwait(true);
+            else
+                IsLoading = false;
+
+            StatusText = "Extracted";
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"ExtractHere failed: {ex.Message}");
+            StatusText = "Could not extract";
+            IsLoading = false;
+        }
+    }
+
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private void Open()
     {
@@ -1015,6 +1110,62 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
     private bool CanRename() => CanModifySelection() && SelectedEntries.Count == 1;
 
+    private bool CanCompressSelection()
+        => CanModifySelection()
+           && SelectedEntries.All(e => !ArchivePath.IsVirtual(e.FullPath));
+
+    private bool CanExtractSelection()
+        => HasSelection()
+           && SelectedEntries.Any(e => _archive.IsArchiveFile(e.FullPath) || ArchivePath.IsVirtual(e.FullPath));
+
+    private string? GetPhysicalHostDirectory()
+    {
+        if (ArchivePath.IsVirtual(CurrentPath)
+            && ArchivePath.TryParse(CurrentPath, out var archiveFile, out _))
+        {
+            return Path.GetDirectoryName(archiveFile);
+        }
+
+        if (!IsArchive && !string.IsNullOrEmpty(CurrentPath))
+            return CurrentPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        return null;
+    }
+
+    private static string GetUniquePath(string path)
+    {
+        if (!File.Exists(path) && !Directory.Exists(path))
+            return path;
+
+        var directory = Path.GetDirectoryName(path) ?? string.Empty;
+        var fileName = Path.GetFileNameWithoutExtension(path);
+        var extension = Path.GetExtension(path);
+
+        for (var i = 2; i < 100; i++)
+        {
+            var candidate = Path.Combine(directory, $"{fileName} ({i}){extension}");
+            if (!File.Exists(candidate) && !Directory.Exists(candidate))
+                return candidate;
+        }
+
+        return Path.Combine(directory, $"{fileName} ({Guid.NewGuid():N}){extension}");
+    }
+
+    private static string GetUniqueDirectory(string path)
+    {
+        if (!Directory.Exists(path))
+            return path;
+
+        for (var i = 2; i < 100; i++)
+        {
+            var candidate = $"{path} ({i})";
+            if (!Directory.Exists(candidate))
+                return candidate;
+        }
+
+        return $"{path} ({Guid.NewGuid():N})";
+    }
+
     partial void OnSelectedCountChanged(int value)
     {
         CutCommand.NotifyCanExecuteChanged();
@@ -1022,6 +1173,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         DeleteCommand.NotifyCanExecuteChanged();
         BeginRenameCommand.NotifyCanExecuteChanged();
         ShowMoreOptionsCommand.NotifyCanExecuteChanged();
+        CompressToZipCommand.NotifyCanExecuteChanged();
+        ExtractHereCommand.NotifyCanExecuteChanged();
         OpenCommand.NotifyCanExecuteChanged();
         OpenInNewTabCommand.NotifyCanExecuteChanged();
         OpenInNewWindowCommand.NotifyCanExecuteChanged();

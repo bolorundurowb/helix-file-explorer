@@ -24,6 +24,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     private readonly IGitProvider _git;
     private readonly IArchiveProvider _archive;
     private readonly IFolderColorService _folderColors;
+    private readonly ISettingsStore _settingsStore;
     private readonly FileVisualService _visuals;
     private readonly Func<IFileChangeWatcher> _watcherFactory;
     private bool _showHiddenFiles;
@@ -40,6 +41,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         IGitProvider git,
         IArchiveProvider archive,
         IFolderColorService folderColors,
+        ISettingsStore settingsStore,
         FileVisualService visuals,
         Func<IFileChangeWatcher> watcherFactory)
     {
@@ -52,6 +54,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         _git = git;
         _archive = archive;
         _folderColors = folderColors;
+        _settingsStore = settingsStore;
         _visuals = visuals;
         _watcherFactory = watcherFactory;
         LeftPane = CreatePane();
@@ -105,11 +108,13 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
             _uiHost,
             _git,
             _watcherFactory(),
-            _visuals);
+            _visuals,
+            _settingsStore);
         pane.Navigated += OnPaneNavigated;
         pane.EntryActivated += OnEntryActivated;
         pane.OpenInNewTabRequested += OnOpenInNewTabRequested;
-        pane.OpenInNewPaneRequested += OnOpenInNewPaneRequested;
+        pane.OpenInOtherPaneRequested += OnOpenInOtherPaneRequested;
+        pane.PinPathRequested += OnPanePinPathRequested;
         pane.ApplyViewSettings(_showHiddenFiles, _showFileExtensions);
         return pane;
     }
@@ -154,19 +159,24 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     }
 
     public event EventHandler<string>? OpenInNewTabRequested;
+    public event EventHandler<(string Path, bool Pin)>? PinPathRequested;
 
     private void OnOpenInNewTabRequested(object? sender, string path)
         => OpenInNewTabRequested?.Invoke(this, path);
 
-    private void OnOpenInNewPaneRequested(object? sender, string path)
+    private void OnOpenInOtherPaneRequested(object? sender, string path)
     {
         if (!IsDualPane)
             ToggleDualPane();
 
-        RightPane?.NavigateTo(path);
-        if (RightPane is not null)
-            ActivePane = RightPane;
+        var target = ReferenceEquals(ActivePane, LeftPane) ? RightPane : LeftPane;
+        target ??= RightPane ?? LeftPane;
+        target.NavigateTo(path);
+        ActivePane = target;
     }
+
+    private void OnPanePinPathRequested(object? sender, (string Path, bool Pin) args)
+        => PinPathRequested?.Invoke(this, args);
 
     private void OnPaneNavigated(object? sender, EventArgs e)
     {
@@ -330,7 +340,8 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         pane.Navigated -= OnPaneNavigated;
         pane.EntryActivated -= OnEntryActivated;
         pane.OpenInNewTabRequested -= OnOpenInNewTabRequested;
-        pane.OpenInNewPaneRequested -= OnOpenInNewPaneRequested;
+        pane.OpenInOtherPaneRequested -= OnOpenInOtherPaneRequested;
+        pane.PinPathRequested -= OnPanePinPathRequested;
     }
 
     public void RefreshFolderColorBindings()

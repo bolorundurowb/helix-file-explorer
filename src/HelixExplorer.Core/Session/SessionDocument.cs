@@ -3,15 +3,13 @@ using HelixExplorer.Core.Models;
 namespace HelixExplorer.Core.Session;
 
 /// <summary>
-/// Root of the persisted workspace state (<c>session.json</c>): open tabs, the active tab,
-/// and chrome preferences that should survive a restart.
+/// Root of the persisted workspace state (<c>session.json</c>): open tabs and recent navigation paths.
+/// Chrome preferences (sidebar, theme, etc.) live in <see cref="Settings.AppSettings"/>.
 /// </summary>
 public sealed class SessionDocument
 {
     public List<TabSnapshot> Tabs { get; set; } = [];
     public int ActiveTabIndex { get; set; }
-    public bool SidebarOpen { get; set; } = true;
-    public double SidebarWidth { get; set; } = 240;
     public List<string> RecentPaths { get; set; } = [];
 }
 

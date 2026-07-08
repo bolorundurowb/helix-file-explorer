@@ -32,6 +32,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     private readonly IGitProvider _git;
     private readonly IFileChangeWatcher _watcher;
     private readonly FileVisualService _visuals;
+    private readonly ISettingsStore _settingsStore;
+    private readonly Dictionary<string, EntryItemViewModel> _entryPool = new(StringComparer.OrdinalIgnoreCase);
     private readonly Stack<string> _backStack = new();
     private readonly Stack<string> _forwardStack = new();
     private readonly List<FileSystemEntry> _viewBuffer = new();
@@ -57,7 +59,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         IUiHost uiHost,
         IGitProvider git,
         IFileChangeWatcher watcher,
-        FileVisualService visuals)
+        FileVisualService visuals,
+        ISettingsStore settingsStore)
     {
         _fileSystem = fileSystem;
         _archive = archive;
@@ -70,6 +73,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         _git = git;
         _watcher = watcher;
         _visuals = visuals;
+        _settingsStore = settingsStore;
         _watcher.Changed += OnWatcherChanged;
         _clipboard.Changed += OnClipboardChanged;
         SelectedEntries.CollectionChanged += (_, _) => SyncEntrySelectionFlags();
@@ -78,7 +82,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     public event EventHandler? Navigated;
     public event EventHandler<FileSystemEntry>? EntryActivated;
     public event EventHandler<string>? OpenInNewTabRequested;
-    public event EventHandler<string>? OpenInNewPaneRequested;
+    public event EventHandler<string>? OpenInOtherPaneRequested;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsDetailsView))]
@@ -150,6 +154,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
     partial void OnCurrentPathChanged(string value)
     {
+        _entryPool.Clear();
         RebuildBreadcrumbs(value);
         EditablePath = value;
         ClearFilter();
@@ -570,22 +575,42 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         FileNameFilter.Apply(_visibleBuffer, IsFilterVisible ? FilterText : null, _viewBuffer);
         _viewBuffer.Sort(FileSystemEntryComparer.For(SortColumn, SortDescending));
 
+        var usedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var visualTargets = new List<EntryItemViewModel>();
+
         Entries.Clear();
         foreach (var entry in _viewBuffer)
         {
-            var gitStatus = _gitSnapshot.GetStatusForPath(entry.FullPath);
-            Entries.Add(new EntryItemViewModel(entry, ShowFileExtensions, gitStatus));
+            var path = entry.FullPath;
+            usedPaths.Add(path);
+            var gitStatus = _gitSnapshot.GetStatusForPath(path);
+
+            if (!_entryPool.TryGetValue(path, out var item))
+            {
+                item = new EntryItemViewModel(entry, ShowFileExtensions, gitStatus);
+                _entryPool[path] = item;
+                visualTargets.Add(item);
+            }
+            else
+            {
+                item.UpdateEntry(entry, ShowFileExtensions, gitStatus);
+            }
+
+            Entries.Add(item);
         }
+
+        foreach (var stale in _entryPool.Keys.Where(k => !usedPaths.Contains(k)).ToList())
+            _entryPool.Remove(stale);
 
         ItemCount = _viewBuffer.Count;
         SelectedEntry = null;
         SelectedEntries.Clear();
         SelectedCount = 0;
         UpdateStatusText();
-        RequestEntryVisuals();
+        RequestEntryVisuals(visualTargets);
     }
 
-    private void RequestEntryVisuals()
+    private void RequestEntryVisuals(IReadOnlyList<EntryItemViewModel>? targets = null)
     {
         _visualCts?.Cancel();
         _visualCts?.Dispose();
@@ -593,7 +618,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         var ct = _visualCts.Token;
         var size = IsGridView ? (int)ThumbnailSize : 20;
 
-        foreach (var entry in Entries)
+        var entries = targets ?? Entries;
+        foreach (var entry in entries)
             _ = entry.RefreshVisualAsync(_visuals, size, IsGridView, ct);
     }
 
@@ -742,7 +768,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     // ── View mode & thumbnail sizing ─────────────────────────────────────────
 
     [RelayCommand]
-    private void SetViewMode(LayoutMode mode) => ViewMode = mode;
+    public void SetViewMode(LayoutMode mode) => ViewMode = mode;
 
     [RelayCommand]
     private void CycleViewMode()
@@ -1098,13 +1124,57 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand(CanExecute = nameof(HasSingleSelection))]
-    private void OpenInNewPane()
+    private void OpenInOtherPane()
     {
         if (SelectedEntries.Count != 1)
             return;
 
         var entry = SelectedEntries[0];
-        OpenInNewPaneRequested?.Invoke(this, entry.IsDirectory ? entry.FullPath : Path.GetDirectoryName(entry.FullPath) ?? CurrentPath);
+        OpenInOtherPaneRequested?.Invoke(this, entry.IsDirectory ? entry.FullPath : Path.GetDirectoryName(entry.FullPath) ?? CurrentPath);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanPinSelection))]
+    private void PinToSidebar()
+    {
+        if (SelectedEntries.Count != 1 || !SelectedEntries[0].IsDirectory)
+            return;
+
+        PinPathRequested?.Invoke(this, (SelectedEntries[0].FullPath, true));
+    }
+
+    [RelayCommand(CanExecute = nameof(CanUnpinSelection))]
+    private void UnpinFromSidebar()
+    {
+        if (SelectedEntries.Count != 1 || !SelectedEntries[0].IsDirectory)
+            return;
+
+        PinPathRequested?.Invoke(this, (SelectedEntries[0].FullPath, false));
+    }
+
+    public event EventHandler<(string Path, bool Pin)>? PinPathRequested;
+
+    public void NotifyPinStateChanged()
+    {
+        PinToSidebarCommand.NotifyCanExecuteChanged();
+        UnpinFromSidebarCommand.NotifyCanExecuteChanged();
+    }
+
+    private bool CanPinSelection()
+    {
+        if (SelectedEntries.Count != 1 || !SelectedEntries[0].IsDirectory)
+            return false;
+
+        var settings = _settingsStore.Load();
+        return !PinnedPathHelper.IsPinned(settings.PinnedPaths, SelectedEntries[0].FullPath);
+    }
+
+    private bool CanUnpinSelection()
+    {
+        if (SelectedEntries.Count != 1 || !SelectedEntries[0].IsDirectory)
+            return false;
+
+        var settings = _settingsStore.Load();
+        return PinnedPathHelper.IsPinned(settings.PinnedPaths, SelectedEntries[0].FullPath);
     }
 
     [RelayCommand]
@@ -1188,13 +1258,6 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             Debug.WriteLine($"ShowProperties failed: {ex.Message}");
             StatusText = "Could not open properties";
         }
-    }
-
-    [RelayCommand(CanExecute = nameof(HasSelection))]
-    private void Share()
-    {
-        // Windows Share sheet deep integration is deferred post-v1.
-        StatusText = "Share is not available yet";
     }
 
     [RelayCommand(CanExecute = nameof(CanShowMoreOptions))]
@@ -1310,10 +1373,11 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         OpenCommand.NotifyCanExecuteChanged();
         OpenInNewTabCommand.NotifyCanExecuteChanged();
         OpenInNewWindowCommand.NotifyCanExecuteChanged();
-        OpenInNewPaneCommand.NotifyCanExecuteChanged();
+        OpenInOtherPaneCommand.NotifyCanExecuteChanged();
+        PinToSidebarCommand.NotifyCanExecuteChanged();
+        UnpinFromSidebarCommand.NotifyCanExecuteChanged();
         CopyPathCommand.NotifyCanExecuteChanged();
         ShowPropertiesCommand.NotifyCanExecuteChanged();
-        ShareCommand.NotifyCanExecuteChanged();
     }
 
     public async Task HandleDropAsync(IReadOnlyList<string> paths, bool isCopy)

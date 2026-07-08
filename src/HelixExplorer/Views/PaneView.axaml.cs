@@ -359,6 +359,8 @@ public sealed partial class PaneView : UserControl
         _millerColumns.Add(column);
     }
 
+    private const int MaxMillerColumns = 8;
+
     private ListBox BuildMillerColumn(IEnumerable<EntryItemViewModel> entries, int columnIndex)
     {
         var list = new ListBox
@@ -367,6 +369,7 @@ public sealed partial class PaneView : UserControl
             ItemsSource = entries,
             ItemTemplate = _millerItemTemplate
         };
+        list.ItemsPanel = new FuncTemplate<Panel?>(() => new VirtualizingStackPanel());
         MillerColumnPanel.SetColumnIndex(list, columnIndex);
         list.DoubleTapped += (_, _) =>
         {
@@ -393,6 +396,15 @@ public sealed partial class PaneView : UserControl
             var last = _millerColumns[^1];
             MillerPanel.Children.Remove(last);
             _millerColumns.RemoveAt(_millerColumns.Count - 1);
+        }
+
+        while (_millerColumns.Count >= MaxMillerColumns)
+        {
+            var first = _millerColumns[0];
+            MillerPanel.Children.Remove(first);
+            _millerColumns.RemoveAt(0);
+            for (var i = 0; i < _millerColumns.Count; i++)
+                MillerColumnPanel.SetColumnIndex(_millerColumns[i], i);
         }
 
         var children = await Pane.EnumerateMillerChildrenAsync(entry.FullPath).ConfigureAwait(true);

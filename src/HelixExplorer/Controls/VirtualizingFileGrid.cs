@@ -27,6 +27,8 @@ public sealed class VirtualizingFileGrid : TemplatedControl
     private ScrollViewer? _scrollViewer;
     private INotifyCollectionChanged? _itemsSubscription;
     private bool _rebuildScheduled;
+    private int _lastColumnCount = -1;
+    private int _lastItemCount;
 
     static VirtualizingFileGrid()
     {
@@ -153,6 +155,8 @@ public sealed class VirtualizingFileGrid : TemplatedControl
         if (items.Count == 0)
         {
             _rows.ItemsSource = Array.Empty<GridRow>();
+            _lastColumnCount = -1;
+            _lastItemCount = 0;
             return;
         }
 
@@ -162,7 +166,15 @@ public sealed class VirtualizingFileGrid : TemplatedControl
 
         var tileWidth = Math.Max(48, ItemSize + 12);
         var columns = Math.Max(1, (int)(viewportWidth / tileWidth));
-        var rows = new List<GridRow>((items.Count + columns - 1) / columns);
+        var rowCount = (items.Count + columns - 1) / columns;
+
+        if (columns == _lastColumnCount
+            && items.Count == _lastItemCount
+            && _rows.ItemsSource is IList<GridRow> existing
+            && existing.Count == rowCount)
+            return;
+
+        var rows = new List<GridRow>(rowCount);
         for (var i = 0; i < items.Count; i += columns)
         {
             var count = Math.Min(columns, items.Count - i);
@@ -170,6 +182,8 @@ public sealed class VirtualizingFileGrid : TemplatedControl
         }
 
         _rows.ItemsSource = rows;
+        _lastColumnCount = columns;
+        _lastItemCount = items.Count;
     }
 
     private sealed class GridRow(IReadOnlyList<object> items)

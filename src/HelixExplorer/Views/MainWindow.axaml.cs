@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -13,6 +14,22 @@ public partial class MainWindow : Window
         InitializeComponent();
         Activated += (_, _) => SetWindowActive(true);
         Deactivated += (_, _) => SetWindowActive(false);
+        Loaded += OnLoaded;
+    }
+
+    private void OnLoaded(object? sender, RoutedEventArgs e)
+    {
+        if (SidebarBorder is null)
+            return;
+
+        SidebarBorder.PropertyChanged += (_, args) =>
+        {
+            if (args.Property != Visual.BoundsProperty)
+                return;
+
+            if (DataContext is MainWindowViewModel vm && SidebarBorder.Bounds.Width > 0)
+                vm.SidebarWidth = SidebarBorder.Bounds.Width;
+        };
     }
 
     private void SetWindowActive(bool isActive)

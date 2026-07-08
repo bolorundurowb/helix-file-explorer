@@ -1,0 +1,133 @@
+<Panel xmlns="https://github.com/avaloniaui"
+       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+       xmlns:vm="using:HelixExplorer.ViewModels"
+       xmlns:theme="using:HelixExplorer.Core.Theming"
+       xmlns:settings="using:HelixExplorer.Core.Settings"
+       xmlns:models="using:HelixExplorer.Core.Models"
+       x:Class="HelixExplorer.Views.SettingsOverlay"
+       x:DataType="vm:MainWindowViewModel"
+       IsVisible="False"
+       Focusable="True"
+       Background="#80000000"
+       ZIndex="100"
+       PointerPressed="OnRootPointerPressed">
+    <Border Width="420"
+            MaxHeight="620"
+            VerticalAlignment="Center"
+            HorizontalAlignment="Center"
+            Background="{DynamicResource HelixContentCardBrush}"
+            BorderBrush="{DynamicResource HelixBorderColor}"
+            BorderThickness="1"
+            CornerRadius="8"
+            Padding="20"
+            PointerPressed="OnPanelPointerPressed">
+        <Grid RowDefinitions="Auto,*,Auto">
+            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
+                <TextBlock Text="Settings"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center" />
+                <Button Grid.Column="1"
+                        Content="✕"
+                        Command="{Binding CloseSettingsCommand}"
+                        Padding="6,2"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        Opacity="0.7" />
+            </Grid>
+
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                <StackPanel Spacing="20">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Appearance"
+                                   FontWeight="SemiBold"
+                                   Opacity="0.85" />
+                        <TextBlock Text="Theme"
+                                   Opacity="0.7"
+                                   FontSize="12" />
+                        <ComboBox SelectedItem="{Binding Theme}"
+                                  HorizontalAlignment="Stretch">
+                            <theme:ThemeMode>System</theme:ThemeMode>
+                            <theme:ThemeMode>Light</theme:ThemeMode>
+                            <theme:ThemeMode>Dark</theme:ThemeMode>
+                        </ComboBox>
+                        <TextBlock Text="Accent color"
+                                   Opacity="0.7"
+                                   FontSize="12"
+                                   Margin="0,8,0,0" />
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Button Content="Default" Command="{Binding SetAccentColorCommand}" CommandParameter="" Padding="8,4" />
+                            <Button Content="Blue" Command="{Binding SetAccentColorCommand}" CommandParameter="#0078D4" Padding="8,4" />
+                            <Button Content="Green" Command="{Binding SetAccentColorCommand}" CommandParameter="#107C10" Padding="8,4" />
+                            <Button Content="Purple" Command="{Binding SetAccentColorCommand}" CommandParameter="#8764B8" Padding="8,4" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="File listing"
+                                   FontWeight="SemiBold"
+                                   Opacity="0.85" />
+                        <CheckBox Content="Show hidden items"
+                                  IsChecked="{Binding ShowHiddenFiles, Mode=TwoWay}" />
+                        <CheckBox Content="Show file name extensions"
+                                  IsChecked="{Binding ShowFileExtensions, Mode=TwoWay}" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Units"
+                                   FontWeight="SemiBold"
+                                   Opacity="0.85" />
+                        <TextBlock Text="File size display"
+                                   Opacity="0.7"
+                                   FontSize="12" />
+                        <ComboBox SelectedItem="{Binding SizeDisplay}"
+                                  HorizontalAlignment="Stretch">
+                            <settings:SizeDisplayMode>Binary</settings:SizeDisplayMode>
+                            <settings:SizeDisplayMode>Decimal</settings:SizeDisplayMode>
+                        </ComboBox>
+                        <TextBlock Text="Binary uses KiB/MiB. Decimal uses KB/MB."
+                                   FontSize="11"
+                                   Opacity="0.55"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Defaults"
+                                   FontWeight="SemiBold"
+                                   Opacity="0.85" />
+                        <TextBlock Text="Default view mode"
+                                   Opacity="0.7"
+                                   FontSize="12" />
+                        <ComboBox SelectedItem="{Binding DefaultViewMode}"
+                                  HorizontalAlignment="Stretch">
+                            <models:LayoutMode>Details</models:LayoutMode>
+                            <models:LayoutMode>List</models:LayoutMode>
+                            <models:LayoutMode>Grid</models:LayoutMode>
+                            <models:LayoutMode>Miller</models:LayoutMode>
+                        </ComboBox>
+                        <TextBlock Text="Default thumbnail size (grid view)"
+                                   Opacity="0.7"
+                                   FontSize="12"
+                                   Margin="0,8,0,0" />
+                        <Slider Minimum="32"
+                                Maximum="256"
+                                Value="{Binding DefaultThumbnailSize, Mode=TwoWay}"
+                                TickFrequency="16"
+                                IsSnapToTickEnabled="True" />
+                        <CheckBox Content="Open new tabs in dual-pane mode"
+                                  IsChecked="{Binding DefaultDualPane, Mode=TwoWay}" />
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+
+            <Button Grid.Row="2"
+                    Content="Done"
+                    Command="{Binding CloseSettingsCommand}"
+                    HorizontalAlignment="Right"
+                    Margin="0,16,0,0"
+                    Padding="16,6"
+                    Cursor="Hand" />
+        </Grid>
+    </Border>
+</Panel>

@@ -1,3 +1,4 @@
+using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Theming;
 
 namespace HelixExplorer.Core.Settings;
@@ -10,6 +11,11 @@ public sealed class AppSettings
     public SizeDisplayMode SizeDisplay { get; set; } = SizeDisplayMode.Binary;
     public bool ShowHiddenFiles { get; set; }
     public bool ShowFileExtensions { get; set; } = true;
+    public LayoutMode DefaultViewMode { get; set; } = LayoutMode.Details;
+    public double DefaultThumbnailSize { get; set; } = 72;
+    public bool DefaultDualPane { get; set; }
+    public uint? AccentColorArgb { get; set; }
+    public List<string> PinnedPaths { get; set; } = [];
     public Dictionary<string, uint> FolderColors { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 

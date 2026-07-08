@@ -65,7 +65,7 @@ public class FileNameFilterTests
 public class SessionStoreTests
 {
     [Fact]
-    public void RoundTrip_PreservesTabsPanesAndChrome()
+    public void RoundTrip_PreservesTabsAndRecentPaths()
     {
         var path = Path.Combine(Path.GetTempPath(), $"helix-session-{Guid.NewGuid():N}.json");
         try
@@ -73,9 +73,8 @@ public class SessionStoreTests
             var store = new JsonSessionStore(path);
             var document = new SessionDocument
             {
-                SidebarOpen = false,
-                SidebarWidth = 300,
                 ActiveTabIndex = 1,
+                RecentPaths = ["C:\\Recent", "D:\\Other"],
                 Tabs =
                 {
                     new TabSnapshot
@@ -97,9 +96,8 @@ public class SessionStoreTests
             store.Save(document);
             var loaded = new JsonSessionStore(path).Load();
 
-            Assert.False(loaded.SidebarOpen);
-            Assert.Equal(300, loaded.SidebarWidth);
             Assert.Equal(1, loaded.ActiveTabIndex);
+            Assert.Equal(2, loaded.RecentPaths.Count);
             Assert.Equal(2, loaded.Tabs.Count);
 
             var first = loaded.Tabs[0];
@@ -133,7 +131,7 @@ public class SessionStoreTests
         var loaded = new JsonSessionStore(path).Load();
 
         Assert.Empty(loaded.Tabs);
-        Assert.True(loaded.SidebarOpen);
+        Assert.Empty(loaded.RecentPaths);
     }
 
     [Fact]

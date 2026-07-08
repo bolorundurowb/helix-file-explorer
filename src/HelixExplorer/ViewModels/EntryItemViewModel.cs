@@ -10,6 +10,7 @@ namespace HelixExplorer.ViewModels;
 /// <summary>View-facing row wrapping a listing entry with optional git status for coloring.</summary>
 public sealed partial class EntryItemViewModel : ObservableObject
 {
+    private FileSystemEntry _entry;
     private bool _showFileExtensions = true;
 
     public EntryItemViewModel(
@@ -17,14 +18,14 @@ public sealed partial class EntryItemViewModel : ObservableObject
         bool showFileExtensions = true,
         GitFileStatus gitStatus = GitFileStatus.None)
     {
-        Entry = entry;
+        _entry = entry;
         _showFileExtensions = showFileExtensions;
         GitStatus = gitStatus;
     }
 
-    public FileSystemEntry Entry { get; }
+    public FileSystemEntry Entry => _entry;
 
-    public string FullPath => Entry.FullPath;
+    public string FullPath => _entry.FullPath;
 
     public EntryItemViewModel IconAppearance => this;
 
@@ -34,13 +35,38 @@ public sealed partial class EntryItemViewModel : ObservableObject
         OnPropertyChanged(nameof(IconAppearance));
     }
 
-    public string Name => Entry.Name;
-    public string DisplayName => EntryDisplayName.Format(Entry, _showFileExtensions);
-    public bool IsDirectory => Entry.IsDirectory;
-    public long SizeBytes => Entry.SizeBytes;
-    public DateTime ModifiedUtc => Entry.ModifiedUtc;
-    public string Extension => Entry.Extension;
-    public string TypeLabel => Entry.TypeLabel;
+    public string Name => _entry.Name;
+    public string DisplayName => EntryDisplayName.Format(_entry, _showFileExtensions);
+    public bool IsDirectory => _entry.IsDirectory;
+    public long SizeBytes => _entry.SizeBytes;
+    public DateTime ModifiedUtc => _entry.ModifiedUtc;
+    public string Extension => _entry.Extension;
+    public string TypeLabel => _entry.TypeLabel;
+
+    internal void UpdateEntry(FileSystemEntry entry, bool showFileExtensions, GitFileStatus gitStatus)
+    {
+        var entryChanged = !_entry.Equals(entry);
+        _entry = entry;
+
+        if (_showFileExtensions != showFileExtensions)
+            SetShowFileExtensions(showFileExtensions);
+
+        if (GitStatus != gitStatus)
+            GitStatus = gitStatus;
+
+        if (!entryChanged)
+            return;
+
+        OnPropertyChanged(nameof(Name));
+        OnPropertyChanged(nameof(DisplayName));
+        OnPropertyChanged(nameof(IsDirectory));
+        OnPropertyChanged(nameof(SizeBytes));
+        OnPropertyChanged(nameof(ModifiedUtc));
+        OnPropertyChanged(nameof(Extension));
+        OnPropertyChanged(nameof(TypeLabel));
+        OnPropertyChanged(nameof(FullPath));
+        OnPropertyChanged(nameof(IconAppearance));
+    }
 
     internal void SetShowFileExtensions(bool showFileExtensions)
     {

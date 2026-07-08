@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Models;
+using HelixExplorer.Core.Settings;
 
 namespace HelixExplorer.ViewModels;
 
@@ -13,7 +14,8 @@ public sealed partial class SidebarItemViewModel : ObservableObject
         SidebarItemKind kind,
         bool isSectionHeader = false,
         bool isSelected = false,
-        KnownFolderKind? knownFolder = null)
+        KnownFolderKind? knownFolder = null,
+        string? toolTip = null)
     {
         Title = title;
         Path = path;
@@ -21,10 +23,12 @@ public sealed partial class SidebarItemViewModel : ObservableObject
         IsSectionHeader = isSectionHeader;
         IsSelected = isSelected;
         KnownFolder = knownFolder;
+        ToolTip = toolTip;
     }
 
     public string Title { get; }
     public string? Path { get; }
+    public string? ToolTip { get; }
 
     internal void NotifyFolderColorChanged()
     {
@@ -58,6 +62,7 @@ public static class SidebarFactory
     public static ObservableCollection<SidebarItemViewModel> Build(
         IQuickAccessProvider quickAccess,
         IVolumeProvider volumes,
+        IReadOnlyList<string>? userPinnedPaths = null,
         IReadOnlyList<NetworkLocationInfo>? networkLocations = null,
         string? selectedPath = null)
     {
@@ -71,14 +76,41 @@ public static class SidebarFactory
             isSelected: PathsEqual(homePath, selectedPath)));
 
         items.Add(new SidebarItemViewModel("Pinned", null, SidebarItemKind.Section, isSectionHeader: true));
-        foreach (var (kind, path, displayName) in quickAccess.GetPinnedDefaults())
+
+        var defaultPaths = quickAccess.GetPinnedDefaults()
+            .Select(t => t.Path)
+            .Where(p => !string.IsNullOrEmpty(p))
+            .ToList();
+
+        var mergedPins = PinnedPathHelper.MergeUserPins(
+            userPinnedPaths ?? Array.Empty<string>(),
+            defaultPaths);
+
+        var knownByPath = quickAccess.GetPinnedDefaults()
+            .Where(t => !string.IsNullOrEmpty(t.Path))
+            .ToDictionary(t => NormalizePath(t.Path!), t => t, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (path, displayName) in mergedPins)
         {
+            KnownFolderKind? knownFolder = null;
+            var title = displayName;
+            string? toolTip = null;
+
+            if (knownByPath.TryGetValue(NormalizePath(path), out var known))
+            {
+                knownFolder = known.Kind;
+                title = known.DisplayName;
+                if (known.Kind == KnownFolderKind.RecycleBin)
+                    toolTip = "Opens Recycle Bin in File Explorer";
+            }
+
             items.Add(new SidebarItemViewModel(
-                displayName,
+                title,
                 path,
                 SidebarItemKind.Pinned,
-                knownFolder: kind,
-                isSelected: PathsEqual(path, selectedPath)));
+                knownFolder: knownFolder,
+                isSelected: PathsEqual(path, selectedPath),
+                toolTip: toolTip));
         }
 
         items.Add(new SidebarItemViewModel("Drives", null, SidebarItemKind.Section, isSectionHeader: true));
@@ -118,9 +150,9 @@ public static class SidebarFactory
     {
         if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b))
             return false;
-        return string.Equals(
-            a.TrimEnd('\\', '/'),
-            b.TrimEnd('\\', '/'),
-            StringComparison.OrdinalIgnoreCase);
+        return string.Equals(NormalizePath(a), NormalizePath(b), StringComparison.OrdinalIgnoreCase);
     }
+
+    private static string NormalizePath(string path)
+        => path.TrimEnd('\\', '/');
 }

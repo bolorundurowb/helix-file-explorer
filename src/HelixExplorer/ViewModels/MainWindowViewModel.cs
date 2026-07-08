@@ -20,6 +20,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly ISettingsStore _settingsStore;
     private readonly ISessionStore _sessionStore;
     private readonly IThemeService _themeService;
+    private readonly IAccentBrushService _accentBrushes;
     private readonly IFileSystemProvider _fileSystem;
     private readonly IQuickAccessProvider _quickAccess;
     private readonly IVolumeProvider _volumes;
@@ -37,6 +38,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly string _homePath;
     private readonly List<CommandItem> _allCommands = new();
     private readonly List<string> _recentPaths = new();
+    private IReadOnlyList<NetworkLocationInfo> _lastNetworkLocations = [];
     private CancellationTokenSource? _networkCts;
     private bool _commandsBuilt;
     private bool _disposed;
@@ -47,6 +49,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         ISettingsStore settingsStore,
         ISessionStore sessionStore,
         IThemeService themeService,
+        IAccentBrushService accentBrushes,
         IFileSystemProvider fileSystem,
         IQuickAccessProvider quickAccess,
         IVolumeProvider volumes,
@@ -65,6 +68,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _settingsStore = settingsStore;
         _sessionStore = sessionStore;
         _themeService = themeService;
+        _accentBrushes = accentBrushes;
         _fileSystem = fileSystem;
         _quickAccess = quickAccess;
         _volumes = volumes;
@@ -85,12 +89,20 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
         var settings = _settingsStore.Load();
         IsSidebarOpen = settings.SidebarOpen;
+        SidebarWidth = Math.Clamp(settings.SidebarWidth, 180, 480);
         ShowHiddenFiles = settings.ShowHiddenFiles;
         ShowFileExtensions = settings.ShowFileExtensions;
         Theme = settings.Theme;
         SizeDisplay = settings.SizeDisplay;
+        DefaultViewMode = settings.DefaultViewMode;
+        DefaultThumbnailSize = Math.Clamp(settings.DefaultThumbnailSize, PaneViewModel.MinThumbnailSize, PaneViewModel.MaxThumbnailSize);
+        DefaultDualPane = settings.DefaultDualPane;
+        AccentColorArgb = settings.AccentColorArgb;
 
-        SidebarItems = SidebarFactory.Build(_quickAccess, _volumes);
+        _accentBrushes.ApplyCustomAccent(AccentColorArgb);
+        _themeService.ThemeChanged += OnThemeServiceChanged;
+
+        SidebarItems = SidebarFactory.Build(_quickAccess, _volumes, settings.PinnedPaths);
 
         RestoreSession();
         _ = RefreshNetworkLocationsAsync();
@@ -127,7 +139,10 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             var locations = await _networkLocations.GetNetworkLocationsAsync(ct).ConfigureAwait(true);
             if (!ct.IsCancellationRequested)
+            {
+                _lastNetworkLocations = locations;
                 RebuildSidebar(locations);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -146,7 +161,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private void RebuildSidebar(IReadOnlyList<NetworkLocationInfo> networkLocations)
     {
         var selectedPath = ActivePane?.CurrentPath;
-        var items = SidebarFactory.Build(_quickAccess, _volumes, networkLocations, selectedPath);
+        var settings = _settingsStore.Load();
+        var items = SidebarFactory.Build(_quickAccess, _volumes, settings.PinnedPaths, networkLocations, selectedPath);
         SidebarItems.Clear();
         foreach (var item in items)
             SidebarItems.Add(item);
@@ -162,6 +178,21 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private bool _isSidebarOpen = true;
+
+    [ObservableProperty]
+    private double _sidebarWidth = 240;
+
+    [ObservableProperty]
+    private LayoutMode _defaultViewMode = LayoutMode.Details;
+
+    [ObservableProperty]
+    private double _defaultThumbnailSize = 72;
+
+    [ObservableProperty]
+    private bool _defaultDualPane;
+
+    [ObservableProperty]
+    private uint? _accentColorArgb;
 
     [ObservableProperty]
     private bool _isWindowActive = true;
@@ -195,23 +226,73 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     partial void OnThemeChanged(ThemeMode value)
     {
         _themeService.ApplyTheme(value);
-        PersistViewSettings();
+        PersistChromeSettings();
+        _accentBrushes.ApplyCustomAccent(AccentColorArgb);
     }
 
     partial void OnSizeDisplayChanged(SizeDisplayMode value)
     {
-        PersistViewSettings();
+        PersistChromeSettings();
         SizeDisplayChanged?.Invoke(value);
         RefreshSizeDisplayOnAllPanes();
     }
+
+    partial void OnSidebarWidthChanged(double value)
+    {
+        var clamped = Math.Clamp(value, 180, 480);
+        if (Math.Abs(clamped - value) > double.Epsilon)
+        {
+            SidebarWidth = clamped;
+            return;
+        }
+
+        PersistChromeSettings();
+    }
+
+    partial void OnDefaultViewModeChanged(LayoutMode value) => PersistChromeSettings();
+
+    partial void OnDefaultThumbnailSizeChanged(double value)
+    {
+        var clamped = Math.Clamp(value, PaneViewModel.MinThumbnailSize, PaneViewModel.MaxThumbnailSize);
+        if (Math.Abs(clamped - value) > double.Epsilon)
+        {
+            DefaultThumbnailSize = clamped;
+            return;
+        }
+
+        PersistChromeSettings();
+    }
+
+    partial void OnDefaultDualPaneChanged(bool value) => PersistChromeSettings();
+
+    partial void OnAccentColorArgbChanged(uint? value)
+    {
+        _accentBrushes.ApplyCustomAccent(value);
+        PersistChromeSettings();
+    }
+
+    private void OnThemeServiceChanged(ThemeMode _)
+        => _accentBrushes.ApplyCustomAccent(AccentColorArgb);
 
     private void PersistViewSettings()
     {
         var settings = _settingsStore.Load();
         settings.ShowHiddenFiles = ShowHiddenFiles;
         settings.ShowFileExtensions = ShowFileExtensions;
+        _settingsStore.Save(settings);
+    }
+
+    private void PersistChromeSettings()
+    {
+        var settings = _settingsStore.Load();
+        settings.SidebarOpen = IsSidebarOpen;
+        settings.SidebarWidth = SidebarWidth;
         settings.Theme = Theme;
         settings.SizeDisplay = SizeDisplay;
+        settings.DefaultViewMode = DefaultViewMode;
+        settings.DefaultThumbnailSize = DefaultThumbnailSize;
+        settings.DefaultDualPane = DefaultDualPane;
+        settings.AccentColorArgb = AccentColorArgb;
         _settingsStore.Save(settings);
     }
 
@@ -238,6 +319,13 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         var session = _sessionStore.Load();
 
+        if (session.RecentPaths.Count > 0)
+        {
+            _recentPaths.Clear();
+            foreach (var path in session.RecentPaths)
+                _recentPaths.Add(path);
+        }
+
         if (session.Tabs.Count == 0)
         {
             AddTab(CreateDefaultTab());
@@ -260,8 +348,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         var document = new SessionDocument
         {
-            SidebarOpen = IsSidebarOpen,
-            ActiveTabIndex = SelectedTab is null ? 0 : Math.Max(0, Tabs.IndexOf(SelectedTab))
+            ActiveTabIndex = SelectedTab is null ? 0 : Math.Max(0, Tabs.IndexOf(SelectedTab)),
+            RecentPaths = _recentPaths.Take(12).ToList()
         };
 
         foreach (var tab in Tabs)
@@ -288,13 +376,24 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             _git,
             _archive,
             _folderColors,
+            _settingsStore,
             _visuals,
             _watcherFactory);
         tab.CloseRequested += OnTabCloseRequested;
         tab.Navigated += OnTabNavigated;
         tab.OpenInNewTabRequested += OnOpenInNewTabRequested;
+        tab.PinPathRequested += OnPinPathRequested;
         tab.SetSelectionActive(IsWindowActive);
+        ApplyDefaultTabLayout(tab);
         return tab;
+    }
+
+    private void ApplyDefaultTabLayout(TabViewModel tab)
+    {
+        tab.LeftPane.SetViewMode(DefaultViewMode);
+        tab.LeftPane.ThumbnailSize = DefaultThumbnailSize;
+        if (DefaultDualPane && !tab.IsDualPane)
+            tab.ToggleDualPaneCommand.Execute(null);
     }
 
     partial void OnIsWindowActiveChanged(bool value)
@@ -353,6 +452,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         tab.CloseRequested -= OnTabCloseRequested;
         tab.Navigated -= OnTabNavigated;
         tab.OpenInNewTabRequested -= OnOpenInNewTabRequested;
+        tab.PinPathRequested -= OnPinPathRequested;
         tab.Dispose();
 
         if (Tabs.Count == 0)
@@ -629,9 +729,11 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
                     Arguments = item.Path,
                     UseShellExecute = true
                 });
+                SelectedTab!.ActivePane.StatusText = "Opened in File Explorer";
             }
             catch
             {
+                SelectedTab!.ActivePane.StatusText = "Could not open in File Explorer";
             }
 
             return;
@@ -644,9 +746,57 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private void ToggleSidebar()
     {
         IsSidebarOpen = !IsSidebarOpen;
+        PersistChromeSettings();
+    }
+
+    [RelayCommand]
+    private void SetAccentColor(string? hex)
+    {
+        if (string.IsNullOrWhiteSpace(hex))
+        {
+            AccentColorArgb = null;
+            return;
+        }
+
+        AccentColorArgb = AccentColorDefaults.FromHex(hex);
+    }
+
+    public void PinPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
+            return;
+
         var settings = _settingsStore.Load();
-        settings.SidebarOpen = IsSidebarOpen;
+        var normalized = path.TrimEnd('\\', '/');
+        if (PinnedPathHelper.IsPinned(settings.PinnedPaths, normalized))
+            return;
+
+        settings.PinnedPaths.Insert(0, normalized);
         _settingsStore.Save(settings);
+        RebuildSidebar(_lastNetworkLocations);
+        SelectedTab?.ActivePane.NotifyPinStateChanged();
+    }
+
+    public void UnpinPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+
+        var settings = _settingsStore.Load();
+        var normalized = path.TrimEnd('\\', '/');
+        settings.PinnedPaths.RemoveAll(p =>
+            string.Equals(p.TrimEnd('\\', '/'), normalized, StringComparison.OrdinalIgnoreCase));
+        _settingsStore.Save(settings);
+        RebuildSidebar(_lastNetworkLocations);
+        SelectedTab?.ActivePane.NotifyPinStateChanged();
+    }
+
+    private void OnPinPathRequested(object? sender, (string Path, bool Pin) args)
+    {
+        if (args.Pin)
+            PinPath(args.Path);
+        else
+            UnpinPath(args.Path);
     }
 
     [RelayCommand]
@@ -670,6 +820,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _networkCts?.Dispose();
 
         _folderColors.ColorsChanged -= OnFolderColorsChanged;
+        _themeService.ThemeChanged -= OnThemeServiceChanged;
 
         SaveSession();
 
@@ -678,6 +829,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             tab.CloseRequested -= OnTabCloseRequested;
             tab.Navigated -= OnTabNavigated;
             tab.OpenInNewTabRequested -= OnOpenInNewTabRequested;
+            tab.PinPathRequested -= OnPinPathRequested;
             tab.Dispose();
         }
 

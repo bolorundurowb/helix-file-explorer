@@ -10,16 +10,30 @@
             BorderThickness="0,0,0,1"
             Padding="4">
         <Grid ColumnDefinitions="*,Auto">
-            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+            <!-- Breadcrumb mode: click empty space to morph into the editable path box. -->
+            <ScrollViewer Grid.Column="0"
+                          IsVisible="{Binding !IsEditingPath}"
+                          Background="Transparent"
+                          PointerPressed="OnBreadcrumbAreaPressed"
+                          HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Disabled">
                 <StackPanel x:Name="BreadcrumbHost" Orientation="Horizontal" Spacing="2" />
             </ScrollViewer>
+
+            <!-- Edit mode: absolute path text field. -->
             <TextBox x:Name="PathBox"
-                     Grid.Column="1"
-                     Text="{Binding CurrentPath, Mode=TwoWay}"
+                     Grid.Column="0" Grid.ColumnSpan="2"
+                     IsVisible="{Binding IsEditingPath}"
                      KeyDown="OnPathBoxKeyDown"
-                     Watermark="Type a path and press Enter…"
-                     Width="320"
-                     Margin="8,0,0,0" />
+                     Watermark="Type a path and press Enter…" />
+
+            <Button Grid.Column="1"
+                    IsVisible="{Binding !IsEditingPath}"
+                    Click="OnEditToggle"
+                    Content="✎"
+                    ToolTip.Tip="Edit path"
+                    Padding="6,2"
+                    Margin="4,0,0,0" />
         </Grid>
     </Border>
 </UserControl>

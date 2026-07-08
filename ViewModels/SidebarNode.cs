@@ -1,9 +1,10 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace HelixExplorer.ViewModels;
 
-/// <summary>Hierarchical node in the sidebar tree (drives, QAT, network locations).</summary>
+/// <summary>Hierarchical node in the sidebar tree (Pinned, System Drives, Network).</summary>
 public sealed partial class SidebarNode : ObservableObject
 {
     [ObservableProperty] private string _displayName = string.Empty;
@@ -36,11 +37,30 @@ public sealed partial class SidebarNode : ObservableObject
         }
     }
 
-    /// <summary>Seed the sidebar with the host's logical drives.</summary>
+    /// <summary>Seed the sidebar with Pinned favourites, system drives, and network locations.</summary>
     public static IReadOnlyList<SidebarNode> BuildRoots()
     {
         var roots = new List<SidebarNode>(8);
 
+        // Quick-access pinned favourites.
+        var pinned = new SidebarNode
+        {
+            DisplayName = "Pinned",
+            FullPath = string.Empty,
+            Icon = "📌",
+            IsPinned = true,
+            IsExpanded = true,
+            HasPopulated = true
+        };
+        pinned.Children.Add(MakeKnownFolder(Environment.SpecialFolder.UserProfile, "🏠"));
+        pinned.Children.Add(MakeKnownFolder(Environment.SpecialFolder.MyDocuments, "📄"));
+        pinned.Children.Add(MakeKnownFolder(Environment.SpecialFolder.DesktopDirectory, "🖥️"));
+        pinned.Children.Add(MakeKnownFolder(Environment.SpecialFolder.MyMusic, "🎵"));
+        pinned.Children.Add(MakeKnownFolder(Environment.SpecialFolder.MyPictures, "🖼️"));
+        pinned.Children.Add(MakeKnownFolder(Environment.SpecialFolder.MyVideos, "🎬"));
+        roots.Add(pinned);
+
+        // System drives.
         var thisPc = new SidebarNode
         {
             DisplayName = "This PC",
@@ -61,31 +81,22 @@ public sealed partial class SidebarNode : ObservableObject
         }
         roots.Add(thisPc);
 
-        // Quick-access pinned pins.
-        var pinned = new SidebarNode
+        // Network locations — lazily discovered so a slow handshake never blocks startup.
+        roots.Add(new SidebarNode
         {
-            DisplayName = "Pinned",
+            DisplayName = "Network",
             FullPath = string.Empty,
-            Icon = "📌",
-            IsPinned = true,
-            IsExpanded = true,
-            HasPopulated = true
-        };
-        pinned.Children.Add(MakeKnownFolder(Environment.SpecialFolder.UserProfile, "🏠"));
-        pinned.Children.Add(MakeKnownFolder(Environment.SpecialFolder.MyDocuments, "📄"));
-        pinned.Children.Add(MakeKnownFolder(Environment.SpecialFolder.DesktopDirectory, "🖥️"));
-        pinned.Children.Add(MakeKnownFolder(Environment.SpecialFolder.MyMusic, "🎵"));
-        pinned.Children.Add(MakeKnownFolder(Environment.SpecialFolder.MyPictures, "🖼️"));
-        pinned.Children.Add(MakeKnownFolder(Environment.SpecialFolder.MyVideos, "🎬"));
-        roots.Add(pinned);
+            Icon = "🌐",
+            LoadChildrenAsync = LoadNetworkAsync
+        });
 
         return roots;
     }
 
     private static SidebarNode MakeKnownFolder(Environment.SpecialFolder folder, string icon)
     {
-        var path = Environment.GetFolderPath(folder);
-        var name = Path.GetFileName(path);
+        string path = Environment.GetFolderPath(folder);
+        string name = Path.GetFileName(path);
         if (string.IsNullOrEmpty(name)) name = folder.ToString();
         return new SidebarNode
         {
@@ -117,8 +128,43 @@ public sealed partial class SidebarNode : ObservableObject
                     {
                         DisplayName = Path.GetFileName(entry),
                         FullPath = entry + Path.DirectorySeparatorChar,
+                        Icon = "📁",
                         LoadChildrenAsync = NodeFromDirectory
                     });
+                }
+            }
+            catch (Exception) { /* best effort */ }
+        }, token).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Enumerates mapped network drives. A fuller implementation would also enumerate SMB
+    /// shares via WNetOpenEnum; that discovery routine belongs behind the top notification
+    /// banner described in the UX spec. TODO: live share discovery.
+    /// </summary>
+    private static async ValueTask LoadNetworkAsync(SidebarNode parent, CancellationToken token)
+    {
+        await Task.Run(() =>
+        {
+            try
+            {
+                bool any = false;
+                foreach (var drive in DriveInfo.GetDrives())
+                {
+                    token.ThrowIfCancellationRequested();
+                    if (drive.DriveType != DriveType.Network) continue;
+                    any = true;
+                    parent.Children.Add(new SidebarNode
+                    {
+                        DisplayName = drive.Name,
+                        FullPath = drive.Name,
+                        Icon = "🌐",
+                        LoadChildrenAsync = NodeFromDirectory
+                    });
+                }
+                if (!any)
+                {
+                    parent.Children.Add(new SidebarNode { DisplayName = "No network drives", Icon = "➖" });
                 }
             }
             catch (Exception) { /* best effort */ }

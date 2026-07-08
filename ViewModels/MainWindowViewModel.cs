@@ -1,12 +1,18 @@
 using System.Collections.ObjectModel;
+using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using HelixExplorer.Models;
+using HelixExplorer.Services;
 
 namespace HelixExplorer.ViewModels;
 
-/// <summary>Root view-model — owns tabs and the command palette overlay state.</summary>
+/// <summary>Root view-model — owns tabs, the command palette, and session persistence.</summary>
 public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 {
+    private const int MaxRecentPaths = 40;
+    private const int MaxPaletteResults = 25;
+
     public ObservableCollection<TabViewModel> Tabs { get; } = new();
 
     [ObservableProperty]
@@ -21,14 +27,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public ObservableCollection<SidebarNode> Sidebar { get; } = new();
 
     private readonly List<CommandItem> _allCommands = new();
+    private readonly List<string> _recentPaths = new();
     private bool _commandsBuilt;
 
-    public MainWindowViewModel()
+    public MainWindowViewModel() : this(restoreSession: true) { }
+
+    public MainWindowViewModel(bool restoreSession)
     {
-        // Hook theme changes so views bound to accent/folder colours refresh.
         ServiceLocator.Theme.ThemeChanged += OnThemeChanged;
 
-        OpenNewTabCommand.Execute(null);
+        if (restoreSession) RestoreSession();
+        if (Tabs.Count == 0) OpenNewTabCommand.Execute(null);
 
         foreach (var root in SidebarNode.BuildRoots())
         {
@@ -38,17 +47,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     private void OnThemeChanged(object? sender, EventArgs e)
     {
-        // Trigger a property notification for any bound "AccentBrush" / folder colour,
-        // by raising our own OnPropertyChanged surrogate. Views typically bind to the
-        // theme service directly so this is purely a notification convenience.
         OnPropertyChanged(nameof(ThemeAccent));
+        OnPropertyChanged(nameof(ThemeAccentBrush));
     }
 
     /// <summary>The active accent colour for headers/buttons.</summary>
     public Avalonia.Media.Color ThemeAccent => ServiceLocator.Theme.Accent;
     public Avalonia.Media.SolidColorBrush ThemeAccentBrush => new(ServiceLocator.Theme.Accent);
 
-    /// <summary>Build (once) and expose the full command catalog.</summary>
+    // ---- command palette ----
+
     private void EnsureCommandsBuilt()
     {
         if (_commandsBuilt) return;
@@ -56,48 +64,67 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         _allCommands.Add(new CommandItem("New Tab", "File", vm => vm.OpenNewTab(), "Ctrl+T"));
         _allCommands.Add(new CommandItem("Close Tab", "File", vm => vm.CloseTab(), "Ctrl+W"));
-        _allCommands.Add(new CommandItem("Toggle Theme", "Appearance", vm => ServiceLocator.Theme.ToggleTheme(), "Ctrl+Shift+T"));
+        _allCommands.Add(new CommandItem("Toggle Theme", "Appearance", _ => ServiceLocator.Theme.ToggleTheme(), "Ctrl+Shift+T"));
+        _allCommands.Add(new CommandItem("Follow System Theme", "Appearance", _ => ServiceLocator.Theme.FollowSystemTheme = true));
         _allCommands.Add(new CommandItem("Open Settings", "Application", vm => vm.OpenSettings()));
         _allCommands.Add(new CommandItem("Toggle Sidebar", "View", vm => vm.IsSidebarOpen = !vm.IsSidebarOpen, "Ctrl+B"));
         _allCommands.Add(new CommandItem("Toggle Dual Pane", "View", vm =>
         {
             if (vm.ActiveTab != null) vm.ActiveTab.IsDualPane = !vm.ActiveTab.IsDualPane;
         }, "Ctrl+D"));
+        _allCommands.Add(new CommandItem("Toggle Split Orientation", "View", vm => vm.ActiveTab?.ToggleOrientation()));
         _allCommands.Add(new CommandItem("Swap Panes", "View", vm => vm.ActiveTab?.SwapPanes()));
-        _allCommands.Add(new CommandItem("Git: Commit", "Git", _ =>
-        {
-            System.Diagnostics.Debug.WriteLine("Command palette: Git: Commit (stub)");
-        }));
-        _allCommands.Add(new CommandItem("Theme: Toggle Dark", "Appearance", vm => ServiceLocator.Theme.ToggleTheme()));
-
-        FilteredCommands.Clear();
-        foreach (var c in _allCommands) FilteredCommands.Add(c);
+        _allCommands.Add(new CommandItem("Go Up", "Navigation", vm => vm.ActiveTab?.ActivePane.NavigateTo("..")));
+        _allCommands.Add(new CommandItem("Git: Switch Branch", "Git", vm => vm.ActiveTab?.ActivePane.OpenBranchFlyoutCommand.Execute(null)));
     }
 
-    partial void OnCommandPaletteQueryChanged(string value)
+    partial void OnCommandPaletteQueryChanged(string value) => RefreshPalette(value);
+
+    private void RefreshPalette(string query)
     {
         EnsureCommandsBuilt();
         FilteredCommands.Clear();
-        if (string.IsNullOrEmpty(value))
+
+        if (string.IsNullOrEmpty(query))
         {
             foreach (var c in _allCommands) FilteredCommands.Add(c);
             return;
         }
 
-        // Linear in-memory scan avoiding LINQ allocations on the hot path.
+        // Fuzzy-rank commands and recent paths together.
+        var scored = new List<(int score, CommandItem item)>();
         foreach (var c in _allCommands)
         {
-            if (c.SearchText.Contains(value, StringComparison.OrdinalIgnoreCase))
+            int s = c.FuzzyScore(query);
+            if (s >= 0) scored.Add((s, c));
+        }
+        foreach (var path in _recentPaths)
+        {
+            int s = CommandItem.FuzzyScore(path, query);
+            if (s >= 0)
             {
-                FilteredCommands.Add(c);
+                string captured = path;
+                scored.Add((s, new CommandItem(path, "Recent", vm => vm.NavigateActive(captured))));
             }
         }
+
+        foreach (var entry in scored.OrderByDescending(t => t.score).Take(MaxPaletteResults))
+        {
+            FilteredCommands.Add(entry.item);
+        }
     }
+
+    // ---- tab commands ----
 
     [RelayCommand]
     private void OpenNewTab()
     {
-        var tab = TabViewModel.Create(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments));
+        string start = ActiveTab?.ActivePane.CurrentPath ?? string.Empty;
+        if (string.IsNullOrEmpty(start) || start.StartsWith(ArchiveService.Scheme, StringComparison.OrdinalIgnoreCase))
+        {
+            start = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        }
+        var tab = TabViewModel.Create(start);
         Tabs.Add(tab);
         ActiveTab = tab;
     }
@@ -106,28 +133,49 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private void CloseTab()
     {
         if (ActiveTab is null) return;
-        var idx = Tabs.IndexOf(ActiveTab);
-        Tabs.Remove(ActiveTab);
-        ActiveTab.Dispose();
+        int idx = Tabs.IndexOf(ActiveTab);
+        var closing = ActiveTab;
+        Tabs.Remove(closing);
+        closing.Dispose();
         if (Tabs.Count == 0)
         {
             OpenNewTab();
             return;
         }
-        ActiveTab = idx >= 0 && idx < Tabs.Count ? Tabs[idx] : Tabs[^0];
+        ActiveTab = idx >= 0 && idx < Tabs.Count ? Tabs[idx] : Tabs[^1];
     }
 
     private bool CanCloseTab() => Tabs.Count > 1;
+
+    /// <summary>Cycles the active tab (mouse-wheel over the tab strip).</summary>
+    public void CycleTab(int delta)
+    {
+        if (Tabs.Count == 0 || ActiveTab is null) return;
+        int i = Tabs.IndexOf(ActiveTab);
+        i = ((i + delta) % Tabs.Count + Tabs.Count) % Tabs.Count;
+        ActiveTab = Tabs[i];
+    }
+
+    /// <summary>Navigates the active pane, recording the destination in recent paths.</summary>
+    public void NavigateActive(string path)
+    {
+        ActiveTab?.ActivePane.NavigateTo(path);
+        RecordRecent(path);
+    }
+
+    private void RecordRecent(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return;
+        _recentPaths.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+        _recentPaths.Insert(0, path);
+        if (_recentPaths.Count > MaxRecentPaths) _recentPaths.RemoveRange(MaxRecentPaths, _recentPaths.Count - MaxRecentPaths);
+    }
 
     [RelayCommand]
     private void ToggleTheme() => ServiceLocator.Theme.ToggleTheme();
 
     [RelayCommand]
-    private void OpenSettings()
-    {
-        System.Diagnostics.Debug.WriteLine("OpenSettings: stub (would raise SettingsRequested)");
-        SettingsRequested?.Invoke(this, EventArgs.Empty);
-    }
+    private void OpenSettings() => SettingsRequested?.Invoke(this, EventArgs.Empty);
 
     [RelayCommand]
     private void ToggleSidebar() => IsSidebarOpen = !IsSidebarOpen;
@@ -142,12 +190,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private void CopyActivePath()
     {
         if (ActiveTab is null) return;
-        var path = ActiveTab.ActivePane.CurrentPath;
         try
         {
-            System.Diagnostics.Debug.WriteLine($"CopyActivePath → {path}");
+            if (Avalonia.Application.Current?.ApplicationLifetime is
+                Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desk)
+            {
+                desk.MainWindow?.Clipboard?.SetTextAsync(ActiveTab.ActivePane.CurrentPath);
+            }
         }
-        catch (Exception) { /* best effort */ }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"CopyActivePath: {ex.Message}"); }
     }
 
     [RelayCommand]
@@ -156,8 +207,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         IsCommandPaletteOpen = !IsCommandPaletteOpen;
         if (IsCommandPaletteOpen)
         {
+            // Fold currently open locations into recent paths, then reset the query.
+            foreach (var t in Tabs) RecordRecent(t.ActivePane.CurrentPath);
             CommandPaletteQuery = string.Empty;
-            EnsureCommandsBuilt();
+            RefreshPalette(string.Empty);
         }
     }
 
@@ -169,15 +222,61 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         IsCommandPaletteOpen = false;
     }
 
-    partial void OnActiveTabChanged(TabViewModel? value)
-    {
-        CloseTabCommand.NotifyCanExecuteChanged();
-    }
+    partial void OnActiveTabChanged(TabViewModel? value) => CloseTabCommand.NotifyCanExecuteChanged();
 
     public event EventHandler? SettingsRequested;
 
+    /// <summary>Forwards an OS light/dark change to the theme service.</summary>
+    public void NotifySystemThemeChanged(bool isDark) => ServiceLocator.Theme.NotifySystemThemeChanged(isDark);
+
+    // ---- session persistence ----
+
+    private void RestoreSession()
+    {
+        try
+        {
+            var session = ServiceLocator.Session.Load();
+            IsSidebarOpen = session.SidebarOpen;
+            _recentPaths.AddRange(session.RecentPaths.Take(MaxRecentPaths));
+
+            foreach (var ts in session.Tabs)
+            {
+                Tabs.Add(TabViewModel.Restore(ts));
+            }
+            if (Tabs.Count > 0)
+            {
+                int idx = Math.Clamp(session.ActiveTabIndex, 0, Tabs.Count - 1);
+                ActiveTab = Tabs[idx];
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"RestoreSession failed: {ex.Message}");
+        }
+    }
+
+    public void SaveSession()
+    {
+        try
+        {
+            var state = new SessionState
+            {
+                SidebarOpen = IsSidebarOpen,
+                ActiveTabIndex = ActiveTab != null ? Math.Max(0, Tabs.IndexOf(ActiveTab)) : 0,
+                RecentPaths = _recentPaths.Take(MaxRecentPaths).ToList(),
+                Tabs = Tabs.Select(t => t.CaptureState()).ToList()
+            };
+            ServiceLocator.Session.Save(state);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"SaveSession failed: {ex.Message}");
+        }
+    }
+
     public void Dispose()
     {
+        SaveSession();
         foreach (var t in Tabs) t.Dispose();
         Tabs.Clear();
         ServiceLocator.Theme.ThemeChanged -= OnThemeChanged;

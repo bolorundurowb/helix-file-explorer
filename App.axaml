@@ -19,17 +19,23 @@
                 <ResourceDictionary x:Key="Dark">
                     <SolidColorBrush x:Key="HelixSurfaceBrush">#1E1E24</SolidColorBrush>
                     <SolidColorBrush x:Key="HelixPaneBackgroundBrush">#25252C</SolidColorBrush>
+                    <SolidColorBrush x:Key="HelixDarkSurfaceBrush">#17171B</SolidColorBrush>
                     <SolidColorBrush x:Key="HelixForegroundBrush">#FFFFFF</SolidColorBrush>
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Light">
                     <SolidColorBrush x:Key="HelixSurfaceBrush">#F5F5F5</SolidColorBrush>
                     <SolidColorBrush x:Key="HelixPaneBackgroundBrush">#FFFFFF</SolidColorBrush>
+                    <SolidColorBrush x:Key="HelixDarkSurfaceBrush">#E8E8EC</SolidColorBrush>
                     <SolidColorBrush x:Key="HelixForegroundBrush">#1E1E24</SolidColorBrush>
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
             <Color x:Key="HelixAccent">#FF8C00</Color>
             <SolidColorBrush x:Key="HelixAccentBrush" Color="{StaticResource HelixAccent}" />
             <conv:FileSizeConverter x:Key="FileSizeConverter" />
+            <conv:ColorToBrushConverter x:Key="ColorToBrushConverter" />
+            <conv:BoolToThicknessConverter x:Key="BoolToThicknessConverter" />
+            <conv:FolderColorConverter x:Key="FolderColorConverter" />
+            <conv:DoubleScaleConverter x:Key="ScaleConverter" />
         </ResourceDictionary>
     </Application.Resources>
 

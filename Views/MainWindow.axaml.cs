@@ -8,13 +8,22 @@ namespace HelixExplorer.Views;
 
 public sealed partial class MainWindow : Window
 {
+    private MainWindowViewModel? _vm;
+    private Point? _tabGrabOrigin;
+
     public MainWindow()
     {
         InitializeComponent();
-        if (DataContext is MainWindowViewModel vm)
-        {
-            vm.SettingsRequested += OnSettingsRequested;
-        }
+    }
+
+    // DataContext is assigned by the object initializer AFTER the constructor runs, so
+    // subscribe here rather than in the constructor (the old code silently no-op'd).
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        base.OnDataContextChanged(e);
+        if (_vm is not null) _vm.SettingsRequested -= OnSettingsRequested;
+        _vm = DataContext as MainWindowViewModel;
+        if (_vm is not null) _vm.SettingsRequested += OnSettingsRequested;
     }
 
     private async void OnSettingsRequested(object? sender, EventArgs e)
@@ -25,24 +34,55 @@ public sealed partial class MainWindow : Window
 
     private void OnExit(object? sender, RoutedEventArgs e) => Close();
 
-    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    // ---- tab tinting ----
+
+    private void OnTabColorChanged(object? sender, ColorChangedEventArgs e)
     {
-        // Tab tear-out: Detect dragging on a TabItem beyond the title bar bounds. We do
-        // a minimal approximation — on pointer-down over the TabControl, remember which
-        // tab was hit; if the pointer leaves the window while still pressed, tear out.
-        base.OnPointerPressed(e);
-        BeginTabTearOutTracking(e);
+        if (sender is Control { DataContext: TabViewModel tab }) tab.Tint = e.NewColor;
     }
 
-    private Point? _tabGrabOrigin;
-
-    private void BeginTabTearOutTracking(PointerPressedEventArgs e)
+    private void OnClearTabTint(object? sender, RoutedEventArgs e)
     {
+        if (sender is Control { DataContext: TabViewModel tab }) tab.Tint = null;
+    }
+
+    // ---- git branch flyout ----
+
+    private async void OnBranchButtonClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel { ActiveTab: { } tab } && sender is Control c)
+        {
+            await tab.ActivePane.OpenBranchFlyoutCommand.ExecuteAsync(null);
+            FlyoutBase.ShowAttachedFlyout(c);
+        }
+    }
+
+    private void OnBranchSelected(object? sender, RoutedEventArgs e)
+    {
+        if (sender is ListBox { SelectedItem: string branch } &&
+            DataContext is MainWindowViewModel { ActiveTab: { } tab })
+        {
+            tab.ActivePane.CheckoutBranchCommand.Execute(branch);
+        }
+    }
+
+    /// <summary>Mouse-wheel over the tab strip cycles through open tabs.</summary>
+    private void OnTabStripWheel(object? sender, PointerWheelEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm)
+        {
+            vm.CycleTab(e.Delta.Y < 0 ? 1 : -1);
+            e.Handled = true;
+        }
+    }
+
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        base.OnPointerPressed(e);
         if (DataContext is not MainWindowViewModel vm) return;
         if (e.Source is Control { DataContext: TabViewModel dragged } && vm.Tabs.Contains(dragged))
         {
             _tabGrabOrigin = e.GetPosition(this);
-            e.Pointer.Capture(this);
         }
     }
 
@@ -50,28 +90,25 @@ public sealed partial class MainWindow : Window
     {
         base.OnPointerMoved(e);
         if (_tabGrabOrigin is null) return;
-        if (e.GetCurrentPoint(this).Properties.PointerUpdateKind != default(PointerUpdateKind) &&
-            e.GetCurrentPoint(this).Properties.PointerUpdateKind != PointerUpdateKind.LeftButtonPressed) { _tabGrabOrigin = null; return; }
+
+        // Only continue while the left button is held.
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            _tabGrabOrigin = null;
+            return;
+        }
 
         var pos = e.GetPosition(this);
-        var bounds = Bounds;
-        var outside = pos.X < 0 || pos.Y < 0 || pos.X > bounds.Width || pos.Y > bounds.Height;
-        if (outside && DataContext is MainWindowViewModel vm)
+        bool outside = pos.X < 0 || pos.Y < 0 || pos.X > Bounds.Width || pos.Y > Bounds.Height;
+        if (outside && DataContext is MainWindowViewModel vm && vm.ActiveTab is not null)
         {
-            // Tear out — create a new window carrying a copy of this tab's path.
-            if (vm.ActiveTab != null)
-            {
-                var path = vm.ActiveTab.ActivePane.CurrentPath;
-                var newVm = new MainWindowViewModel();
-                if (newVm.ActiveTab != null)
-                {
-                    newVm.ActiveTab.ActivePane.NavigateTo(path);
-                }
-                var newWindow = new MainWindow { DataContext = newVm };
-                newWindow.Show();
-            }
+            // Tear out: open a new window at the dragged tab's location.
+            // TODO: transparent thumbnail follow + true tab hand-off (see UX spec §1).
+            string path = vm.ActiveTab.ActivePane.CurrentPath;
+            var newVm = new MainWindowViewModel(restoreSession: false);
+            newVm.NavigateActive(path);
+            new MainWindow { DataContext = newVm }.Show();
             _tabGrabOrigin = null;
-            e.Pointer.Capture(null);
         }
     }
 

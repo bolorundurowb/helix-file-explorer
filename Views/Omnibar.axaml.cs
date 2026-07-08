@@ -153,11 +153,40 @@ public sealed partial class Omnibar : UserControl
         }
     }
 
+    /// <summary>Clicking empty space in the breadcrumb strip switches to editable-path mode.</summary>
+    private void OnBreadcrumbAreaPressed(object? sender, PointerPressedEventArgs e)
+    {
+        // Ignore clicks that landed on an actual breadcrumb segment (those navigate).
+        if (e.Source is BreadcrumbItem) return;
+        EnterEditMode();
+    }
+
+    private void OnEditToggle(object? sender, RoutedEventArgs e) => EnterEditMode();
+
+    private void EnterEditMode()
+    {
+        if (_pane is null) return;
+        PathBox.Text = _pane.CurrentPath;
+        _pane.IsEditingPath = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            PathBox.Focus();
+            PathBox.SelectAll();
+        });
+    }
+
     private void OnPathBoxKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter && _pane != null && PathBox.Text is { Length: > 0 } text)
+        if (_pane is null) return;
+        if (e.Key == Key.Enter)
         {
-            _pane.NavigateTo(text);
+            if (PathBox.Text is { Length: > 0 } text) _pane.NavigateTo(text);
+            _pane.IsEditingPath = false;
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            _pane.IsEditingPath = false;
             e.Handled = true;
         }
     }

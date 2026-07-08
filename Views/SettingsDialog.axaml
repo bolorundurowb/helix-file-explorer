@@ -7,10 +7,11 @@
         Width="640" Height="520"
         CanResize="True"
         Background="{DynamicResource HelixSurfaceBrush}">
-    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" Margin="16">
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto" Margin="16">
         <StackPanel Orientation="Horizontal" Spacing="12" Grid.Row="0">
             <TextBlock Text="Theme:" VerticalAlignment="Center" />
             <ToggleSwitch IsChecked="{Binding IsDarkTheme}" Content="Dark" />
+            <ToggleSwitch IsChecked="{Binding FollowSystemTheme}" Content="Follow system" />
         </StackPanel>
 
         <StackPanel Orientation="Horizontal" Spacing="12" Grid.Row="1" Margin="0,12,0,0">
@@ -25,7 +26,21 @@
                       VerticalAlignment="Center" />
         </StackPanel>
 
-        <ScrollViewer Grid.Row="3" Margin="0,12,0,0">
+        <WrapPanel Grid.Row="3" Margin="0,12,0,0" Orientation="Horizontal">
+            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,20,0">
+                <TextBlock Text="Default view:" VerticalAlignment="Center" />
+                <ComboBox ItemsSource="{Binding ViewModes}"
+                          SelectedItem="{Binding DefaultViewMode, Mode=TwoWay}"
+                          VerticalAlignment="Center" />
+            </StackPanel>
+            <ToggleSwitch IsChecked="{Binding DualPaneVertical}" Content="Vertical split" Margin="0,0,20,0" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Thumbnails:" VerticalAlignment="Center" />
+                <Slider Minimum="32" Maximum="256" Width="140" Value="{Binding ThumbnailSize, Mode=TwoWay}" VerticalAlignment="Center" />
+            </StackPanel>
+        </WrapPanel>
+
+        <ScrollViewer Grid.Row="4" Margin="0,12,0,0">
             <StackPanel Spacing="6">
                 <TextBlock Text="Folder Colours" FontWeight="Bold" />
                 <ItemsControl ItemsSource="{Binding FolderColors}">
@@ -42,7 +57,7 @@
             </StackPanel>
         </ScrollViewer>
 
-        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,12,0,0">
+        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,12,0,0">
             <Button Content="Close" Click="OnClose" />
         </StackPanel>
     </Grid>

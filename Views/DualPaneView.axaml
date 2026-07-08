@@ -2,23 +2,29 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:HelixExplorer.ViewModels"
              xmlns:views="using:HelixExplorer.Views"
-             xmlns:models="using:HelixExplorer.Models"
-             xmlns:controls="using:HelixExplorer.Controls"
              x:Class="HelixExplorer.Views.DualPaneView"
              x:Name="Root"
              x:CompileBindings="False">
-    <Grid ColumnDefinitions="*,4,*">
-        <views:PaneView Grid.Column="0"
-                        x:Name="LeftPane"
-                        DataContext="{Binding Left}" />
-        <GridSplitter Grid.Column="1"
+    <!-- Row/column layout is configured in code-behind so the split can flip between
+         horizontal and vertical, and collapse to a single pane. -->
+    <Grid x:Name="LayoutGrid">
+        <Border x:Name="LeftHost"
+                BorderBrush="{DynamicResource HelixAccentBrush}"
+                BorderThickness="{Binding Left.IsActive, Converter={StaticResource BoolToThicknessConverter}}"
+                PointerPressed="OnLeftPressed">
+            <views:PaneView DataContext="{Binding Left}" />
+        </Border>
+
+        <GridSplitter x:Name="Splitter"
                       Background="{DynamicResource HelixAccentBrush}"
-                      ResizeDirection="Columns"
-                      Width="4"
-                      IsVisible="{Binding #Root.DataContext.IsDualPane}" />
-        <views:PaneView Grid.Column="2"
-                        x:Name="RightPane"
-                        DataContext="{Binding Right}"
-                        IsVisible="{Binding #Root.DataContext.IsDualPane}" />
+                      IsVisible="{Binding IsDualPane}" />
+
+        <Border x:Name="RightHost"
+                BorderBrush="{DynamicResource HelixAccentBrush}"
+                BorderThickness="{Binding Right.IsActive, Converter={StaticResource BoolToThicknessConverter}}"
+                IsVisible="{Binding IsDualPane}"
+                PointerPressed="OnRightPressed">
+            <views:PaneView DataContext="{Binding Right}" />
+        </Border>
     </Grid>
 </UserControl>

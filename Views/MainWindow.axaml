@@ -40,15 +40,37 @@
                 </MenuItem>
             </Menu>
 
-            <!-- Tab strip / workspace container -->
+            <!-- Network discovery banner (shown during slow remote handshakes). -->
+            <Border x:Name="NetworkBanner"
+                    DockPanel.Dock="Top"
+                    IsVisible="False"
+                    Background="{DynamicResource HelixAccentBrush}"
+                    Padding="8,3">
+                <TextBlock Text="Discovering network shares…" Foreground="White" FontSize="12" />
+            </Border>
+
+            <!-- Tab strip / workspace container. Mouse-wheel cycles tabs. -->
             <TabControl x:Name="TabsControl"
                         DockPanel.Dock="Top"
                         ItemsSource="{Binding Tabs}"
                         SelectedItem="{Binding ActiveTab, Mode=TwoWay}"
+                        PointerWheelChanged="OnTabStripWheel"
                         Margin="0,0,0,2">
                 <TabControl.ItemTemplate>
                     <DataTemplate DataType="vm:TabViewModel">
-                        <TextBlock Text="{Binding Title}" />
+                        <Border CornerRadius="4" Padding="6,2"
+                                Background="{Binding Tint, Converter={StaticResource ColorToBrushConverter}}">
+                            <Border.ContextFlyout>
+                                <Flyout>
+                                    <StackPanel Spacing="6" Width="230">
+                                        <TextBlock Text="Tab colour" FontWeight="Bold" />
+                                        <ColorPicker ColorChanged="OnTabColorChanged" />
+                                        <Button Content="Clear colour" Click="OnClearTabTint" HorizontalAlignment="Right" />
+                                    </StackPanel>
+                                </Flyout>
+                            </Border.ContextFlyout>
+                            <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
+                        </Border>
                     </DataTemplate>
                 </TabControl.ItemTemplate>
             </TabControl>
@@ -56,10 +78,28 @@
             <!-- Path omnibar -->
             <views:Omnibar DockPanel.Dock="Top" DataContext="{Binding ActiveTab.ActivePane}" />
 
-            <!-- Status bar -->
+            <!-- Status bar: clickable git branch (with switch flyout), path, item count -->
             <Border DockPanel.Dock="Bottom" Padding="8,4" Background="{DynamicResource HelixPaneBackgroundBrush}">
                 <Grid ColumnDefinitions="Auto,*,Auto">
-                    <TextBlock Grid.Column="0" Text="{Binding ActiveTab.ActivePane.RepositoryStatus.Display}" VerticalAlignment="Center" />
+                    <Button Grid.Column="0"
+                            x:Name="BranchButton"
+                            Click="OnBranchButtonClick"
+                            Padding="4,0"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            IsVisible="{Binding ActiveTab.ActivePane.RepositoryStatus.IsRepository, FallbackValue=False}">
+                        <TextBlock Text="{Binding ActiveTab.ActivePane.RepositoryStatus.Display}"
+                                   Foreground="{DynamicResource HelixAccentBrush}"
+                                   VerticalAlignment="Center" />
+                        <FlyoutBase.AttachedFlyout>
+                            <Flyout>
+                                <ListBox x:Name="BranchList"
+                                         ItemsSource="{Binding ActiveTab.ActivePane.Branches}"
+                                         DoubleTapped="OnBranchSelected"
+                                         Width="240" MaxHeight="260" />
+                            </Flyout>
+                        </FlyoutBase.AttachedFlyout>
+                    </Button>
                     <TextBlock Grid.Column="1"
                                Text="{Binding ActiveTab.ActivePane.CurrentPath}"
                                VerticalAlignment="Center"

@@ -33,7 +33,8 @@
                   Background="Transparent"
                   BorderThickness="0">
             <DataGrid.ContextMenu>
-                <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                <ContextMenu x:CompileBindings="False"
+                             DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
                     <StackPanel Orientation="Horizontal" Spacing="2" Margin="4,2">
                         <Button ToolTip.Tip="Cut" Command="{Binding CutCommand}" Padding="6" Background="Transparent" BorderThickness="0">
                             <PathIcon Data="M9.64,7.64C9.87,7.14 10,6.59 10,6A4,4 0 0,0 6,2A4,4 0 0,0 2,6A4,4 0 0,0 6,10C6.59,10 7.14,9.87 7.64,9.64L10,12L7.64,14.36C7.14,14.13 6.59,14 6,14A4,4 0 0,0 2,18A4,4 0 0,0 6,22A4,4 0 0,0 10,18C10,17.41 9.87,16.86 9.64,16.36L12,14L19,21H22V20L9.64,7.64M6,8A2,2 0 0,1 4,6A2,2 0 0,1 6,4A2,2 0 0,1 8,6A2,2 0 0,1 6,8M6,20A2,2 0 0,1 4,18A2,2 0 0,1 6,16A2,2 0 0,1 8,18A2,2 0 0,1 6,20M12,12.5L14,10.5L22,2.5V2H19L12,9L10,7L8.5,8.5L12,12.5Z" Width="14" Height="14" />
@@ -44,16 +45,24 @@
                         <Button ToolTip.Tip="Rename" Command="{Binding BeginRenameCommand}" Padding="6" Background="Transparent" BorderThickness="0">
                             <PathIcon Data="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z" Width="14" Height="14" />
                         </Button>
+                        <Button ToolTip.Tip="Share" Command="{Binding ShareCommand}" Padding="6" Background="Transparent" BorderThickness="0">
+                            <PathIcon Data="M18,16.08C17.24,16.08 16.56,16.38 16.04,16.85L8.91,12.7C8.96,12.47 9,12.24 9,12C9,11.76 8.96,11.53 8.91,11.3L15.96,7.19C16.5,7.69 17.21,8 18,8A3,3 0 0,0 21,5A3,3 0 0,0 18,2A3,3 0 0,0 15,5C15,5.24 15.04,5.47 15.09,5.7L8.04,9.81C7.5,9.31 6.79,9 6,9A3,3 0 0,0 3,12A3,3 0 0,0 6,15C6.79,15 7.5,14.69 8.04,14.19L15.16,18.34C15.11,18.55 15.08,18.77 15.08,19A3,3 0 0,0 18,22A3,3 0 0,0 21,19A3,3 0 0,0 18,16.08Z" Width="14" Height="14" />
+                        </Button>
                         <Button ToolTip.Tip="Delete" Command="{Binding DeleteCommand}" Padding="6" Background="Transparent" BorderThickness="0">
                             <PathIcon Data="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6Z" Width="14" Height="14" />
                         </Button>
+                        <Button ToolTip.Tip="Properties" Command="{Binding ShowPropertiesCommand}" Padding="6" Background="Transparent" BorderThickness="0">
+                            <PathIcon Data="M13,9H11V7H13M13,17H11V11H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z" Width="14" Height="14" />
+                        </Button>
                     </StackPanel>
                     <Separator />
-                    <MenuItem Header="Cut" Command="{Binding CutCommand}" />
-                    <MenuItem Header="Copy" Command="{Binding CopyCommand}" />
+                    <MenuItem Header="Open" Command="{Binding OpenCommand}" />
+                    <MenuItem Header="Open in new tab" Command="{Binding OpenInNewTabCommand}" />
+                    <MenuItem Header="Open in new window" Command="{Binding OpenInNewWindowCommand}" />
+                    <MenuItem Header="Open in new pane" Command="{Binding OpenInNewPaneCommand}" />
+                    <Separator />
+                    <MenuItem Header="Copy path" Command="{Binding CopyPathCommand}" />
                     <MenuItem Header="Paste" Command="{Binding PasteCommand}" />
-                    <MenuItem Header="Rename" Command="{Binding BeginRenameCommand}" />
-                    <MenuItem Header="Delete" Command="{Binding DeleteCommand}" />
                     <Separator />
                     <MenuItem Header="Show more options" Command="{Binding ShowMoreOptionsCommand}" />
                 </ContextMenu>
@@ -115,6 +124,41 @@
                  PointerMoved="OnListPointerMoved"
                  PointerReleased="OnListPointerReleased"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListBox.ContextMenu>
+                <ContextMenu x:CompileBindings="False"
+                             DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                    <StackPanel Orientation="Horizontal" Spacing="2" Margin="4,2">
+                        <Button ToolTip.Tip="Cut" Command="{Binding CutCommand}" Padding="6" Background="Transparent" BorderThickness="0">
+                            <PathIcon Data="M9.64,7.64C9.87,7.14 10,6.59 10,6A4,4 0 0,0 6,2A4,4 0 0,0 2,6A4,4 0 0,0 6,10C6.59,10 7.14,9.87 7.64,9.64L10,12L7.64,14.36C7.14,14.13 6.59,14 6,14A4,4 0 0,0 2,18A4,4 0 0,0 6,22A4,4 0 0,0 10,18C10,17.41 9.87,16.86 9.64,16.36L12,14L19,21H22V20L9.64,7.64M6,8A2,2 0 0,1 4,6A2,2 0 0,1 6,4A2,2 0 0,1 8,6A2,2 0 0,1 6,8M6,20A2,2 0 0,1 4,18A2,2 0 0,1 6,16A2,2 0 0,1 8,18A2,2 0 0,1 6,20M12,12.5L14,10.5L22,2.5V2H19L12,9L10,7L8.5,8.5L12,12.5Z" Width="14" Height="14" />
+                        </Button>
+                        <Button ToolTip.Tip="Copy" Command="{Binding CopyCommand}" Padding="6" Background="Transparent" BorderThickness="0">
+                            <PathIcon Data="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" Width="14" Height="14" />
+                        </Button>
+                        <Button ToolTip.Tip="Rename" Command="{Binding BeginRenameCommand}" Padding="6" Background="Transparent" BorderThickness="0">
+                            <PathIcon Data="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z" Width="14" Height="14" />
+                        </Button>
+                        <Button ToolTip.Tip="Share" Command="{Binding ShareCommand}" Padding="6" Background="Transparent" BorderThickness="0">
+                            <PathIcon Data="M18,16.08C17.24,16.08 16.56,16.38 16.04,16.85L8.91,12.7C8.96,12.47 9,12.24 9,12C9,11.76 8.96,11.53 8.91,11.3L15.96,7.19C16.5,7.69 17.21,8 18,8A3,3 0 0,0 21,5A3,3 0 0,0 18,2A3,3 0 0,0 15,5C15,5.24 15.04,5.47 15.09,5.7L8.04,9.81C7.5,9.31 6.79,9 6,9A3,3 0 0,0 3,12A3,3 0 0,0 6,15C6.79,15 7.5,14.69 8.04,14.19L15.16,18.34C15.11,18.55 15.08,18.77 15.08,19A3,3 0 0,0 18,22A3,3 0 0,0 21,19A3,3 0 0,0 18,16.08Z" Width="14" Height="14" />
+                        </Button>
+                        <Button ToolTip.Tip="Delete" Command="{Binding DeleteCommand}" Padding="6" Background="Transparent" BorderThickness="0">
+                            <PathIcon Data="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6Z" Width="14" Height="14" />
+                        </Button>
+                        <Button ToolTip.Tip="Properties" Command="{Binding ShowPropertiesCommand}" Padding="6" Background="Transparent" BorderThickness="0">
+                            <PathIcon Data="M13,9H11V7H13M13,17H11V11H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z" Width="14" Height="14" />
+                        </Button>
+                    </StackPanel>
+                    <Separator />
+                    <MenuItem Header="Open" Command="{Binding OpenCommand}" />
+                    <MenuItem Header="Open in new tab" Command="{Binding OpenInNewTabCommand}" />
+                    <MenuItem Header="Open in new window" Command="{Binding OpenInNewWindowCommand}" />
+                    <MenuItem Header="Open in new pane" Command="{Binding OpenInNewPaneCommand}" />
+                    <Separator />
+                    <MenuItem Header="Copy path" Command="{Binding CopyPathCommand}" />
+                    <MenuItem Header="Paste" Command="{Binding PasteCommand}" />
+                    <Separator />
+                    <MenuItem Header="Show more options" Command="{Binding ShowMoreOptionsCommand}" />
+                </ContextMenu>
+            </ListBox.ContextMenu>
             <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="models:FileSystemEntry">
                     <Grid ColumnDefinitions="Auto,*"
@@ -155,6 +199,41 @@
                      PointerMoved="OnListPointerMoved"
                      PointerReleased="OnListPointerReleased"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListBox.ContextMenu>
+                    <ContextMenu x:CompileBindings="False"
+                                 DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                        <StackPanel Orientation="Horizontal" Spacing="2" Margin="4,2">
+                            <Button ToolTip.Tip="Cut" Command="{Binding CutCommand}" Padding="6" Background="Transparent" BorderThickness="0">
+                                <PathIcon Data="M9.64,7.64C9.87,7.14 10,6.59 10,6A4,4 0 0,0 6,2A4,4 0 0,0 2,6A4,4 0 0,0 6,10C6.59,10 7.14,9.87 7.64,9.64L10,12L7.64,14.36C7.14,14.13 6.59,14 6,14A4,4 0 0,0 2,18A4,4 0 0,0 6,22A4,4 0 0,0 10,18C10,17.41 9.87,16.86 9.64,16.36L12,14L19,21H22V20L9.64,7.64M6,8A2,2 0 0,1 4,6A2,2 0 0,1 6,4A2,2 0 0,1 8,6A2,2 0 0,1 6,8M6,20A2,2 0 0,1 4,18A2,2 0 0,1 6,16A2,2 0 0,1 8,18A2,2 0 0,1 6,20M12,12.5L14,10.5L22,2.5V2H19L12,9L10,7L8.5,8.5L12,12.5Z" Width="14" Height="14" />
+                            </Button>
+                            <Button ToolTip.Tip="Copy" Command="{Binding CopyCommand}" Padding="6" Background="Transparent" BorderThickness="0">
+                                <PathIcon Data="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" Width="14" Height="14" />
+                            </Button>
+                            <Button ToolTip.Tip="Rename" Command="{Binding BeginRenameCommand}" Padding="6" Background="Transparent" BorderThickness="0">
+                                <PathIcon Data="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z" Width="14" Height="14" />
+                            </Button>
+                            <Button ToolTip.Tip="Share" Command="{Binding ShareCommand}" Padding="6" Background="Transparent" BorderThickness="0">
+                                <PathIcon Data="M18,16.08C17.24,16.08 16.56,16.38 16.04,16.85L8.91,12.7C8.96,12.47 9,12.24 9,12C9,11.76 8.96,11.53 8.91,11.3L15.96,7.19C16.5,7.69 17.21,8 18,8A3,3 0 0,0 21,5A3,3 0 0,0 18,2A3,3 0 0,0 15,5C15,5.24 15.04,5.47 15.09,5.7L8.04,9.81C7.5,9.31 6.79,9 6,9A3,3 0 0,0 3,12A3,3 0 0,0 6,15C6.79,15 7.5,14.69 8.04,14.19L15.16,18.34C15.11,18.55 15.08,18.77 15.08,19A3,3 0 0,0 18,22A3,3 0 0,0 21,19A3,3 0 0,0 18,16.08Z" Width="14" Height="14" />
+                            </Button>
+                            <Button ToolTip.Tip="Delete" Command="{Binding DeleteCommand}" Padding="6" Background="Transparent" BorderThickness="0">
+                                <PathIcon Data="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6Z" Width="14" Height="14" />
+                            </Button>
+                            <Button ToolTip.Tip="Properties" Command="{Binding ShowPropertiesCommand}" Padding="6" Background="Transparent" BorderThickness="0">
+                                <PathIcon Data="M13,9H11V7H13M13,17H11V11H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z" Width="14" Height="14" />
+                            </Button>
+                        </StackPanel>
+                        <Separator />
+                        <MenuItem Header="Open" Command="{Binding OpenCommand}" />
+                        <MenuItem Header="Open in new tab" Command="{Binding OpenInNewTabCommand}" />
+                        <MenuItem Header="Open in new window" Command="{Binding OpenInNewWindowCommand}" />
+                        <MenuItem Header="Open in new pane" Command="{Binding OpenInNewPaneCommand}" />
+                        <Separator />
+                        <MenuItem Header="Copy path" Command="{Binding CopyPathCommand}" />
+                        <MenuItem Header="Paste" Command="{Binding PasteCommand}" />
+                        <Separator />
+                        <MenuItem Header="Show more options" Command="{Binding ShowMoreOptionsCommand}" />
+                    </ContextMenu>
+                </ListBox.ContextMenu>
                 <ListBox.ItemsPanel>
                     <ItemsPanelTemplate>
                         <WrapPanel Orientation="Horizontal" />

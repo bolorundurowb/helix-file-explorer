@@ -68,6 +68,7 @@ public partial class App : Application
         services.AddSingleton<IThemeService, AvaloniaThemeService>();
         services.AddSingleton<IClipboardService, InternalClipboardService>();
         services.AddSingleton<IOsFileClipboard, AvaloniaOsFileClipboard>();
+        services.AddSingleton<IUiHost, AvaloniaUiHost>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddTransient<MainWindow>();
     }

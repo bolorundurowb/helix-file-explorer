@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Filtering;
+using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Session;
 using HelixExplorer.Core.Sorting;
@@ -21,6 +22,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     private readonly IClipboardService _clipboard;
     private readonly IOsFileClipboard _osClipboard;
     private readonly IShellContextMenuService _shellContextMenu;
+    private readonly IUiHost _uiHost;
     private readonly IFileChangeWatcher _watcher;
     private readonly Stack<string> _backStack = new();
     private readonly Stack<string> _forwardStack = new();
@@ -35,6 +37,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         IClipboardService clipboard,
         IOsFileClipboard osClipboard,
         IShellContextMenuService shellContextMenu,
+        IUiHost uiHost,
         IFileChangeWatcher watcher)
     {
         _fileSystem = fileSystem;
@@ -42,6 +45,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         _clipboard = clipboard;
         _osClipboard = osClipboard;
         _shellContextMenu = shellContextMenu;
+        _uiHost = uiHost;
         _watcher = watcher;
         _watcher.Changed += OnWatcherChanged;
         _clipboard.Changed += OnClipboardChanged;
@@ -49,6 +53,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
     public event EventHandler? Navigated;
     public event EventHandler<FileSystemEntry>? EntryActivated;
+    public event EventHandler<string>? OpenInNewTabRequested;
+    public event EventHandler<string>? OpenInNewPaneRequested;
 
     [ObservableProperty] private string _currentPath = string.Empty;
 
@@ -618,15 +624,116 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand(CanExecute = nameof(HasSelection))]
-    private async Task ShowMoreOptions()
+    private void Open()
+    {
+        if (SelectedEntries.Count == 1)
+            ActivateEntry(SelectedEntries[0]);
+    }
+
+    [RelayCommand(CanExecute = nameof(HasSingleSelection))]
+    private void OpenInNewTab()
+    {
+        if (SelectedEntries.Count != 1)
+            return;
+
+        var entry = SelectedEntries[0];
+        OpenInNewTabRequested?.Invoke(this, entry.IsDirectory ? entry.FullPath : Path.GetDirectoryName(entry.FullPath) ?? CurrentPath);
+    }
+
+    [RelayCommand(CanExecute = nameof(HasSingleSelection))]
+    private void OpenInNewWindow()
+    {
+        if (SelectedEntries.Count != 1)
+            return;
+
+        var entry = SelectedEntries[0];
+        var path = entry.IsDirectory ? entry.FullPath : Path.GetDirectoryName(entry.FullPath) ?? entry.FullPath;
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = $"\"{path}\"",
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"OpenInNewWindow failed: {ex.Message}");
+            StatusText = "Could not open new window";
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(HasSingleSelection))]
+    private void OpenInNewPane()
+    {
+        if (SelectedEntries.Count != 1)
+            return;
+
+        var entry = SelectedEntries[0];
+        OpenInNewPaneRequested?.Invoke(this, entry.IsDirectory ? entry.FullPath : Path.GetDirectoryName(entry.FullPath) ?? CurrentPath);
+    }
+
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private async Task CopyPath()
     {
         if (SelectedEntries.Count == 0)
             return;
 
         try
         {
+            var text = string.Join(Environment.NewLine, SelectedEntries.Select(e => e.FullPath));
+            await _uiHost.SetClipboardTextAsync(text).ConfigureAwait(true);
+            StatusText = SelectedEntries.Count == 1 ? "Path copied" : "Paths copied";
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"CopyPath failed: {ex.Message}");
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(HasSingleSelection))]
+    private async Task ShowProperties()
+    {
+        if (SelectedEntries.Count != 1)
+            return;
+
+        try
+        {
+            await _shellContextMenu.ShowPropertiesAsync(
+                SelectedEntries[0].FullPath,
+                _uiHost.GetMainWindowHandle()).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"ShowProperties failed: {ex.Message}");
+            StatusText = "Could not open properties";
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private void Share()
+    {
+        // Windows Share sheet deep integration is deferred post-v1.
+        StatusText = "Share is not available yet";
+    }
+
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private async Task ShowMoreOptions()
+    {
+        if (SelectedEntries.Count == 0 && string.IsNullOrEmpty(CurrentPath))
+            return;
+
+        try
+        {
             var paths = SelectedEntries.Select(e => e.FullPath).ToList();
-            await _shellContextMenu.ShowMoreOptionsAsync(paths).ConfigureAwait(true);
+            var (x, y) = _uiHost.GetPointerScreenPosition();
+            await _shellContextMenu.ShowMoreOptionsAsync(
+                CurrentPath,
+                paths,
+                _uiHost.GetMainWindowHandle(),
+                x,
+                y).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -636,6 +743,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     }
 
     private bool HasSelection() => SelectedEntries.Count > 0;
+
+    private bool HasSingleSelection() => SelectedEntries.Count == 1;
 
     // Always allow Paste when a folder is open so OS clipboard (Explorer) works;
     // Paste resolves internal payload first, then falls back to IOsFileClipboard.
@@ -650,6 +759,13 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         DeleteCommand.NotifyCanExecuteChanged();
         BeginRenameCommand.NotifyCanExecuteChanged();
         ShowMoreOptionsCommand.NotifyCanExecuteChanged();
+        OpenCommand.NotifyCanExecuteChanged();
+        OpenInNewTabCommand.NotifyCanExecuteChanged();
+        OpenInNewWindowCommand.NotifyCanExecuteChanged();
+        OpenInNewPaneCommand.NotifyCanExecuteChanged();
+        CopyPathCommand.NotifyCanExecuteChanged();
+        ShowPropertiesCommand.NotifyCanExecuteChanged();
+        ShareCommand.NotifyCanExecuteChanged();
     }
 
     public async Task HandleDropAsync(IReadOnlyList<string> paths, bool isCopy)

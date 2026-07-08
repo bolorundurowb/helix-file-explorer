@@ -360,15 +360,35 @@
                 </DockPanel>
             </Border>
 
-            <Border Grid.Column="1"
-                    Margin="8"
-                    Background="{DynamicResource HelixContentCardBrush}"
-                    CornerRadius="{DynamicResource HelixContentCornerRadius}"
-                    BorderBrush="{DynamicResource HelixBorderColor}"
-                    BorderThickness="1"
-                    ClipToBounds="True">
-                <views:DualPaneView DataContext="{Binding SelectedTab}" />
-            </Border>
+            <DockPanel Grid.Column="1">
+                <Border DockPanel.Dock="Top"
+                        IsVisible="{Binding IsDiscoveringNetwork}"
+                        Margin="8,8,8,0"
+                        Background="{DynamicResource HelixToolbarBrush}"
+                        BorderBrush="{DynamicResource HelixBorderColor}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="12,8">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <PathIcon Data="M17,3A2,2 0 0,1 19,5V15A2,2 0 0,1 17,17H13V19H14A1,1 0 0,1 15,20H9A1,1 0 0,1 10,19H11V17H7A2,2 0 0,1 5,15V5A2,2 0 0,1 7,3H17M17,5H7V15H17V5Z"
+                                  Width="14" Height="14"
+                                  Foreground="{DynamicResource HelixAccentBrush}" />
+                        <TextBlock Text="{Binding NetworkBannerText}"
+                                   VerticalAlignment="Center"
+                                   FontSize="12"
+                                   Opacity="0.85" />
+                    </StackPanel>
+                </Border>
+
+                <Border Margin="8"
+                        Background="{DynamicResource HelixContentCardBrush}"
+                        CornerRadius="{DynamicResource HelixContentCornerRadius}"
+                        BorderBrush="{DynamicResource HelixBorderColor}"
+                        BorderThickness="1"
+                        ClipToBounds="True">
+                    <views:DualPaneView DataContext="{Binding SelectedTab}" />
+                </Border>
+            </DockPanel>
         </Grid>
     </DockPanel>
 </Window>

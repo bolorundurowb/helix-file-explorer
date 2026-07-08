@@ -12,19 +12,34 @@ public sealed class WinNetworkLocationProvider : INetworkLocationProvider
     private const int ResourceUsageContainer = 0x00000002;
     private const int ErrorNoMoreItems = 259;
 
-    public ValueTask<IReadOnlyList<NetworkLocationInfo>> GetNetworkLocationsAsync(CancellationToken cancellationToken = default)
-        => ValueTask.FromResult(EnumerateNetworkLocations(cancellationToken));
+    public async ValueTask<IReadOnlyList<NetworkLocationInfo>> GetNetworkLocationsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await Task.Run(() => EnumerateNetworkLocations(cancellationToken), cancellationToken)
+            .ConfigureAwait(false);
+    }
 
     private static IReadOnlyList<NetworkLocationInfo> EnumerateNetworkLocations(CancellationToken cancellationToken)
     {
         var results = new List<NetworkLocationInfo>();
         Enumerate(null, results, cancellationToken);
 
-        return results
-            .GroupBy(location => location.Path, StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.First())
-            .OrderBy(location => location.DisplayName, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        if (results.Count == 0)
+            return results;
+
+        // De-dupe by path (case-insensitive) without LINQ OrderBy allocations in a hot path sense —
+        // discovery itself is I/O-bound, but keep the filter explicit.
+        results.Sort(static (a, b) => string.Compare(a.DisplayName, b.DisplayName, StringComparison.OrdinalIgnoreCase));
+
+        var unique = new List<NetworkLocationInfo>(results.Count);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var location in results)
+        {
+            if (seen.Add(location.Path))
+                unique.Add(location);
+        }
+
+        return unique;
     }
 
     private static void Enumerate(NetResource? parent, List<NetworkLocationInfo> results, CancellationToken cancellationToken)
@@ -54,13 +69,16 @@ public sealed class WinNetworkLocationProvider : INetworkLocationProvider
                     for (var i = 0; i < count; i++)
                     {
                         var resource = Marshal.PtrToStructure<NetResource>(buffer + i * itemSize);
-                        var remoteName = resource?.RemoteName;
+                        if (resource is null)
+                            continue;
+
+                        var remoteName = resource.RemoteName;
                         if (!string.IsNullOrWhiteSpace(remoteName))
                         {
                             results.Add(new NetworkLocationInfo(
                                 remoteName,
-                                GetDisplayName(remoteName, resource?.Comment),
-                                resource?.Comment));
+                                GetDisplayName(remoteName, resource.Comment),
+                                resource.Comment));
                         }
 
                         if ((resource.Usage & ResourceUsageContainer) == ResourceUsageContainer)

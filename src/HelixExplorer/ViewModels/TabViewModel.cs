@@ -2,6 +2,7 @@ using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HelixExplorer.Core.FileSystem;
+using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Session;
 
@@ -13,6 +14,8 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     private readonly IFileOperationService _fileOps;
     private readonly IClipboardService _clipboard;
     private readonly IOsFileClipboard _osClipboard;
+    private readonly IShellContextMenuService _shellContextMenu;
+    private readonly IUiHost _uiHost;
     private readonly Func<IFileChangeWatcher> _watcherFactory;
     private bool _disposed;
 
@@ -21,12 +24,16 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         IFileOperationService fileOps,
         IClipboardService clipboard,
         IOsFileClipboard osClipboard,
+        IShellContextMenuService shellContextMenu,
+        IUiHost uiHost,
         Func<IFileChangeWatcher> watcherFactory)
     {
         _fileSystem = fileSystem;
         _fileOps = fileOps;
         _clipboard = clipboard;
         _osClipboard = osClipboard;
+        _shellContextMenu = shellContextMenu;
+        _uiHost = uiHost;
         _watcherFactory = watcherFactory;
         LeftPane = CreatePane();
         _activePane = LeftPane;
@@ -68,9 +75,33 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
 
     private PaneViewModel CreatePane()
     {
-        var pane = new PaneViewModel(_fileSystem, _fileOps, _clipboard, _osClipboard, _watcherFactory());
+        var pane = new PaneViewModel(
+            _fileSystem,
+            _fileOps,
+            _clipboard,
+            _osClipboard,
+            _shellContextMenu,
+            _uiHost,
+            _watcherFactory());
         pane.Navigated += OnPaneNavigated;
+        pane.OpenInNewTabRequested += OnOpenInNewTabRequested;
+        pane.OpenInNewPaneRequested += OnOpenInNewPaneRequested;
         return pane;
+    }
+
+    public event EventHandler<string>? OpenInNewTabRequested;
+
+    private void OnOpenInNewTabRequested(object? sender, string path)
+        => OpenInNewTabRequested?.Invoke(this, path);
+
+    private void OnOpenInNewPaneRequested(object? sender, string path)
+    {
+        if (!IsDualPane)
+            ToggleDualPane();
+
+        RightPane?.NavigateTo(path);
+        if (RightPane is not null)
+            ActivePane = RightPane;
     }
 
     private void OnPaneNavigated(object? sender, EventArgs e)
@@ -211,9 +242,16 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     {
         if (RightPane is null)
             return;
-        RightPane.Navigated -= OnPaneNavigated;
+        DetachPane(RightPane);
         RightPane.Dispose();
         RightPane = null;
+    }
+
+    private void DetachPane(PaneViewModel pane)
+    {
+        pane.Navigated -= OnPaneNavigated;
+        pane.OpenInNewTabRequested -= OnOpenInNewTabRequested;
+        pane.OpenInNewPaneRequested -= OnOpenInNewPaneRequested;
     }
 
     public void Dispose()
@@ -221,7 +259,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         if (_disposed)
             return;
         _disposed = true;
-        LeftPane.Navigated -= OnPaneNavigated;
+        DetachPane(LeftPane);
         LeftPane.Dispose();
         DisposeRightPane();
     }

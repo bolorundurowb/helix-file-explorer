@@ -30,21 +30,31 @@ public sealed class WinQuickAccessProvider : IQuickAccessProvider
 
     public IReadOnlyList<(KnownFolderKind Kind, string Path, string DisplayName)> GetPinnedDefaults()
     {
-        var result = new List<(KnownFolderKind, string, string)>(6);
+        var result = new List<(KnownFolderKind, string, string)>(7);
         Add(result, KnownFolderKind.Desktop, "Desktop");
         Add(result, KnownFolderKind.Downloads, "Downloads");
         Add(result, KnownFolderKind.Documents, "Documents");
         Add(result, KnownFolderKind.Music, "Music");
         Add(result, KnownFolderKind.Pictures, "Pictures");
         Add(result, KnownFolderKind.Videos, "Videos");
+        Add(result, KnownFolderKind.RecycleBin, "Recycle Bin", requireDirectory: false);
         return result;
     }
 
-    private void Add(List<(KnownFolderKind, string, string)> list, KnownFolderKind kind, string displayName)
+    private void Add(
+        List<(KnownFolderKind, string, string)> list,
+        KnownFolderKind kind,
+        string displayName,
+        bool requireDirectory = true)
     {
         var path = GetPath(kind);
-        if (!string.IsNullOrEmpty(path) && Directory.Exists(path))
-            list.Add((kind, EnsureTrailingSeparator(path), displayName));
+        if (string.IsNullOrEmpty(path))
+            return;
+
+        if (requireDirectory && !Directory.Exists(path))
+            return;
+
+        list.Add((kind, requireDirectory ? EnsureTrailingSeparator(path) : path, displayName));
     }
 
     private static string GetDownloadsFolder()

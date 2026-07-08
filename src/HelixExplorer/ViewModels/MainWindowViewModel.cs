@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HelixExplorer.Core.FileSystem;
+using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Session;
 using HelixExplorer.Core.Settings;
@@ -21,8 +22,11 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly IFileOperationService _fileOps;
     private readonly IClipboardService _clipboard;
     private readonly IOsFileClipboard _osClipboard;
+    private readonly IShellContextMenuService _shellContextMenu;
+    private readonly IUiHost _uiHost;
     private readonly Func<IFileChangeWatcher> _watcherFactory;
     private readonly string _homePath;
+    private CancellationTokenSource? _networkCts;
     private bool _disposed;
 
     public MainWindowViewModel(
@@ -36,6 +40,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         IFileOperationService fileOps,
         IClipboardService clipboard,
         IOsFileClipboard osClipboard,
+        IShellContextMenuService shellContextMenu,
+        IUiHost uiHost,
         Func<IFileChangeWatcher> watcherFactory)
     {
         _settingsStore = settingsStore;
@@ -48,6 +54,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _fileOps = fileOps;
         _clipboard = clipboard;
         _osClipboard = osClipboard;
+        _shellContextMenu = shellContextMenu;
+        _uiHost = uiHost;
         _watcherFactory = watcherFactory;
 
         _homePath = _quickAccess.GetPath(KnownFolderKind.Home)
@@ -66,16 +74,36 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<SidebarItemViewModel> SidebarItems { get; }
 
+    [ObservableProperty]
+    private bool _isDiscoveringNetwork;
+
+    [ObservableProperty]
+    private string _networkBannerText = "Discovering network shares…";
+
     private async Task RefreshNetworkLocationsAsync()
     {
+        _networkCts?.Cancel();
+        _networkCts = new CancellationTokenSource();
+        var ct = _networkCts.Token;
+
+        IsDiscoveringNetwork = true;
         try
         {
-            var locations = await _networkLocations.GetNetworkLocationsAsync().ConfigureAwait(true);
-            RebuildSidebar(locations);
+            var locations = await _networkLocations.GetNetworkLocationsAsync(ct).ConfigureAwait(true);
+            if (!ct.IsCancellationRequested)
+                RebuildSidebar(locations);
+        }
+        catch (OperationCanceledException)
+        {
         }
         catch
         {
             // Network discovery is opportunistic; keep the stable fallback item.
+        }
+        finally
+        {
+            if (!ct.IsCancellationRequested)
+                IsDiscoveringNetwork = false;
         }
     }
 
@@ -147,10 +175,29 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     private TabViewModel CreateTab()
     {
-        var tab = new TabViewModel(_fileSystem, _fileOps, _clipboard, _osClipboard, _watcherFactory);
+        var tab = new TabViewModel(
+            _fileSystem,
+            _fileOps,
+            _clipboard,
+            _osClipboard,
+            _shellContextMenu,
+            _uiHost,
+            _watcherFactory);
         tab.CloseRequested += OnTabCloseRequested;
         tab.Navigated += OnTabNavigated;
+        tab.OpenInNewTabRequested += OnOpenInNewTabRequested;
         return tab;
+    }
+
+    private void OnOpenInNewTabRequested(object? sender, string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+
+        var tab = CreateTab();
+        tab.LeftPane.NavigateTo(path);
+        AddTab(tab);
+        SelectedTab = tab;
     }
 
     private TabViewModel CreateDefaultTab()
@@ -190,6 +237,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         Tabs.Remove(tab);
         tab.CloseRequested -= OnTabCloseRequested;
         tab.Navigated -= OnTabNavigated;
+        tab.OpenInNewTabRequested -= OnOpenInNewTabRequested;
         tab.Dispose();
 
         if (Tabs.Count == 0)
@@ -303,7 +351,22 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             return;
 
         if (item.Path.StartsWith("shell:", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "explorer.exe",
+                    Arguments = item.Path,
+                    UseShellExecute = true
+                });
+            }
+            catch
+            {
+            }
+
             return;
+        }
 
         SelectedTab?.ActivePane.NavigateTo(item.Path);
     }
@@ -338,12 +401,16 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             return;
         _disposed = true;
 
+        _networkCts?.Cancel();
+        _networkCts?.Dispose();
+
         SaveSession();
 
         foreach (var tab in Tabs)
         {
             tab.CloseRequested -= OnTabCloseRequested;
             tab.Navigated -= OnTabNavigated;
+            tab.OpenInNewTabRequested -= OnOpenInNewTabRequested;
             tab.Dispose();
         }
 

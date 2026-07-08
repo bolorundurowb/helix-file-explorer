@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HelixExplorer.Core.FileSystem;
+using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Session;
@@ -24,6 +25,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly IOsFileClipboard _osClipboard;
     private readonly IShellContextMenuService _shellContextMenu;
     private readonly IUiHost _uiHost;
+    private readonly IGitProvider _git;
     private readonly Func<IFileChangeWatcher> _watcherFactory;
     private readonly string _homePath;
     private CancellationTokenSource? _networkCts;
@@ -42,6 +44,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         IOsFileClipboard osClipboard,
         IShellContextMenuService shellContextMenu,
         IUiHost uiHost,
+        IGitProvider git,
         Func<IFileChangeWatcher> watcherFactory)
     {
         _settingsStore = settingsStore;
@@ -56,6 +59,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _osClipboard = osClipboard;
         _shellContextMenu = shellContextMenu;
         _uiHost = uiHost;
+        _git = git;
         _watcherFactory = watcherFactory;
 
         _homePath = _quickAccess.GetPath(KnownFolderKind.Home)
@@ -182,6 +186,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             _osClipboard,
             _shellContextMenu,
             _uiHost,
+            _git,
             _watcherFactory);
         tab.CloseRequested += OnTabCloseRequested;
         tab.Navigated += OnTabNavigated;

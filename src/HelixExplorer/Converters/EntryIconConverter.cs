@@ -2,10 +2,11 @@ using System.Globalization;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
 using HelixExplorer.Core.Models;
+using HelixExplorer.ViewModels;
 
 namespace HelixExplorer.Converters;
 
-/// <summary>Maps a <see cref="FileSystemEntry"/> (or its IsDirectory flag) to a folder/file glyph.</summary>
+/// <summary>Maps a listing entry (or its IsDirectory flag) to a folder/file glyph.</summary>
 public sealed class EntryIconConverter : IValueConverter
 {
     private const string FolderPath =
@@ -23,6 +24,7 @@ public sealed class EntryIconConverter : IValueConverter
     {
         var isDirectory = value switch
         {
+            EntryItemViewModel item => item.IsDirectory,
             FileSystemEntry entry => entry.IsDirectory,
             bool flag => flag,
             _ => false

@@ -16,6 +16,7 @@ public sealed class FileSizeConverter : IValueConverter
         return value switch
         {
             long size => FileSizeFormatter.Format(size, Mode, isDirectory: false),
+            ViewModels.EntryItemViewModel item => FileSizeFormatter.Format(item.SizeBytes, Mode, item.IsDirectory),
             Core.Models.FileSystemEntry entry => FileSizeFormatter.Format(entry.SizeBytes, Mode, entry.IsDirectory),
             _ => string.Empty
         };

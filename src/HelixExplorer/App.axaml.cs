@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using HelixExplorer.Core.FileSystem;
+using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Core.Session;
 using HelixExplorer.Core.Settings;
@@ -69,6 +70,7 @@ public partial class App : Application
         services.AddSingleton<IClipboardService, InternalClipboardService>();
         services.AddSingleton<IOsFileClipboard, AvaloniaOsFileClipboard>();
         services.AddSingleton<IUiHost, AvaloniaUiHost>();
+        services.AddSingleton<IGitProvider, CliGitProvider>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddTransient<MainWindow>();
     }

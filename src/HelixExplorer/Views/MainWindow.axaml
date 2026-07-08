@@ -295,11 +295,37 @@
                 BorderBrush="{DynamicResource HelixBorderColor}"
                 BorderThickness="0,1,0,0"
                 Height="32">
-            <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Grid.Column="0"
-                           Text="{Binding SelectedTab.ActivePane.StatusText}"
-                           VerticalAlignment="Center" FontSize="12" Opacity="0.7" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <Button Grid.Column="0"
+                        x:Name="BranchButton"
+                        Click="OnBranchButtonClick"
+                        Padding="6,2"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        IsVisible="{Binding SelectedTab.ActivePane.RepositoryStatus.IsRepository, FallbackValue=False}"
+                        ToolTip.Tip="Switch branch">
+                    <TextBlock Text="{Binding SelectedTab.ActivePane.RepositoryStatus.Display}"
+                               Foreground="{DynamicResource HelixAccentBrush}"
+                               FontSize="12"
+                               VerticalAlignment="Center" />
+                    <FlyoutBase.AttachedFlyout>
+                        <Flyout Placement="TopEdgeAlignedLeft">
+                            <ListBox x:Name="BranchList"
+                                     ItemsSource="{Binding SelectedTab.ActivePane.Branches}"
+                                     DoubleTapped="OnBranchSelected"
+                                     Width="240"
+                                     MaxHeight="260" />
+                        </Flyout>
+                    </FlyoutBase.AttachedFlyout>
+                </Button>
                 <TextBlock Grid.Column="1"
+                           Text="{Binding SelectedTab.ActivePane.StatusText}"
+                           VerticalAlignment="Center"
+                           FontSize="12"
+                           Opacity="0.7"
+                           Margin="12,0,0,0" />
+                <TextBlock Grid.Column="2"
                            Text="{Binding SelectedTab.ActivePane.SelectedCount, StringFormat='{}{0} selected'}"
                            VerticalAlignment="Center" FontSize="12" Opacity="0.7" />
             </Grid>

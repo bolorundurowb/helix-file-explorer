@@ -70,19 +70,20 @@
             <DataGrid.Columns>
                 <DataGridTemplateColumn Header="Name" Width="2*" Tag="Name" SortMemberPath="Name">
                     <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate x:DataType="models:FileSystemEntry">
+                        <DataTemplate x:DataType="vm:EntryItemViewModel">
                             <Grid ColumnDefinitions="Auto,*"
                                   VerticalAlignment="Center"
                                   ToolTip.Tip="{Binding Name}">
                                 <PathIcon Grid.Column="0"
                                           Data="{Binding Converter={StaticResource EntryIconConverter}}"
                                           Width="14" Height="14" Margin="0,0,6,0"
-                                          Foreground="{DynamicResource HelixAccentBrush}" />
+                                          Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}" />
                                 <TextBlock Grid.Column="1"
                                            Text="{Binding Name}"
                                            FontSize="{DynamicResource HelixEntryFontSize}"
                                            TextTrimming="CharacterEllipsis"
-                                           VerticalAlignment="Center" />
+                                           VerticalAlignment="Center"
+                                           Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}" />
                             </Grid>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
@@ -101,7 +102,7 @@
                                     FontSize="{DynamicResource HelixEntryFontSize}" />
                 <DataGridTemplateColumn Header="Size" Width="90" Tag="Size" SortMemberPath="SizeBytes">
                     <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate x:DataType="models:FileSystemEntry">
+                        <DataTemplate x:DataType="vm:EntryItemViewModel">
                             <TextBlock Text="{Binding Converter={StaticResource FileSizeConverter}}"
                                        FontSize="{DynamicResource HelixEntryFontSize}"
                                        VerticalAlignment="Center" />
@@ -160,18 +161,19 @@
                 </ContextMenu>
             </ListBox.ContextMenu>
             <ListBox.ItemTemplate>
-                <DataTemplate x:DataType="models:FileSystemEntry">
+                <DataTemplate x:DataType="vm:EntryItemViewModel">
                     <Grid ColumnDefinitions="Auto,*"
                           ToolTip.Tip="{Binding Name}">
                         <PathIcon Grid.Column="0"
                                   Data="{Binding Converter={StaticResource EntryIconConverter}}"
                                   Width="14" Height="14" Margin="0,0,6,0"
-                                  Foreground="{DynamicResource HelixAccentBrush}" />
+                                  Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}" />
                         <TextBlock Grid.Column="1"
                                    Text="{Binding Name}"
                                    FontSize="{DynamicResource HelixEntryFontSize}"
                                    TextTrimming="CharacterEllipsis"
-                                   VerticalAlignment="Center" />
+                                   VerticalAlignment="Center"
+                                   Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}" />
                     </Grid>
                 </DataTemplate>
             </ListBox.ItemTemplate>
@@ -240,21 +242,22 @@
                     </ItemsPanelTemplate>
                 </ListBox.ItemsPanel>
                 <ListBox.ItemTemplate>
-                    <DataTemplate x:DataType="models:FileSystemEntry" x:CompileBindings="False">
+                    <DataTemplate x:DataType="vm:EntryItemViewModel" x:CompileBindings="False">
                         <StackPanel Width="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=ListBox}}"
                                     Margin="6" Spacing="4"
                                     ToolTip.Tip="{Binding Name}">
                             <PathIcon Data="{Binding Converter={StaticResource EntryIconConverter}}"
                                       Width="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=ListBox}}"
                                       Height="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                      Foreground="{DynamicResource HelixAccentBrush}" />
+                                      Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}" />
                             <TextBlock Text="{Binding Name}"
                                        FontSize="{DynamicResource HelixEntryFontSize}"
                                        TextAlignment="Center"
                                        TextWrapping="Wrap"
                                        MaxLines="2"
                                        TextTrimming="CharacterEllipsis"
-                                       HorizontalAlignment="Stretch" />
+                                       HorizontalAlignment="Stretch"
+                                       Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}" />
                         </StackPanel>
                     </DataTemplate>
                 </ListBox.ItemTemplate>

@@ -1,5 +1,7 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using HelixExplorer.ViewModels;
 
 namespace HelixExplorer.Views;
@@ -45,5 +47,28 @@ public partial class MainWindow : Window
             tab.CloseCommand.Execute(null);
             e.Handled = true;
         }
+    }
+
+    private async void OnBranchButtonClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel { ActivePane: { } pane })
+            return;
+
+        await pane.OpenBranchFlyoutCommand.ExecuteAsync(null);
+        if (sender is Button button)
+            FlyoutBase.ShowAttachedFlyout(button);
+    }
+
+    private async void OnBranchSelected(object? sender, TappedEventArgs e)
+    {
+        if (sender is not ListBox { SelectedItem: string branch })
+            return;
+
+        if (DataContext is not MainWindowViewModel { ActivePane: { } pane })
+            return;
+
+        await pane.CheckoutBranchCommand.ExecuteAsync(branch);
+        if (BranchButton is not null)
+            FlyoutBase.GetAttachedFlyout(BranchButton)?.Hide();
     }
 }

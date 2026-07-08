@@ -2,6 +2,7 @@ using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HelixExplorer.Core.FileSystem;
+using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Session;
@@ -16,6 +17,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     private readonly IOsFileClipboard _osClipboard;
     private readonly IShellContextMenuService _shellContextMenu;
     private readonly IUiHost _uiHost;
+    private readonly IGitProvider _git;
     private readonly Func<IFileChangeWatcher> _watcherFactory;
     private bool _disposed;
 
@@ -26,6 +28,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         IOsFileClipboard osClipboard,
         IShellContextMenuService shellContextMenu,
         IUiHost uiHost,
+        IGitProvider git,
         Func<IFileChangeWatcher> watcherFactory)
     {
         _fileSystem = fileSystem;
@@ -34,6 +37,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         _osClipboard = osClipboard;
         _shellContextMenu = shellContextMenu;
         _uiHost = uiHost;
+        _git = git;
         _watcherFactory = watcherFactory;
         LeftPane = CreatePane();
         _activePane = LeftPane;
@@ -82,6 +86,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
             _osClipboard,
             _shellContextMenu,
             _uiHost,
+            _git,
             _watcherFactory());
         pane.Navigated += OnPaneNavigated;
         pane.OpenInNewTabRequested += OnOpenInNewTabRequested;

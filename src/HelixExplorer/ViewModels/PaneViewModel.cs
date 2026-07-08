@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Filtering;
+using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Session;
@@ -23,11 +24,13 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     private readonly IOsFileClipboard _osClipboard;
     private readonly IShellContextMenuService _shellContextMenu;
     private readonly IUiHost _uiHost;
+    private readonly IGitProvider _git;
     private readonly IFileChangeWatcher _watcher;
     private readonly Stack<string> _backStack = new();
     private readonly Stack<string> _forwardStack = new();
     private readonly List<FileSystemEntry> _viewBuffer = new();
     private IReadOnlyList<FileSystemEntry> _allEntries = Array.Empty<FileSystemEntry>();
+    private GitStatusSnapshot _gitSnapshot = GitStatusSnapshot.Empty;
     private CancellationTokenSource? _refreshCts;
     private bool _disposed;
 
@@ -38,6 +41,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         IOsFileClipboard osClipboard,
         IShellContextMenuService shellContextMenu,
         IUiHost uiHost,
+        IGitProvider git,
         IFileChangeWatcher watcher)
     {
         _fileSystem = fileSystem;
@@ -46,6 +50,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         _osClipboard = osClipboard;
         _shellContextMenu = shellContextMenu;
         _uiHost = uiHost;
+        _git = git;
         _watcher = watcher;
         _watcher.Changed += OnWatcherChanged;
         _clipboard.Changed += OnClipboardChanged;
@@ -72,11 +77,14 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _statusText = string.Empty;
     [ObservableProperty] private bool _isEditingPath;
     [ObservableProperty] private string _editablePath = string.Empty;
-    [ObservableProperty] private FileSystemEntry? _selectedEntry;
+    [ObservableProperty] private EntryItemViewModel? _selectedEntry;
     [ObservableProperty] private bool _isActive;
     [ObservableProperty] private double _thumbnailSize = 72;
     [ObservableProperty] private bool _isRenaming;
     [ObservableProperty] private string _renameText = string.Empty;
+
+    [ObservableProperty] private GitStatus _repositoryStatus = GitStatus.Empty;
+    [ObservableProperty] private bool _isBranchFlyoutOpen;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsFilterActive))]
@@ -100,9 +108,11 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(GoForwardCommand))]
     private bool _canGoForward;
 
-    public ObservableCollection<FileSystemEntry> Entries { get; } = new();
+    public ObservableCollection<EntryItemViewModel> Entries { get; } = new();
 
-    public ObservableCollection<FileSystemEntry> SelectedEntries { get; } = new();
+    public ObservableCollection<EntryItemViewModel> SelectedEntries { get; } = new();
+
+    public ObservableCollection<string> Branches { get; } = new();
 
     public ObservableCollection<BreadcrumbSegment> Breadcrumbs { get; } = new();
 
@@ -129,7 +139,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             ThumbnailSize = clamped;
     }
 
-    partial void OnSelectedEntryChanged(FileSystemEntry? value)
+    partial void OnSelectedEntryChanged(EntryItemViewModel? value)
     {
         if (value is null)
         {
@@ -139,10 +149,10 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
         if (SelectedEntries.Count <= 1)
         {
-            if (SelectedEntries.Count == 0 || !SelectedEntries[0].Equals(value))
+            if (SelectedEntries.Count == 0 || !ReferenceEquals(SelectedEntries[0], value))
             {
                 SelectedEntries.Clear();
-                SelectedEntries.Add(value.Value);
+                SelectedEntries.Add(value);
             }
             SelectedCount = 1;
         }
@@ -160,7 +170,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         });
     }
 
-    public void UpdateSelection(IList<FileSystemEntry> entries)
+    public void UpdateSelection(IList<EntryItemViewModel> entries)
     {
         SelectedEntries.Clear();
         foreach (var entry in entries)
@@ -306,11 +316,32 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
             _allEntries = listing.Entries;
 
+            GitStatusSnapshot gitSnapshot;
+            try
+            {
+                gitSnapshot = await _git.GetStatusAsync(CurrentPath, token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Git status failed for '{CurrentPath}': {ex.Message}");
+                gitSnapshot = GitStatusSnapshot.Empty;
+            }
+
+            if (token.IsCancellationRequested || _disposed)
+                return;
+
+            _gitSnapshot = gitSnapshot;
+
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 if (token.IsCancellationRequested || _disposed)
                     return;
 
+                RepositoryStatus = _gitSnapshot.Status;
                 ApplySortAndPublish();
                 Navigated?.Invoke(this, EventArgs.Empty);
             });
@@ -340,7 +371,10 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
         Entries.Clear();
         foreach (var entry in _viewBuffer)
-            Entries.Add(entry);
+        {
+            var gitStatus = _gitSnapshot.GetStatusForPath(entry.FullPath);
+            Entries.Add(new EntryItemViewModel(entry, gitStatus));
+        }
 
         ItemCount = _viewBuffer.Count;
         SelectedEntry = null;
@@ -362,9 +396,11 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
     public void ActivateSelected()
     {
-        if (SelectedEntry is { } entry)
-            ActivateEntry(entry);
+        if (SelectedEntry is { } item)
+            ActivateEntry(item);
     }
+
+    public void ActivateEntry(EntryItemViewModel item) => ActivateEntry(item.Entry);
 
     public void ActivateEntry(FileSystemEntry entry)
     {
@@ -672,6 +708,52 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
         var entry = SelectedEntries[0];
         OpenInNewPaneRequested?.Invoke(this, entry.IsDirectory ? entry.FullPath : Path.GetDirectoryName(entry.FullPath) ?? CurrentPath);
+    }
+
+    [RelayCommand]
+    private async Task OpenBranchFlyout()
+    {
+        if (!RepositoryStatus.IsRepository || string.IsNullOrEmpty(CurrentPath))
+            return;
+
+        try
+        {
+            var branches = await _git.ListBranchesAsync(CurrentPath).ConfigureAwait(true);
+            Branches.Clear();
+            foreach (var branch in branches)
+                Branches.Add(branch);
+            IsBranchFlyoutOpen = true;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"OpenBranchFlyout failed: {ex.Message}");
+            StatusText = "Could not list branches";
+        }
+    }
+
+    [RelayCommand]
+    private async Task CheckoutBranch(string? branch)
+    {
+        if (string.IsNullOrWhiteSpace(branch) || string.IsNullOrEmpty(CurrentPath))
+            return;
+
+        IsBranchFlyoutOpen = false;
+        try
+        {
+            var ok = await _git.CheckoutBranchAsync(CurrentPath, branch).ConfigureAwait(true);
+            if (!ok)
+            {
+                StatusText = $"Could not checkout {branch}";
+                return;
+            }
+
+            await RefreshAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"CheckoutBranch failed: {ex.Message}");
+            StatusText = $"Could not checkout {branch}";
+        }
     }
 
     [RelayCommand(CanExecute = nameof(HasSelection))]

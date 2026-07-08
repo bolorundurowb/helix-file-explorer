@@ -58,24 +58,24 @@ public sealed partial class PaneView : UserControl
         }
     }
 
-    private static FileSystemEntry? ExtractSelected(object? sender) => sender switch
+    private static EntryItemViewModel? ExtractSelected(object? sender) => sender switch
     {
-        DataGrid grid => grid.SelectedItem as FileSystemEntry?,
-        ListBox list => list.SelectedItem as FileSystemEntry?,
+        DataGrid grid => grid.SelectedItem as EntryItemViewModel,
+        ListBox list => list.SelectedItem as EntryItemViewModel,
         _ => null
     };
 
-    private static IList<FileSystemEntry> ExtractSelectedItems(object? sender)
+    private static IList<EntryItemViewModel> ExtractSelectedItems(object? sender)
     {
-        var result = new List<FileSystemEntry>();
+        var result = new List<EntryItemViewModel>();
         switch (sender)
         {
             case DataGrid { SelectedItems: { } items }:
-                foreach (FileSystemEntry entry in items)
+                foreach (EntryItemViewModel entry in items)
                     result.Add(entry);
                 break;
             case ListBox { SelectedItems: { } listBoxItems }:
-                foreach (FileSystemEntry entry in listBoxItems)
+                foreach (EntryItemViewModel entry in listBoxItems)
                     result.Add(entry);
                 break;
         }

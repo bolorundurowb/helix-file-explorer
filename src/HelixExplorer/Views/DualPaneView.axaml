@@ -1,0 +1,37 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HelixExplorer.ViewModels"
+             xmlns:views="using:HelixExplorer.Views"
+             x:Class="HelixExplorer.Views.DualPaneView"
+             x:DataType="vm:TabViewModel">
+    <Panel>
+        <!-- Single pane — wrapper keeps TabViewModel as the compiled-binding source -->
+        <Panel IsVisible="{Binding IsSinglePane}">
+            <views:PaneView DataContext="{Binding LeftPane}" />
+        </Panel>
+
+        <!-- Dual pane -->
+        <Grid x:Name="DualGrid" IsVisible="{Binding IsDualPane}">
+            <Grid x:Name="LeftHost" PointerPressed="OnLeftActivate">
+                <views:PaneView DataContext="{Binding LeftPane}" />
+                <Border IsVisible="{Binding LeftPane.IsActive}"
+                        BorderBrush="{DynamicResource HelixFocusBorderBrush}"
+                        BorderThickness="2"
+                        CornerRadius="4"
+                        IsHitTestVisible="False" />
+            </Grid>
+
+            <GridSplitter x:Name="Splitter"
+                          Background="{DynamicResource HelixBorderColor}" />
+
+            <Grid x:Name="RightHost" PointerPressed="OnRightActivate">
+                <views:PaneView DataContext="{Binding RightPane}" />
+                <Border IsVisible="{Binding RightPane.IsActive, FallbackValue=False}"
+                        BorderBrush="{DynamicResource HelixFocusBorderBrush}"
+                        BorderThickness="2"
+                        CornerRadius="4"
+                        IsHitTestVisible="False" />
+            </Grid>
+        </Grid>
+    </Panel>
+</UserControl>

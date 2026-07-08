@@ -54,6 +54,7 @@
             <conv:FileSizeConverter x:Key="FileSizeConverter" />
             <conv:RelativeTimeConverter x:Key="RelativeTimeConverter" />
             <conv:BoolToSidebarBrushConverter x:Key="BoolToSidebarBrushConverter" />
+            <conv:EntryIconConverter x:Key="EntryIconConverter" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

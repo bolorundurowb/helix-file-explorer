@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using HelixExplorer.Core.Infrastructure;
+using HelixExplorer.Core.Session;
 using HelixExplorer.Core.Settings;
 using HelixExplorer.Core.Theming;
 using HelixExplorer.Services;
@@ -62,6 +63,7 @@ public partial class App : Application
     {
         services.AddHelixWindowsServices();
         services.AddSingleton<ISettingsStore, JsonSettingsStore>();
+        services.AddSingleton<ISessionStore, JsonSessionStore>();
         services.AddSingleton<IThemeService, AvaloniaThemeService>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddTransient<MainWindow>();

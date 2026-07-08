@@ -4,19 +4,25 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HelixExplorer.Core.FileSystem;
+using HelixExplorer.Core.Filtering;
 using HelixExplorer.Core.Models;
+using HelixExplorer.Core.Session;
 using HelixExplorer.Core.Sorting;
 
 namespace HelixExplorer.ViewModels;
 
 /// <summary>
-/// State for one file pane: path, history, sort, and the current listing snapshot.
+/// State for one file pane: path, history, sort, filter, and the current listing snapshot.
 /// </summary>
 public sealed partial class PaneViewModel : ObservableObject, IDisposable
 {
+    public const double MinThumbnailSize = 32;
+    public const double MaxThumbnailSize = 256;
+
     private readonly IFileSystemProvider _fileSystem;
     private readonly Stack<string> _backStack = new();
     private readonly Stack<string> _forwardStack = new();
+    private readonly List<FileSystemEntry> _viewBuffer = new();
     private IReadOnlyList<FileSystemEntry> _allEntries = Array.Empty<FileSystemEntry>();
     private CancellationTokenSource? _refreshCts;
     private bool _disposed;
@@ -30,16 +36,39 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     public event EventHandler<FileSystemEntry>? EntryActivated;
 
     [ObservableProperty] private string _currentPath = string.Empty;
-    [ObservableProperty] private LayoutMode _viewMode = LayoutMode.Details;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDetailsView))]
+    [NotifyPropertyChangedFor(nameof(IsListView))]
+    [NotifyPropertyChangedFor(nameof(IsGridView))]
+    private LayoutMode _viewMode = LayoutMode.Details;
     [ObservableProperty] private SortColumn _sortColumn = SortColumn.Name;
     [ObservableProperty] private bool _sortDescending;
     [ObservableProperty] private int _itemCount;
+    [ObservableProperty] private int _totalCount;
     [ObservableProperty] private int _selectedCount;
     [ObservableProperty] private bool _isLoading;
     [ObservableProperty] private string _statusText = string.Empty;
     [ObservableProperty] private bool _isEditingPath;
     [ObservableProperty] private string _editablePath = string.Empty;
     [ObservableProperty] private FileSystemEntry? _selectedEntry;
+    [ObservableProperty] private bool _isActive;
+    [ObservableProperty] private double _thumbnailSize = 72;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsFilterActive))]
+    private bool _isFilterVisible;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsFilterActive))]
+    private string _filterText = string.Empty;
+
+    /// <summary>True when a non-empty quick filter is currently narrowing the listing.</summary>
+    public bool IsFilterActive => IsFilterVisible && !string.IsNullOrWhiteSpace(FilterText);
+
+    public bool IsDetailsView => ViewMode == LayoutMode.Details;
+    public bool IsListView => ViewMode == LayoutMode.List;
+    public bool IsGridView => ViewMode == LayoutMode.Grid;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GoBackCommand))]
@@ -57,12 +86,22 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     {
         RebuildBreadcrumbs(value);
         EditablePath = value;
+        ClearFilter();
         _ = RefreshAsync();
     }
 
     partial void OnSortColumnChanged(SortColumn value) => ApplySortAndPublish();
 
     partial void OnSortDescendingChanged(bool value) => ApplySortAndPublish();
+
+    partial void OnFilterTextChanged(string value) => ApplySortAndPublish();
+
+    partial void OnThumbnailSizeChanged(double value)
+    {
+        var clamped = Math.Clamp(value, MinThumbnailSize, MaxThumbnailSize);
+        if (Math.Abs(clamped - value) > double.Epsilon)
+            ThumbnailSize = clamped;
+    }
 
     partial void OnSelectedEntryChanged(FileSystemEntry? value)
         => SelectedCount = value is null ? 0 : 1;
@@ -193,7 +232,6 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
                     return;
 
                 ApplySortAndPublish();
-                StatusText = $"{ItemCount} item{(ItemCount == 1 ? "" : "s")}";
                 Navigated?.Invoke(this, EventArgs.Empty);
             });
         }
@@ -215,26 +253,30 @@ finally
 
     private void ApplySortAndPublish()
     {
-        if (_allEntries.Count == 0)
+        TotalCount = _allEntries.Count;
+
+        // Filter (allocation-free substring match) then sort into the reusable view buffer.
+        FileNameFilter.Apply(_allEntries, IsFilterVisible ? FilterText : null, _viewBuffer);
+        _viewBuffer.Sort(FileSystemEntryComparer.For(SortColumn, SortDescending));
+
+        Entries.Clear();
+        foreach (var entry in _viewBuffer)
+            Entries.Add(entry);
+
+        ItemCount = _viewBuffer.Count;
+        SelectedEntry = null;
+        UpdateStatusText();
+    }
+
+    private void UpdateStatusText()
+    {
+        if (IsFilterActive)
         {
-            Entries.Clear();
-            ItemCount = 0;
-            SelectedEntry = null;
+            StatusText = $"{ItemCount} of {TotalCount} item{(TotalCount == 1 ? "" : "s")}";
             return;
         }
 
-        var buffer = new FileSystemEntry[_allEntries.Count];
-        for (var i = 0; i < _allEntries.Count; i++)
-            buffer[i] = _allEntries[i];
-
-        Array.Sort(buffer, FileSystemEntryComparer.For(SortColumn, SortDescending));
-
-        Entries.Clear();
-        foreach (var entry in buffer)
-            Entries.Add(entry);
-
-        ItemCount = buffer.Length;
-        SelectedEntry = null;
+        StatusText = $"{ItemCount} item{(ItemCount == 1 ? "" : "s")}";
     }
 
     public void ActivateSelected()
@@ -284,6 +326,70 @@ finally
     {
         EditablePath = CurrentPath;
         IsEditingPath = true;
+    }
+
+    // ── Quick filter (Ctrl+F) ────────────────────────────────────────────────
+
+    [RelayCommand]
+    private void ToggleFilter()
+    {
+        if (IsFilterVisible)
+            ClearFilter();
+        else
+            IsFilterVisible = true;
+    }
+
+    public void ShowFilter() => IsFilterVisible = true;
+
+    public void ClearFilter()
+    {
+        var wasFiltering = IsFilterActive;
+        IsFilterVisible = false;
+        if (FilterText.Length != 0)
+            FilterText = string.Empty; // triggers re-publish
+        else if (wasFiltering)
+            ApplySortAndPublish();
+    }
+
+    // ── View mode & thumbnail sizing ─────────────────────────────────────────
+
+    [RelayCommand]
+    private void SetViewMode(LayoutMode mode) => ViewMode = mode;
+
+    [RelayCommand]
+    private void CycleViewMode()
+        => ViewMode = ViewMode switch
+        {
+            LayoutMode.Details => LayoutMode.List,
+            LayoutMode.List => LayoutMode.Grid,
+            _ => LayoutMode.Details
+        };
+
+    /// <summary>Adjusts grid thumbnail size (used by Ctrl+wheel), clamped to the supported range.</summary>
+    public void AdjustThumbnailSize(double delta)
+        => ThumbnailSize = Math.Clamp(ThumbnailSize + delta, MinThumbnailSize, MaxThumbnailSize);
+
+    // ── Session snapshot ─────────────────────────────────────────────────────
+
+    public PaneSnapshot CreateSnapshot() => new()
+    {
+        Path = CurrentPath,
+        ViewMode = ViewMode,
+        SortColumn = SortColumn,
+        SortDescending = SortDescending,
+        ThumbnailSize = ThumbnailSize
+    };
+
+    /// <summary>Applies persisted presentation state, then navigates to the saved path.</summary>
+    public void RestoreFrom(PaneSnapshot snapshot)
+    {
+        ViewMode = snapshot.ViewMode;
+        SortColumn = snapshot.SortColumn;
+        SortDescending = snapshot.SortDescending;
+        ThumbnailSize = Math.Clamp(snapshot.ThumbnailSize, MinThumbnailSize, MaxThumbnailSize);
+
+        if (!string.IsNullOrWhiteSpace(snapshot.Path))
+            NavigateTo(snapshot.Path);
     }
 
     private void RebuildBreadcrumbs(string path)

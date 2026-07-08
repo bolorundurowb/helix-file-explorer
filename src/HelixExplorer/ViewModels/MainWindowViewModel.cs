@@ -2,6 +2,8 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HelixExplorer.Core.FileSystem;
+using HelixExplorer.Core.Models;
+using HelixExplorer.Core.Session;
 using HelixExplorer.Core.Settings;
 using HelixExplorer.Core.Theming;
 
@@ -10,40 +12,48 @@ namespace HelixExplorer.ViewModels;
 public partial class MainWindowViewModel : ObservableObject, IDisposable
 {
     private readonly ISettingsStore _settingsStore;
+    private readonly ISessionStore _sessionStore;
     private readonly IThemeService _themeService;
+    private readonly IFileSystemProvider _fileSystem;
     private readonly IQuickAccessProvider _quickAccess;
     private readonly IVolumeProvider _volumes;
+    private readonly string _homePath;
     private bool _disposed;
 
     public MainWindowViewModel(
         ISettingsStore settingsStore,
+        ISessionStore sessionStore,
         IThemeService themeService,
         IFileSystemProvider fileSystem,
         IQuickAccessProvider quickAccess,
         IVolumeProvider volumes)
     {
         _settingsStore = settingsStore;
+        _sessionStore = sessionStore;
         _themeService = themeService;
+        _fileSystem = fileSystem;
         _quickAccess = quickAccess;
         _volumes = volumes;
+
+        _homePath = _quickAccess.GetPath(KnownFolderKind.Home)
+                    ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
         var settings = _settingsStore.Load();
         IsSidebarOpen = settings.SidebarOpen;
 
-        ActivePane = new PaneViewModel(fileSystem);
-        ActivePane.Navigated += OnPaneNavigated;
-        ActivePane.PropertyChanged += OnPanePropertyChanged;
-
         SidebarItems = SidebarFactory.Build(_quickAccess, _volumes);
 
-        var home = _quickAccess.GetPath(Core.Models.KnownFolderKind.Home)
-                   ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        ActivePane.NavigateTo(home);
+        RestoreSession();
     }
 
-    public PaneViewModel ActivePane { get; }
+    public ObservableCollection<TabViewModel> Tabs { get; } = new();
 
     public ObservableCollection<SidebarItemViewModel> SidebarItems { get; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ActivePane))]
+    [NotifyPropertyChangedFor(nameof(HasMultipleTabs))]
+    private TabViewModel? _selectedTab;
 
     [ObservableProperty]
     private string _title = "Helix Explorer";
@@ -51,36 +61,173 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _isSidebarOpen = true;
 
-    public int ItemCount => ActivePane.ItemCount;
-    public int SelectedCount => ActivePane.SelectedCount;
-    public bool IsLoading => ActivePane.IsLoading;
-    public string StatusText => ActivePane.StatusText;
+    public PaneViewModel? ActivePane => SelectedTab?.ActivePane;
 
-    private void OnPaneNavigated(object? sender, EventArgs e)
+    public bool HasMultipleTabs => Tabs.Count > 1;
+
+    // ── Session ──────────────────────────────────────────────────────────────
+
+    private void RestoreSession()
     {
-        UpdateSidebarSelection(ActivePane.CurrentPath);
-        OnPropertyChanged(nameof(ItemCount));
-        OnPropertyChanged(nameof(StatusText));
+        var session = _sessionStore.Load();
+
+        if (session.Tabs.Count == 0)
+        {
+            AddTab(CreateDefaultTab());
+        }
+        else
+        {
+            foreach (var snapshot in session.Tabs)
+            {
+                var tab = CreateTab();
+                AddTab(tab);
+                tab.RestoreFrom(snapshot);
+            }
+        }
+
+        var index = Math.Clamp(session.ActiveTabIndex, 0, Tabs.Count - 1);
+        SelectedTab = Tabs[index];
     }
 
-    private void OnPanePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    public void SaveSession()
     {
-        if (e.PropertyName is nameof(PaneViewModel.ItemCount)
-            or nameof(PaneViewModel.SelectedCount)
-            or nameof(PaneViewModel.IsLoading)
-            or nameof(PaneViewModel.StatusText))
+        var document = new SessionDocument
         {
-            OnPropertyChanged(e.PropertyName);
-            if (e.PropertyName == nameof(PaneViewModel.SelectedCount))
-                OnPropertyChanged(nameof(SelectedCount));
-            if (e.PropertyName == nameof(PaneViewModel.ItemCount))
-                OnPropertyChanged(nameof(ItemCount));
-            if (e.PropertyName == nameof(PaneViewModel.IsLoading))
-                OnPropertyChanged(nameof(IsLoading));
-            if (e.PropertyName == nameof(PaneViewModel.StatusText))
-                OnPropertyChanged(nameof(StatusText));
+            SidebarOpen = IsSidebarOpen,
+            ActiveTabIndex = SelectedTab is null ? 0 : Math.Max(0, Tabs.IndexOf(SelectedTab))
+        };
+
+        foreach (var tab in Tabs)
+            document.Tabs.Add(tab.CreateSnapshot());
+
+        try
+        {
+            _sessionStore.Save(document);
+        }
+        catch
+        {
+            // Session persistence is best-effort; never block shutdown on a write failure.
         }
     }
+
+    // ── Tab lifecycle ────────────────────────────────────────────────────────
+
+    private TabViewModel CreateTab()
+    {
+        var tab = new TabViewModel(_fileSystem);
+        tab.CloseRequested += OnTabCloseRequested;
+        tab.Navigated += OnTabNavigated;
+        return tab;
+    }
+
+    private TabViewModel CreateDefaultTab()
+    {
+        var tab = CreateTab();
+        tab.LeftPane.NavigateTo(_homePath);
+        return tab;
+    }
+
+    private void AddTab(TabViewModel tab)
+    {
+        Tabs.Add(tab);
+        OnPropertyChanged(nameof(HasMultipleTabs));
+    }
+
+    [RelayCommand]
+    private void NewTab()
+    {
+        var tab = CreateDefaultTab();
+        AddTab(tab);
+        SelectedTab = tab;
+    }
+
+    [RelayCommand]
+    private void CloseTab(TabViewModel? tab)
+    {
+        tab ??= SelectedTab;
+        if (tab is null)
+            return;
+
+        var index = Tabs.IndexOf(tab);
+        if (index < 0)
+            return;
+
+        var wasSelected = ReferenceEquals(tab, SelectedTab);
+
+        Tabs.Remove(tab);
+        tab.CloseRequested -= OnTabCloseRequested;
+        tab.Navigated -= OnTabNavigated;
+        tab.Dispose();
+
+        if (Tabs.Count == 0)
+        {
+            var replacement = CreateDefaultTab();
+            AddTab(replacement);
+            SelectedTab = replacement;
+        }
+        else if (wasSelected)
+        {
+            SelectedTab = Tabs[Math.Clamp(index, 0, Tabs.Count - 1)];
+        }
+
+        OnPropertyChanged(nameof(HasMultipleTabs));
+    }
+
+    [RelayCommand]
+    private void CloseSelectedTab() => CloseTab(SelectedTab);
+
+    [RelayCommand]
+    private void SelectNextTab() => CycleSelectedTab(1);
+
+    [RelayCommand]
+    private void SelectPreviousTab() => CycleSelectedTab(-1);
+
+    public void CycleSelectedTab(int delta)
+    {
+        if (Tabs.Count < 2 || SelectedTab is null)
+            return;
+
+        var current = Tabs.IndexOf(SelectedTab);
+        var next = (current + delta % Tabs.Count + Tabs.Count) % Tabs.Count;
+        SelectedTab = Tabs[next];
+    }
+
+    private void OnTabCloseRequested(object? sender, EventArgs e)
+    {
+        if (sender is TabViewModel tab)
+            CloseTab(tab);
+    }
+
+    private void OnTabNavigated(object? sender, EventArgs e)
+    {
+        if (!ReferenceEquals(sender, SelectedTab))
+            return;
+
+        SyncChromeToActivePane();
+    }
+
+    partial void OnSelectedTabChanged(TabViewModel? value) => SyncChromeToActivePane();
+
+    private void SyncChromeToActivePane()
+    {
+        var path = SelectedTab?.ActivePane.CurrentPath ?? string.Empty;
+        UpdateSidebarSelection(path);
+        Title = SelectedTab is null || string.IsNullOrEmpty(SelectedTab.Title)
+            ? "Helix Explorer"
+            : $"{SelectedTab.Title} — Helix Explorer";
+        OnPropertyChanged(nameof(ActivePane));
+    }
+
+    // ── Dual pane / filter / view passthroughs ──────────────────────────────
+
+    [RelayCommand]
+    private void ToggleDualPane() => SelectedTab?.ToggleDualPaneCommand.Execute(null);
+
+    [RelayCommand]
+    private void ToggleFilter() => SelectedTab?.ActivePane.ToggleFilterCommand.Execute(null);
+
+    [RelayCommand]
+    private void SetViewMode(LayoutMode mode) => SelectedTab?.ActivePane.SetViewModeCommand.Execute(mode);
 
     private void UpdateSidebarSelection(string path)
     {
@@ -106,7 +253,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         if (item.Path.StartsWith("shell:", StringComparison.OrdinalIgnoreCase))
             return;
 
-        ActivePane.NavigateTo(item.Path);
+        SelectedTab?.ActivePane.NavigateTo(item.Path);
     }
 
     [RelayCommand]
@@ -138,8 +285,16 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         if (_disposed)
             return;
         _disposed = true;
-        ActivePane.Navigated -= OnPaneNavigated;
-        ActivePane.PropertyChanged -= OnPanePropertyChanged;
-        ActivePane.Dispose();
+
+        SaveSession();
+
+        foreach (var tab in Tabs)
+        {
+            tab.CloseRequested -= OnTabCloseRequested;
+            tab.Navigated -= OnTabNavigated;
+            tab.Dispose();
+        }
+
+        Tabs.Clear();
     }
 }

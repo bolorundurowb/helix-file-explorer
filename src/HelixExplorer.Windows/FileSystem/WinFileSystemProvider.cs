@@ -82,7 +82,8 @@ public sealed class WinFileSystemProvider : IFileSystemProvider
                 }
 
                 var ext = isDir ? string.Empty : info.Extension;
-                entries.Add(new FileSystemEntry(info.FullName, info.Name, isDir, size, modified, ext));
+                var isHidden = (info.Attributes & FileAttributes.Hidden) != 0;
+                entries.Add(new FileSystemEntry(info.FullName, info.Name, isDir, size, modified, ext, isHidden));
             }
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or DirectoryNotFoundException)

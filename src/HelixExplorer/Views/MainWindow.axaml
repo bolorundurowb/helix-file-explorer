@@ -66,15 +66,33 @@
                     <ListBox.Styles>
                         <Style Selector="ListBoxItem">
                             <Setter Property="Padding" Value="0" />
-                            <Setter Property="Margin" Value="0" />
+                            <Setter Property="Margin" Value="0,0,2,0" />
                             <Setter Property="Background" Value="Transparent" />
                             <Setter Property="VerticalAlignment" Value="Bottom" />
                         </Style>
-                        <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+                        <Style Selector="ListBoxItem /template/ ContentPresenter">
                             <Setter Property="Background" Value="Transparent" />
                         </Style>
+                        <Style Selector="ListBoxItem:not(:selected) Border#TabChip">
+                            <Setter Property="Opacity" Value="0.58" />
+                            <Setter Property="Background" Value="Transparent" />
+                            <Setter Property="BorderThickness" Value="0" />
+                        </Style>
                         <Style Selector="ListBoxItem:selected Border#TabChip">
+                            <Setter Property="Opacity" Value="1" />
                             <Setter Property="Background" Value="{DynamicResource HelixContentCardBrush}" />
+                            <Setter Property="BorderBrush" Value="{DynamicResource HelixBorderColor}" />
+                            <Setter Property="BorderThickness" Value="1,1,1,0" />
+                            <Setter Property="Margin" Value="0,2,0,-1" />
+                        </Style>
+                        <Style Selector="ListBoxItem:selected Border#TabActiveBar">
+                            <Setter Property="IsVisible" Value="True" />
+                        </Style>
+                        <Style Selector="ListBoxItem:selected TextBlock#TabTitle">
+                            <Setter Property="FontWeight" Value="SemiBold" />
+                        </Style>
+                        <Style Selector="ListBoxItem:not(:selected) TextBlock#TabTitle">
+                            <Setter Property="Opacity" Value="0.75" />
                         </Style>
                     </ListBox.Styles>
                     <ListBox.ItemTemplate>
@@ -82,16 +100,18 @@
                             <Border x:Name="TabChip"
                                     CornerRadius="8,8,0,0"
                                     Background="Transparent"
-                                    Padding="12,6"
+                                    BorderThickness="0"
+                                    Padding="12,6,12,4"
                                     MinWidth="150" MaxWidth="220"
                                     PointerReleased="OnTabPointerReleased"
                                     WindowDecorationProperties.ElementRole="User">
-                                <Grid RowDefinitions="*,Auto">
+                                <Grid RowDefinitions="Auto,Auto,Auto">
                                     <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8">
                                         <PathIcon Data="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z"
                                                   Width="14" Height="14"
                                                   Foreground="{DynamicResource HelixAccentBrush}" />
-                                        <TextBlock Text="{Binding Title}"
+                                        <TextBlock x:Name="TabTitle"
+                                                   Text="{Binding Title}"
                                                    VerticalAlignment="Center"
                                                    TextTrimming="CharacterEllipsis"
                                                    MaxWidth="140" />
@@ -109,6 +129,13 @@
                                             Margin="0,4,0,0"
                                             Background="{Binding TintBrush}"
                                             IsVisible="{Binding HasTint}" />
+                                    <Border x:Name="TabActiveBar"
+                                            Grid.Row="2"
+                                            Height="2"
+                                            CornerRadius="1"
+                                            Margin="10,4,10,0"
+                                            Background="{DynamicResource HelixAccentBrush}"
+                                            IsVisible="False" />
                                 </Grid>
                                 <Border.ContextMenu>
                                     <ContextMenu>
@@ -254,6 +281,22 @@
                     </Button>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
+                    <Button ToolTip.Tip="View options"
+                            Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
+                        <PathIcon Data="M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17Z"
+                                  Width="14" Height="14" />
+                        <Button.Flyout>
+                            <MenuFlyout>
+                                <MenuItem Header="Hidden items"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding ShowHiddenFiles, Mode=TwoWay}" />
+                                <MenuItem Header="File name extensions"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding ShowFileExtensions, Mode=TwoWay}" />
+                            </MenuFlyout>
+                        </Button.Flyout>
+                    </Button>
+                    <Border Width="1" Background="{DynamicResource HelixBorderColor}" Margin="4,4" />
                     <Button ToolTip.Tip="Details view"
                             Command="{Binding SetViewModeCommand}"
                             CommandParameter="{x:Static models:LayoutMode.Details}"
@@ -345,16 +388,22 @@
                     BorderBrush="{DynamicResource HelixBorderColor}"
                     BorderThickness="0,0,1,0">
                 <DockPanel>
-                    <Border DockPanel.Dock="Bottom"
+                    <Button DockPanel.Dock="Bottom"
+                            Command="{Binding OpenSettingsCommand}"
                             Padding="12,8"
+                            Background="Transparent"
                             BorderBrush="{DynamicResource HelixBorderColor}"
                             BorderThickness="0,1,0,0"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Left"
                             Cursor="Hand">
                         <StackPanel Orientation="Horizontal" Spacing="10">
                             <PathIcon Data="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.04 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.04 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z" Width="16" Height="16" />
-                            <TextBlock Text="Settings" VerticalAlignment="Center" />
+                            <TextBlock Text="Settings"
+                                       VerticalAlignment="Center"
+                                       FontSize="{DynamicResource HelixSidebarFontSize}" />
                         </StackPanel>
-                    </Border>
+                    </Button>
 
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <ItemsControl ItemsSource="{Binding SidebarItems}" Margin="0,8">
@@ -364,7 +413,7 @@
                                         <TextBlock Text="{Binding Title}"
                                                    IsVisible="{Binding IsSectionHeader}"
                                                    Padding="12,12,12,4"
-                                                   FontSize="11"
+                                                   FontSize="{DynamicResource HelixSidebarSectionFontSize}"
                                                    Opacity="0.5"
                                                    FontWeight="SemiBold" />
                                         <Border IsVisible="{Binding !IsSectionHeader}"
@@ -383,19 +432,25 @@
                                                     <MenuItem Header="Clear color" Click="OnSidebarClearColorClick" />
                                                 </ContextMenu>
                                             </Border.ContextMenu>
-                                            <Grid ColumnDefinitions="3,4,*" MinHeight="36">
+                                            <Grid ColumnDefinitions="3,Auto,*" MinHeight="32">
                                                 <Border Grid.Column="0"
                                                         Background="{DynamicResource HelixSelectionBarBrush}"
                                                         IsVisible="{Binding IsSelected}"
                                                         CornerRadius="0,2,2,0" />
-                                                <Border Grid.Column="1"
-                                                        Background="{Binding Path, Converter={StaticResource FolderColorConverter}}"
-                                                        CornerRadius="2"
-                                                        Margin="0,8,0,8" />
+                                                <PathIcon Grid.Column="1"
+                                                          Width="16"
+                                                          Height="16"
+                                                          Margin="10,0,6,0"
+                                                          VerticalAlignment="Center"
+                                                          IsVisible="{Binding ShowsFolderIcon}"
+                                                          Data="{DynamicResource HelixFolderIconGeometry}"
+                                                          Foreground="{Binding Path, Converter={StaticResource FolderIconBrushConverter}}" />
                                                 <Border Grid.Column="2"
-                                                        Padding="8,8"
+                                                        Padding="10,6,8,6"
                                                         Background="{Binding IsSelected, Converter={StaticResource BoolToSidebarBrushConverter}}">
-                                                    <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
+                                                    <TextBlock Text="{Binding Title}"
+                                                               VerticalAlignment="Center"
+                                                               FontSize="{DynamicResource HelixSidebarFontSize}" />
                                                 </Border>
                                             </Grid>
                                         </Border>
@@ -441,5 +496,8 @@
         <views:CommandPaletteOverlay IsVisible="{Binding IsCommandPaletteOpen}"
                                       IsHitTestVisible="{Binding IsCommandPaletteOpen}"
                                       DataContext="{Binding}" />
+        <views:SettingsOverlay IsVisible="{Binding IsSettingsOpen}"
+                               IsHitTestVisible="{Binding IsSettingsOpen}"
+                               DataContext="{Binding}" />
     </DockPanel>
 </Window>

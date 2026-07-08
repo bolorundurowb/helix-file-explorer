@@ -10,7 +10,8 @@ public readonly record struct FileSystemEntry(
     bool IsDirectory,
     long SizeBytes,
     DateTime ModifiedUtc,
-    string Extension)
+    string Extension,
+    bool IsHidden = false)
 {
     public string TypeLabel => IsDirectory
         ? "Folder"

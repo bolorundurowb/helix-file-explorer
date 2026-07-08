@@ -45,7 +45,8 @@ public partial class App : Application
             desktop.ShutdownRequested += OnShutdownRequested;
 
             var mainWindow = _host.Services.GetRequiredService<MainWindow>();
-            mainWindow.DataContext = _host.Services.GetRequiredService<MainWindowViewModel>();
+            var mainWindowViewModel = _host.Services.GetRequiredService<MainWindowViewModel>();
+            mainWindow.DataContext = mainWindowViewModel;
             desktop.MainWindow = mainWindow;
 
             var themeService = _host.Services.GetRequiredService<IThemeService>();
@@ -56,12 +57,25 @@ public partial class App : Application
                 && converterObj is Converters.FileSizeConverter converter)
             {
                 converter.Mode = settings.SizeDisplay;
+                mainWindowViewModel.SizeDisplayChanged += mode => converter.Mode = mode;
             }
 
             if (Resources.TryGetResource("FolderColorConverter", ActualThemeVariant, out var folderColorObj)
                 && folderColorObj is Converters.FolderColorConverter folderColorConverter)
             {
                 folderColorConverter.FolderColors = _host.Services.GetRequiredService<IFolderColorService>();
+            }
+
+            if (Resources.TryGetResource("FolderIconBrushConverter", ActualThemeVariant, out var folderIconBrushObj)
+                && folderIconBrushObj is Converters.FolderIconBrushConverter folderIconBrushConverter)
+            {
+                folderIconBrushConverter.FolderColors = _host.Services.GetRequiredService<IFolderColorService>();
+            }
+
+            if (Resources.TryGetResource("EntryIconBrushConverter", ActualThemeVariant, out var iconBrushObj)
+                && iconBrushObj is Converters.EntryIconBrushConverter iconBrushConverter)
+            {
+                iconBrushConverter.FolderColors = _host.Services.GetRequiredService<IFolderColorService>();
             }
         }
 

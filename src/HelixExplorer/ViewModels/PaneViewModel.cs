@@ -35,6 +35,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     private readonly Stack<string> _backStack = new();
     private readonly Stack<string> _forwardStack = new();
     private readonly List<FileSystemEntry> _viewBuffer = new();
+    private readonly List<FileSystemEntry> _visibleBuffer = new();
     private IReadOnlyList<FileSystemEntry> _allEntries = Array.Empty<FileSystemEntry>();
     private GitStatusSnapshot _gitSnapshot = GitStatusSnapshot.Empty;
     private CancellationTokenSource? _refreshCts;
@@ -119,6 +120,9 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsFilterActive))]
     private string _filterText = string.Empty;
+
+    [ObservableProperty] private bool _showHiddenFiles;
+    [ObservableProperty] private bool _showFileExtensions = true;
 
     public bool IsFilterActive => IsFilterVisible && !string.IsNullOrWhiteSpace(FilterText);
 
@@ -552,16 +556,25 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
     private void ApplySortAndPublish()
     {
-        TotalCount = _allEntries.Count;
+        _visibleBuffer.Clear();
+        foreach (var entry in _allEntries)
+        {
+            if (!ShowHiddenFiles && entry.IsHidden)
+                continue;
 
-        FileNameFilter.Apply(_allEntries, IsFilterVisible ? FilterText : null, _viewBuffer);
+            _visibleBuffer.Add(entry);
+        }
+
+        TotalCount = _visibleBuffer.Count;
+
+        FileNameFilter.Apply(_visibleBuffer, IsFilterVisible ? FilterText : null, _viewBuffer);
         _viewBuffer.Sort(FileSystemEntryComparer.For(SortColumn, SortDescending));
 
         Entries.Clear();
         foreach (var entry in _viewBuffer)
         {
             var gitStatus = _gitSnapshot.GetStatusForPath(entry.FullPath);
-            Entries.Add(new EntryItemViewModel(entry, gitStatus));
+            Entries.Add(new EntryItemViewModel(entry, ShowFileExtensions, gitStatus));
         }
 
         ItemCount = _viewBuffer.Count;
@@ -630,9 +643,38 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             entries = Array.Empty<FileSystemEntry>();
         }
 
-        var buffer = new List<FileSystemEntry>(entries);
+        var buffer = new List<FileSystemEntry>(entries.Count);
+        foreach (var entry in entries)
+        {
+            if (!ShowHiddenFiles && entry.IsHidden)
+                continue;
+
+            buffer.Add(entry);
+        }
+
         buffer.Sort(FileSystemEntryComparer.For(SortColumn, SortDescending));
-        return buffer.ConvertAll(entry => new EntryItemViewModel(entry));
+        return buffer.ConvertAll(entry => new EntryItemViewModel(entry, ShowFileExtensions));
+    }
+
+    public void ApplyViewSettings(bool showHiddenFiles, bool showFileExtensions)
+    {
+        var hiddenChanged = ShowHiddenFiles != showHiddenFiles;
+        var extensionsChanged = ShowFileExtensions != showFileExtensions;
+        ShowHiddenFiles = showHiddenFiles;
+        ShowFileExtensions = showFileExtensions;
+
+        if (hiddenChanged)
+            ApplySortAndPublish();
+        else if (extensionsChanged)
+            RefreshDisplayNames();
+    }
+
+    public void RefreshListingPresentation() => ApplySortAndPublish();
+
+    private void RefreshDisplayNames()
+    {
+        foreach (var entry in Entries)
+            entry.SetShowFileExtensions(ShowFileExtensions);
     }
 
     public async Task<IReadOnlyList<string>> ResolvePhysicalPathsAsync(IReadOnlyList<string> paths)

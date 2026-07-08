@@ -10,6 +10,7 @@ using Avalonia.Threading;
 using HelixExplorer.Controls;
 using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.Models;
+using HelixExplorer.Input;
 using HelixExplorer.ViewModels;
 
 namespace HelixExplorer.Views;
@@ -25,7 +26,7 @@ public sealed partial class PaneView : UserControl
     private bool _dragStarted;
     private readonly List<Control> _millerColumns = new();
     private readonly FuncDataTemplate<EntryItemViewModel> _millerItemTemplate = new(
-        (item, _) => new TextBlock { Text = item?.Name ?? string.Empty });
+        (item, _) => new TextBlock { Text = item?.DisplayName ?? string.Empty });
 
     public PaneView()
     {
@@ -77,7 +78,8 @@ public sealed partial class PaneView : UserControl
         else if (_pane.IsMillerView
                  && e.PropertyName is nameof(PaneViewModel.ViewMode)
                      or nameof(PaneViewModel.CurrentPath)
-                     or nameof(PaneViewModel.ItemCount))
+                     or nameof(PaneViewModel.ItemCount)
+                     or nameof(PaneViewModel.ShowFileExtensions))
         {
             RebuildMiller();
         }
@@ -206,7 +208,7 @@ public sealed partial class PaneView : UserControl
 
     private void OnPaneKeyDown(object? sender, KeyEventArgs e)
     {
-        if (Pane is null)
+        if (Pane is null || TextInputFocus.IsActive())
             return;
 
         if (e.Key == Key.Enter)
@@ -290,7 +292,11 @@ public sealed partial class PaneView : UserControl
             return;
 
         if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
+        {
+            if (!Pane.SelectedEntries.Contains(entry))
+                SelectGridEntry(entry, KeyModifiers.None);
             return;
+        }
 
         SelectGridEntry(entry, e.KeyModifiers);
         e.Handled = true;
@@ -408,14 +414,24 @@ public sealed partial class PaneView : UserControl
     private void OnListPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed
+                && Pane is not null
+                && TryGetEntryFromSource(e.Source) is { } rightClicked
+                && !Pane.SelectedEntries.Contains(rightClicked))
+            {
+                SelectGridEntry(rightClicked, KeyModifiers.None);
+            }
+
             return;
+        }
 
         if (Pane?.IsGridView == true
             && ReferenceEquals(sender, GridView)
             && !e.GetCurrentPoint(this).Properties.IsRightButtonPressed
-            && TryGetEntryFromSource(e.Source) is { } entry)
+            && TryGetEntryFromSource(e.Source) is { } gridEntry)
         {
-            SelectGridEntry(entry, e.KeyModifiers);
+            SelectGridEntry(gridEntry, e.KeyModifiers);
         }
 
         _pressPoint = e.GetPosition(this);

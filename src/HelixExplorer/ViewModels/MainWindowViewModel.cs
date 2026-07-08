@@ -10,6 +10,7 @@ using HelixExplorer.Core.Search;
 using HelixExplorer.Core.Session;
 using HelixExplorer.Core.Settings;
 using HelixExplorer.Core.Theming;
+using HelixExplorer.Input;
 using HelixExplorer.Services;
 
 namespace HelixExplorer.ViewModels;
@@ -84,6 +85,10 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
         var settings = _settingsStore.Load();
         IsSidebarOpen = settings.SidebarOpen;
+        ShowHiddenFiles = settings.ShowHiddenFiles;
+        ShowFileExtensions = settings.ShowFileExtensions;
+        Theme = settings.Theme;
+        SizeDisplay = settings.SizeDisplay;
 
         SidebarItems = SidebarFactory.Build(_quickAccess, _volumes);
 
@@ -100,6 +105,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     public ObservableCollection<CommandItem> FilteredCommands { get; } = new();
 
     [ObservableProperty] private bool _isCommandPaletteOpen;
+
+    [ObservableProperty] private bool _isSettingsOpen;
 
     [ObservableProperty] private string _commandPaletteQuery = string.Empty;
 
@@ -158,6 +165,70 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private bool _isWindowActive = true;
+
+    [ObservableProperty]
+    private bool _showHiddenFiles;
+
+    [ObservableProperty]
+    private bool _showFileExtensions = true;
+
+    [ObservableProperty]
+    private ThemeMode _theme = ThemeMode.System;
+
+    [ObservableProperty]
+    private SizeDisplayMode _sizeDisplay = SizeDisplayMode.Binary;
+
+    public event Action<SizeDisplayMode>? SizeDisplayChanged;
+
+    partial void OnShowHiddenFilesChanged(bool value)
+    {
+        PersistViewSettings();
+        ApplyViewSettingsToTabs();
+    }
+
+    partial void OnShowFileExtensionsChanged(bool value)
+    {
+        PersistViewSettings();
+        ApplyViewSettingsToTabs();
+    }
+
+    partial void OnThemeChanged(ThemeMode value)
+    {
+        _themeService.ApplyTheme(value);
+        PersistViewSettings();
+    }
+
+    partial void OnSizeDisplayChanged(SizeDisplayMode value)
+    {
+        PersistViewSettings();
+        SizeDisplayChanged?.Invoke(value);
+        RefreshSizeDisplayOnAllPanes();
+    }
+
+    private void PersistViewSettings()
+    {
+        var settings = _settingsStore.Load();
+        settings.ShowHiddenFiles = ShowHiddenFiles;
+        settings.ShowFileExtensions = ShowFileExtensions;
+        settings.Theme = Theme;
+        settings.SizeDisplay = SizeDisplay;
+        _settingsStore.Save(settings);
+    }
+
+    private void ApplyViewSettingsToTabs()
+    {
+        foreach (var tab in Tabs)
+            tab.ApplyViewSettings(ShowHiddenFiles, ShowFileExtensions);
+    }
+
+    private void RefreshSizeDisplayOnAllPanes()
+    {
+        foreach (var tab in Tabs)
+        {
+            tab.LeftPane.RefreshListingPresentation();
+            tab.RightPane?.RefreshListingPresentation();
+        }
+    }
 
     public PaneViewModel? ActivePane => SelectedTab?.ActivePane;
 
@@ -252,6 +323,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     private void AddTab(TabViewModel tab)
     {
+        tab.ApplyViewSettings(ShowHiddenFiles, ShowFileExtensions);
         Tabs.Add(tab);
         OnPropertyChanged(nameof(HasMultipleTabs));
     }
@@ -347,6 +419,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _allCommands.Add(new CommandItem("Toggle Sidebar", "View", vm => vm.ToggleSidebarCommand.Execute(null), "Ctrl+B"));
         _allCommands.Add(new CommandItem("Toggle Dual Pane", "View", vm => vm.ToggleDualPaneCommand.Execute(null), "Ctrl+D"));
         _allCommands.Add(new CommandItem("Toggle Filter", "View", vm => vm.ToggleFilterCommand.Execute(null), "Ctrl+F"));
+        _allCommands.Add(new CommandItem("Settings", "View", vm => vm.OpenSettingsCommand.Execute(null)));
         _allCommands.Add(new CommandItem("Go Back", "Navigation", vm => vm.ActivePane?.GoBackCommand.Execute(null)));
         _allCommands.Add(new CommandItem("Go Forward", "Navigation", vm => vm.ActivePane?.GoForwardCommand.Execute(null)));
         _allCommands.Add(new CommandItem("Go Up", "Navigation", vm => vm.ActivePane?.GoUpCommand.Execute(null)));
@@ -356,6 +429,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _allCommands.Add(new CommandItem("List View", "View", vm => vm.SetViewModeCommand.Execute(LayoutMode.List)));
         _allCommands.Add(new CommandItem("Grid View", "View", vm => vm.SetViewModeCommand.Execute(LayoutMode.Grid)));
         _allCommands.Add(new CommandItem("Miller Columns", "View", vm => vm.SetViewModeCommand.Execute(LayoutMode.Miller)));
+        _allCommands.Add(new CommandItem("Show Hidden Items", "View", vm => vm.ToggleShowHiddenFilesCommand.Execute(null)));
+        _allCommands.Add(new CommandItem("Show File Extensions", "View", vm => vm.ToggleShowFileExtensionsCommand.Execute(null)));
         _allCommands.Add(new CommandItem("Git: Switch Branch", "Git", vm => _ = vm.ActivePane?.OpenBranchFlyoutCommand.ExecuteAsync(null)));
     }
 
@@ -413,12 +488,23 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         if (!IsCommandPaletteOpen)
             return;
 
+        IsSettingsOpen = false;
         foreach (var tab in Tabs)
             RecordRecent(tab.ActivePane.CurrentPath);
 
         CommandPaletteQuery = string.Empty;
         RefreshCommandPalette(string.Empty);
     }
+
+    [RelayCommand]
+    private void OpenSettings()
+    {
+        IsCommandPaletteOpen = false;
+        IsSettingsOpen = true;
+    }
+
+    [RelayCommand]
+    private void CloseSettings() => IsSettingsOpen = false;
 
     [RelayCommand]
     private void ExecuteCommand(CommandItem? command)
@@ -480,29 +566,37 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void ToggleFilter() => SelectedTab?.ActivePane.ToggleFilterCommand.Execute(null);
 
+    private static bool CanUseGlobalFileShortcuts() => !TextInputFocus.IsActive();
+
     [RelayCommand]
     private void SetViewMode(LayoutMode mode) => SelectedTab?.ActivePane.SetViewModeCommand.Execute(mode);
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanUseGlobalFileShortcuts))]
     private void Cut() => SelectedTab?.ActivePane.CutCommand.Execute(null);
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanUseGlobalFileShortcuts))]
     private void Copy() => SelectedTab?.ActivePane.CopyCommand.Execute(null);
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanUseGlobalFileShortcuts))]
     private void Paste() => SelectedTab?.ActivePane.PasteCommand.Execute(null);
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanUseGlobalFileShortcuts))]
     private void Delete() => SelectedTab?.ActivePane.DeleteCommand.Execute(null);
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanUseGlobalFileShortcuts))]
     private void Rename() => SelectedTab?.ActivePane.BeginRenameCommand.Execute(null);
 
     [RelayCommand]
     private void NewFolder() => SelectedTab?.ActivePane.NewFolderCommand.Execute(null);
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanUseGlobalFileShortcuts))]
     private void SelectAll() => SelectedTab?.ActivePane.SelectAll();
+
+    [RelayCommand]
+    private void ToggleShowHiddenFiles() => ShowHiddenFiles = !ShowHiddenFiles;
+
+    [RelayCommand]
+    private void ToggleShowFileExtensions() => ShowFileExtensions = !ShowFileExtensions;
 
     private void UpdateSidebarSelection(string path)
     {
@@ -558,16 +652,12 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void ToggleTheme()
     {
-        var next = _themeService.CurrentMode switch
+        Theme = _themeService.CurrentMode switch
         {
             ThemeMode.Light => ThemeMode.Dark,
             ThemeMode.Dark => ThemeMode.System,
             _ => ThemeMode.Light
         };
-        _themeService.ApplyTheme(next);
-        var settings = _settingsStore.Load();
-        settings.Theme = next;
-        _settingsStore.Save(settings);
     }
 
     public void Dispose()

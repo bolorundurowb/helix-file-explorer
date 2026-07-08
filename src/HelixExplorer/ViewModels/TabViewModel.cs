@@ -26,6 +26,8 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     private readonly IFolderColorService _folderColors;
     private readonly FileVisualService _visuals;
     private readonly Func<IFileChangeWatcher> _watcherFactory;
+    private bool _showHiddenFiles;
+    private bool _showFileExtensions = true;
     private bool _disposed;
 
     public TabViewModel(
@@ -108,7 +110,16 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         pane.EntryActivated += OnEntryActivated;
         pane.OpenInNewTabRequested += OnOpenInNewTabRequested;
         pane.OpenInNewPaneRequested += OnOpenInNewPaneRequested;
+        pane.ApplyViewSettings(_showHiddenFiles, _showFileExtensions);
         return pane;
+    }
+
+    public void ApplyViewSettings(bool showHiddenFiles, bool showFileExtensions)
+    {
+        _showHiddenFiles = showHiddenFiles;
+        _showFileExtensions = showFileExtensions;
+        LeftPane.ApplyViewSettings(showHiddenFiles, showFileExtensions);
+        RightPane?.ApplyViewSettings(showHiddenFiles, showFileExtensions);
     }
 
     private async void OnEntryActivated(object? sender, FileSystemEntry entry)

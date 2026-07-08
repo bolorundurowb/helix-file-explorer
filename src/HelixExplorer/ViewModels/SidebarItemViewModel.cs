@@ -7,20 +7,35 @@ namespace HelixExplorer.ViewModels;
 
 public sealed partial class SidebarItemViewModel : ObservableObject
 {
-    public SidebarItemViewModel(string title, string? path, SidebarItemKind kind, bool isSectionHeader = false, bool isSelected = false)
+    public SidebarItemViewModel(
+        string title,
+        string? path,
+        SidebarItemKind kind,
+        bool isSectionHeader = false,
+        bool isSelected = false,
+        KnownFolderKind? knownFolder = null)
     {
         Title = title;
         Path = path;
         Kind = kind;
         IsSectionHeader = isSectionHeader;
         IsSelected = isSelected;
+        KnownFolder = knownFolder;
     }
 
     public string Title { get; }
     public string? Path { get; }
 
-    internal void NotifyFolderColorChanged() => OnPropertyChanged(nameof(Path));
+    internal void NotifyFolderColorChanged()
+    {
+        OnPropertyChanged(nameof(Path));
+        OnPropertyChanged(nameof(ShowsFolderIcon));
+    }
+
+    public bool ShowsFolderIcon => Kind is SidebarItemKind.Home or SidebarItemKind.Pinned;
+
     public SidebarItemKind Kind { get; }
+    public KnownFolderKind? KnownFolder { get; }
     public bool IsSectionHeader { get; }
     public bool IsNavigable => !IsSectionHeader && !string.IsNullOrEmpty(Path);
 
@@ -58,11 +73,11 @@ public static class SidebarFactory
         items.Add(new SidebarItemViewModel("Pinned", null, SidebarItemKind.Section, isSectionHeader: true));
         foreach (var (kind, path, displayName) in quickAccess.GetPinnedDefaults())
         {
-            _ = kind;
             items.Add(new SidebarItemViewModel(
                 displayName,
                 path,
                 SidebarItemKind.Pinned,
+                knownFolder: kind,
                 isSelected: PathsEqual(path, selectedPath)));
         }
 

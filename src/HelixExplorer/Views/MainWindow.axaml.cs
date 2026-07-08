@@ -88,8 +88,7 @@ public partial class MainWindow : Window
         if (DataContext is not MainWindowViewModel vm)
             return;
 
-        if (((MenuItem)sender).Parent is not ContextMenu { PlacementTarget: Border border }
-            || border.DataContext is not SidebarItemViewModel item)
+        if (GetSidebarItemFromMenu(sender) is not SidebarItemViewModel item)
             return;
 
         vm.SetSidebarFolderColor(item, hex);
@@ -100,10 +99,21 @@ public partial class MainWindow : Window
         if (DataContext is not MainWindowViewModel vm)
             return;
 
-        if (sender is not MenuItem { Parent: ContextMenu { PlacementTarget: Border border } }
-            || border.DataContext is not SidebarItemViewModel item)
+        if (GetSidebarItemFromMenu(sender) is not SidebarItemViewModel item)
             return;
 
         vm.ClearSidebarFolderColor(item);
+    }
+
+    private static SidebarItemViewModel? GetSidebarItemFromMenu(object? sender)
+    {
+        for (var current = sender as Control; current is not null; current = current.Parent as Control)
+        {
+            if (current is ContextMenu { PlacementTarget: Border border }
+                && border.DataContext is SidebarItemViewModel item)
+                return item;
+        }
+
+        return null;
     }
 }

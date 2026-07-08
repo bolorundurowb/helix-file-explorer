@@ -9,7 +9,7 @@
                Stretch="Uniform"
                IsVisible="{Binding EntryImage, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
         <PathIcon Data="{Binding Converter={StaticResource EntryIconConverter}}"
-                  Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}"
+                  Foreground="{Binding IconAppearance, Converter={StaticResource EntryIconBrushConverter}}"
                   IsVisible="{Binding EntryImage, Converter={x:Static conv:ObjectConverters.IsNull}}" />
     </Panel>
 </UserControl>

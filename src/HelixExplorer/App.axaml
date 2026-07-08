@@ -62,6 +62,8 @@
             <x:Double x:Key="HelixControlSpacing">8</x:Double>
             <x:Double x:Key="HelixRowHeight">28</x:Double>
             <x:Double x:Key="HelixEntryFontSize">12</x:Double>
+            <x:Double x:Key="HelixSidebarFontSize">11</x:Double>
+            <x:Double x:Key="HelixSidebarSectionFontSize">10</x:Double>
             <x:Double x:Key="HelixSidebarDefaultWidth">240</x:Double>
             <Thickness x:Key="HelixContentPadding">12</Thickness>
 
@@ -69,8 +71,12 @@
             <conv:RelativeTimeConverter x:Key="RelativeTimeConverter" />
             <conv:BoolToSidebarBrushConverter x:Key="BoolToSidebarBrushConverter" />
             <conv:EntryIconConverter x:Key="EntryIconConverter" />
+            <conv:EntryIconBrushConverter x:Key="EntryIconBrushConverter" />
             <conv:GitFileStatusBrushConverter x:Key="GitFileStatusBrushConverter" />
             <conv:FolderColorConverter x:Key="FolderColorConverter" />
+            <conv:FolderIconBrushConverter x:Key="FolderIconBrushConverter" />
+
+            <Geometry x:Key="HelixFolderIconGeometry">M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z</Geometry>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

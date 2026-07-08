@@ -10,9 +10,15 @@ namespace HelixExplorer.ViewModels;
 /// <summary>View-facing row wrapping a listing entry with optional git status for coloring.</summary>
 public sealed partial class EntryItemViewModel : ObservableObject
 {
-    public EntryItemViewModel(FileSystemEntry entry, GitFileStatus gitStatus = GitFileStatus.None)
+    private bool _showFileExtensions = true;
+
+    public EntryItemViewModel(
+        FileSystemEntry entry,
+        bool showFileExtensions = true,
+        GitFileStatus gitStatus = GitFileStatus.None)
     {
         Entry = entry;
+        _showFileExtensions = showFileExtensions;
         GitStatus = gitStatus;
     }
 
@@ -20,13 +26,30 @@ public sealed partial class EntryItemViewModel : ObservableObject
 
     public string FullPath => Entry.FullPath;
 
-    internal void NotifyFolderColorChanged() => OnPropertyChanged(nameof(FullPath));
+    public EntryItemViewModel IconAppearance => this;
+
+    internal void NotifyFolderColorChanged()
+    {
+        OnPropertyChanged(nameof(FullPath));
+        OnPropertyChanged(nameof(IconAppearance));
+    }
+
     public string Name => Entry.Name;
+    public string DisplayName => EntryDisplayName.Format(Entry, _showFileExtensions);
     public bool IsDirectory => Entry.IsDirectory;
     public long SizeBytes => Entry.SizeBytes;
     public DateTime ModifiedUtc => Entry.ModifiedUtc;
     public string Extension => Entry.Extension;
     public string TypeLabel => Entry.TypeLabel;
+
+    internal void SetShowFileExtensions(bool showFileExtensions)
+    {
+        if (_showFileExtensions == showFileExtensions)
+            return;
+
+        _showFileExtensions = showFileExtensions;
+        OnPropertyChanged(nameof(DisplayName));
+    }
 
     [ObservableProperty]
     private GitFileStatus _gitStatus;

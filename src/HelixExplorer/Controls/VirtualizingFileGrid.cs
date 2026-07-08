@@ -1,10 +1,11 @@
 using System.Collections;
+using System.Collections.Specialized;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
 using Avalonia.Layout;
-using HelixExplorer.ViewModels;
+using Avalonia.Threading;
 
 namespace HelixExplorer.Controls;
 
@@ -24,11 +25,17 @@ public sealed class VirtualizingFileGrid : TemplatedControl
 
     private ItemsControl? _rows;
     private ScrollViewer? _scrollViewer;
+    private INotifyCollectionChanged? _itemsSubscription;
+    private bool _rebuildScheduled;
 
     static VirtualizingFileGrid()
     {
-        ItemsSourceProperty.Changed.AddClassHandler<VirtualizingFileGrid>((g, _) => g.RebuildRows());
-        ItemSizeProperty.Changed.AddClassHandler<VirtualizingFileGrid>((g, _) => g.RebuildRows());
+        ItemsSourceProperty.Changed.AddClassHandler<VirtualizingFileGrid>((g, e) =>
+        {
+            g.UpdateItemsSubscription(e.OldValue as IEnumerable, e.NewValue as IEnumerable);
+            g.ScheduleRebuildRows();
+        });
+        ItemSizeProperty.Changed.AddClassHandler<VirtualizingFileGrid>((g, _) => g.ScheduleRebuildRows());
         ItemTemplateProperty.Changed.AddClassHandler<VirtualizingFileGrid>((g, _) => g.ApplyRowTemplate());
     }
 
@@ -56,14 +63,60 @@ public sealed class VirtualizingFileGrid : TemplatedControl
         _rows = e.NameScope.Find<ItemsControl>("PART_Rows");
         _scrollViewer = e.NameScope.Find<ScrollViewer>("PART_ScrollViewer");
         ApplyRowTemplate();
-        RebuildRows();
+        UpdateItemsSubscription(null, ItemsSource);
+        ScheduleRebuildRows();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        UnsubscribeFromItems();
+        base.OnDetachedFromVisualTree(e);
     }
 
     protected override void OnSizeChanged(SizeChangedEventArgs e)
     {
         base.OnSizeChanged(e);
         if (e.WidthChanged)
+            ScheduleRebuildRows();
+    }
+
+    private void UpdateItemsSubscription(IEnumerable? oldSource, IEnumerable? newSource)
+    {
+        if (ReferenceEquals(oldSource, newSource))
+            return;
+
+        UnsubscribeFromItems();
+
+        if (newSource is INotifyCollectionChanged collection)
+        {
+            _itemsSubscription = collection;
+            _itemsSubscription.CollectionChanged += OnItemsCollectionChanged;
+        }
+    }
+
+    private void UnsubscribeFromItems()
+    {
+        if (_itemsSubscription is null)
+            return;
+
+        _itemsSubscription.CollectionChanged -= OnItemsCollectionChanged;
+        _itemsSubscription = null;
+    }
+
+    private void OnItemsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        => ScheduleRebuildRows();
+
+    private void ScheduleRebuildRows()
+    {
+        if (_rebuildScheduled)
+            return;
+
+        _rebuildScheduled = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            _rebuildScheduled = false;
             RebuildRows();
+        }, DispatcherPriority.Loaded);
     }
 
     private void ApplyRowTemplate()

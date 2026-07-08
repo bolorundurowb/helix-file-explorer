@@ -12,6 +12,11 @@ public sealed class WinNetworkLocationProvider : INetworkLocationProvider
     private const int ResourceUsageContainer = 0x00000002;
     private const int ErrorNoMoreItems = 259;
 
+    private const int DisplayTypeDomain = 0x00000001;
+    private const int DisplayTypeServer = 0x00000002;
+    private const int DisplayTypeNetwork = 0x00000006;
+    private const int DisplayTypeRoot = 0x00000007;
+
     public async ValueTask<IReadOnlyList<NetworkLocationInfo>> GetNetworkLocationsAsync(
         CancellationToken cancellationToken = default)
     {
@@ -73,7 +78,7 @@ public sealed class WinNetworkLocationProvider : INetworkLocationProvider
                             continue;
 
                         var remoteName = resource.RemoteName;
-                        if (!string.IsNullOrWhiteSpace(remoteName))
+                        if (!string.IsNullOrWhiteSpace(remoteName) && ShouldInclude(resource))
                         {
                             results.Add(new NetworkLocationInfo(
                                 remoteName,
@@ -95,6 +100,16 @@ public sealed class WinNetworkLocationProvider : INetworkLocationProvider
         {
             WNetCloseEnum(handle);
         }
+    }
+
+    private static bool ShouldInclude(NetResource resource)
+    {
+        // Skip low-level provider roots (Terminal Services, Web Client, Plan 9, etc.).
+        if (resource.DisplayType is DisplayTypeNetwork or DisplayTypeRoot)
+            return false;
+
+        // Sidebar shows workgroups and computers, not every share discovered during enumeration.
+        return resource.DisplayType is DisplayTypeDomain or DisplayTypeServer;
     }
 
     private static string GetDisplayName(string remoteName, string? comment)

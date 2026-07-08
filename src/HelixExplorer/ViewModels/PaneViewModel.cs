@@ -12,6 +12,7 @@ using HelixExplorer.Core.Settings;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Session;
 using HelixExplorer.Core.Sorting;
+using HelixExplorer.Services;
 
 namespace HelixExplorer.ViewModels;
 
@@ -30,6 +31,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     private readonly IUiHost _uiHost;
     private readonly IGitProvider _git;
     private readonly IFileChangeWatcher _watcher;
+    private readonly FileVisualService _visuals;
     private readonly Stack<string> _backStack = new();
     private readonly Stack<string> _forwardStack = new();
     private readonly List<FileSystemEntry> _viewBuffer = new();
@@ -37,6 +39,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     private GitStatusSnapshot _gitSnapshot = GitStatusSnapshot.Empty;
     private CancellationTokenSource? _refreshCts;
     private CancellationTokenSource? _gitCts;
+    private CancellationTokenSource? _visualCts;
     private int _refreshGeneration;
     private bool _refreshInFlight;
     private bool _watcherRefreshPending;
@@ -52,7 +55,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         IShellContextMenuService shellContextMenu,
         IUiHost uiHost,
         IGitProvider git,
-        IFileChangeWatcher watcher)
+        IFileChangeWatcher watcher,
+        FileVisualService visuals)
     {
         _fileSystem = fileSystem;
         _archive = archive;
@@ -64,6 +68,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         _uiHost = uiHost;
         _git = git;
         _watcher = watcher;
+        _visuals = visuals;
         _watcher.Changed += OnWatcherChanged;
         _clipboard.Changed += OnClipboardChanged;
         SelectedEntries.CollectionChanged += (_, _) => SyncEntrySelectionFlags();
@@ -170,7 +175,11 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         var clamped = Math.Clamp(value, MinThumbnailSize, MaxThumbnailSize);
         if (Math.Abs(clamped - value) > double.Epsilon)
             ThumbnailSize = clamped;
+        else if (IsGridView)
+            RequestEntryVisuals();
     }
+
+    partial void OnViewModeChanged(LayoutMode value) => RequestEntryVisuals();
 
     partial void OnSelectedEntryChanged(EntryItemViewModel? value)
     {
@@ -560,6 +569,19 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         SelectedEntries.Clear();
         SelectedCount = 0;
         UpdateStatusText();
+        RequestEntryVisuals();
+    }
+
+    private void RequestEntryVisuals()
+    {
+        _visualCts?.Cancel();
+        _visualCts?.Dispose();
+        _visualCts = new CancellationTokenSource();
+        var ct = _visualCts.Token;
+        var size = IsGridView ? (int)ThumbnailSize : 20;
+
+        foreach (var entry in Entries)
+            _ = entry.RefreshVisualAsync(_visuals, size, IsGridView, ct);
     }
 
     private void UpdateStatusText()
@@ -1363,6 +1385,9 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         _refreshCts?.Dispose();
         _refreshCts = null;
         CancelGitRefresh();
+        try { _visualCts?.Cancel(); } catch (ObjectDisposedException) { }
+        _visualCts?.Dispose();
+        _visualCts = null;
         IsLoading = false;
     }
 }

@@ -1,6 +1,9 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Models;
+using HelixExplorer.Services;
+using Avalonia.Media.Imaging;
 
 namespace HelixExplorer.ViewModels;
 
@@ -30,4 +33,31 @@ public sealed partial class EntryItemViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _isSelected;
+
+    [ObservableProperty]
+    private Bitmap? _entryImage;
+
+    private int _visualGeneration;
+
+    public async Task RefreshVisualAsync(
+        FileVisualService visuals,
+        int size,
+        bool gridView,
+        CancellationToken cancellationToken)
+    {
+        var generation = ++_visualGeneration;
+        var preferThumbnail = FileVisualRules.PreferThumbnail(FullPath, IsDirectory, gridView);
+
+        var image = await visuals.GetBitmapAsync(
+            FullPath,
+            IsDirectory,
+            size,
+            preferThumbnail,
+            cancellationToken).ConfigureAwait(true);
+
+        if (generation != _visualGeneration || cancellationToken.IsCancellationRequested)
+            return;
+
+        EntryImage = image;
+    }
 }

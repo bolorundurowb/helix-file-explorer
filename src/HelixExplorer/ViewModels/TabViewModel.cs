@@ -9,6 +9,7 @@ using System.Diagnostics;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Settings;
 using HelixExplorer.Core.Session;
+using HelixExplorer.Services;
 
 namespace HelixExplorer.ViewModels;
 
@@ -23,6 +24,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     private readonly IGitProvider _git;
     private readonly IArchiveProvider _archive;
     private readonly IFolderColorService _folderColors;
+    private readonly FileVisualService _visuals;
     private readonly Func<IFileChangeWatcher> _watcherFactory;
     private bool _disposed;
 
@@ -36,6 +38,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         IGitProvider git,
         IArchiveProvider archive,
         IFolderColorService folderColors,
+        FileVisualService visuals,
         Func<IFileChangeWatcher> watcherFactory)
     {
         _fileSystem = fileSystem;
@@ -47,6 +50,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         _git = git;
         _archive = archive;
         _folderColors = folderColors;
+        _visuals = visuals;
         _watcherFactory = watcherFactory;
         LeftPane = CreatePane();
         _activePane = LeftPane;
@@ -98,7 +102,8 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
             _shellContextMenu,
             _uiHost,
             _git,
-            _watcherFactory());
+            _watcherFactory(),
+            _visuals);
         pane.Navigated += OnPaneNavigated;
         pane.EntryActivated += OnEntryActivated;
         pane.OpenInNewTabRequested += OnOpenInNewTabRequested;

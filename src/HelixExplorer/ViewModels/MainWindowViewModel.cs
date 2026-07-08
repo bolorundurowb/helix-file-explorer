@@ -10,6 +10,7 @@ using HelixExplorer.Core.Search;
 using HelixExplorer.Core.Session;
 using HelixExplorer.Core.Settings;
 using HelixExplorer.Core.Theming;
+using HelixExplorer.Services;
 
 namespace HelixExplorer.ViewModels;
 
@@ -30,6 +31,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly IGitProvider _git;
     private readonly IArchiveProvider _archive;
     private readonly IFolderColorService _folderColors;
+    private readonly FileVisualService _visuals;
     private readonly Func<IFileChangeWatcher> _watcherFactory;
     private readonly string _homePath;
     private readonly List<CommandItem> _allCommands = new();
@@ -56,6 +58,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         IGitProvider git,
         IArchiveProvider archive,
         IFolderColorService folderColors,
+        FileVisualService visuals,
         Func<IFileChangeWatcher> watcherFactory)
     {
         _settingsStore = settingsStore;
@@ -73,6 +76,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _git = git;
         _archive = archive;
         _folderColors = folderColors;
+        _visuals = visuals;
         _watcherFactory = watcherFactory;
 
         _homePath = _quickAccess.GetPath(KnownFolderKind.Home)
@@ -213,6 +217,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             _git,
             _archive,
             _folderColors,
+            _visuals,
             _watcherFactory);
         tab.CloseRequested += OnTabCloseRequested;
         tab.Navigated += OnTabNavigated;

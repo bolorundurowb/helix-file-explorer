@@ -13,10 +13,10 @@
              DragDrop.DragOver="OnDragOver">
 
     <UserControl.Styles>
-        <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+        <Style Selector="ListBox#ListView ListBoxItem:selected /template/ ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource HelixSelectionFillBrush}" />
         </Style>
-        <Style Selector="UserControl.inactive ListBoxItem:selected /template/ ContentPresenter">
+        <Style Selector="UserControl.inactive ListBox#ListView ListBoxItem:selected /template/ ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource HelixSelectionInactiveFillBrush}" />
         </Style>
         <Style Selector="DataGridRow:selected">
@@ -108,10 +108,9 @@
                             <Grid ColumnDefinitions="Auto,*"
                                   VerticalAlignment="Center"
                                   ToolTip.Tip="{Binding Name}">
-                                <PathIcon Grid.Column="0"
-                                          Data="{Binding Converter={StaticResource EntryIconConverter}}"
-                                          Width="14" Height="14" Margin="0,0,6,0"
-                                          Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}" />
+                                <controls:EntryVisualView Grid.Column="0"
+                                                          Width="16" Height="16" Margin="0,0,6,0"
+                                                          Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}" />
                                 <TextBlock Grid.Column="1"
                                            Text="{Binding Name}"
                                            FontSize="{DynamicResource HelixEntryFontSize}"
@@ -210,10 +209,9 @@
                 <DataTemplate x:DataType="vm:EntryItemViewModel">
                     <Grid ColumnDefinitions="Auto,*"
                           ToolTip.Tip="{Binding Name}">
-                        <PathIcon Grid.Column="0"
-                                  Data="{Binding Converter={StaticResource EntryIconConverter}}"
-                                  Width="14" Height="14" Margin="0,0,6,0"
-                                  Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}" />
+                        <controls:EntryVisualView Grid.Column="0"
+                                                  Width="16" Height="16" Margin="0,0,6,0"
+                                                  Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}" />
                         <TextBlock Grid.Column="1"
                                    Text="{Binding Name}"
                                    FontSize="{DynamicResource HelixEntryFontSize}"
@@ -315,10 +313,10 @@
                                         IsVisible="{Binding IsSelected}"
                                         IsHitTestVisible="False" />
                                 <StackPanel Spacing="4" ToolTip.Tip="{Binding Name}">
-                                <PathIcon Data="{Binding Converter={StaticResource EntryIconConverter}}"
-                                          Width="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=controls:VirtualizingFileGrid}}"
-                                          Height="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=controls:VirtualizingFileGrid}}"
-                                          Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}" />
+                                <controls:EntryVisualView Width="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=controls:VirtualizingFileGrid}}"
+                                                          Height="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=controls:VirtualizingFileGrid}}"
+                                                          HorizontalAlignment="Center"
+                                                          Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}" />
                                 <TextBlock Text="{Binding Name}"
                                            FontSize="{DynamicResource HelixEntryFontSize}"
                                            TextAlignment="Center"

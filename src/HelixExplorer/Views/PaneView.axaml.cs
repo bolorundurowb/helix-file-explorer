@@ -286,20 +286,29 @@ public sealed partial class PaneView : UserControl
 
     private void OnGridItemPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (Pane is null || sender is not Control { DataContext: EntryItemViewModel entry })
+        if (Pane is null || TryGetEntryFromSource(sender) is not { } entry)
             return;
 
         if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
             return;
 
-        if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        SelectGridEntry(entry, e.KeyModifiers);
+        e.Handled = true;
+    }
+
+    private void SelectGridEntry(EntryItemViewModel entry, KeyModifiers modifiers)
+    {
+        if (Pane is null)
+            return;
+
+        if (modifiers.HasFlag(KeyModifiers.Control))
         {
             if (Pane.SelectedEntries.Contains(entry))
                 Pane.SelectedEntries.Remove(entry);
             else
                 Pane.SelectedEntries.Add(entry);
         }
-        else if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) && Pane.SelectedEntry is not null)
+        else if (modifiers.HasFlag(KeyModifiers.Shift) && Pane.SelectedEntry is not null)
         {
             Pane.UpdateSelection([entry]);
         }
@@ -309,6 +318,17 @@ public sealed partial class PaneView : UserControl
         }
 
         Pane.SelectedEntry = entry;
+    }
+
+    private static EntryItemViewModel? TryGetEntryFromSource(object? source)
+    {
+        for (var control = source as Control; control is not null; control = control.Parent as Control)
+        {
+            if (control.DataContext is EntryItemViewModel entry)
+                return entry;
+        }
+
+        return null;
     }
 
     private void OnGridItemDoubleTapped(object? sender, TappedEventArgs e)
@@ -389,6 +409,14 @@ public sealed partial class PaneView : UserControl
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
             return;
+
+        if (Pane?.IsGridView == true
+            && ReferenceEquals(sender, GridView)
+            && !e.GetCurrentPoint(this).Properties.IsRightButtonPressed
+            && TryGetEntryFromSource(e.Source) is { } entry)
+        {
+            SelectGridEntry(entry, e.KeyModifiers);
+        }
 
         _pressPoint = e.GetPosition(this);
         _pressArgs = e;

@@ -80,6 +80,7 @@ public partial class App : Application
         services.AddSingleton<IGitProvider, CliGitProvider>();
         services.AddSingleton<IArchiveProvider, SharpCompressArchiveProvider>();
         services.AddSingleton<IFolderColorService, FolderColorService>();
+        services.AddSingleton<FileVisualService>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddTransient<MainWindow>();
     }

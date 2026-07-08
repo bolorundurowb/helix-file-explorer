@@ -13,6 +13,7 @@ public static class WindowsServiceExtensions
         services.AddSingleton<INetworkLocationProvider, FileSystem.WinNetworkLocationProvider>();
         services.AddSingleton<IFileOperationService, FileSystem.WinFileOperationService>();
         services.AddSingleton<IShellContextMenuService, Shell.WinShellContextMenuService>();
+        services.AddSingleton<IFileVisualProvider, Shell.WinFileVisualProvider>();
         services.AddTransient<IFileChangeWatcher, FileSystem.FileChangeWatcherService>();
         services.AddSingleton<Func<IFileChangeWatcher>>(sp => () => sp.GetRequiredService<IFileChangeWatcher>());
         return services;

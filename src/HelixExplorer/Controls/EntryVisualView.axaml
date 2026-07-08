@@ -1,0 +1,15 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="using:Avalonia.Data.Converters"
+             xmlns:vm="using:HelixExplorer.ViewModels"
+             x:Class="HelixExplorer.Controls.EntryVisualView"
+             x:DataType="vm:EntryItemViewModel">
+    <Panel>
+        <Image Source="{Binding EntryImage}"
+               Stretch="Uniform"
+               IsVisible="{Binding EntryImage, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+        <PathIcon Data="{Binding Converter={StaticResource EntryIconConverter}}"
+                  Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}"
+                  IsVisible="{Binding EntryImage, Converter={x:Static conv:ObjectConverters.IsNull}}" />
+    </Panel>
+</UserControl>

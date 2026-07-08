@@ -44,10 +44,11 @@
                 Background="{DynamicResource HelixTabStripBrush}"
                 Padding="8,4,140,0"
                 Height="40"
-                WindowDecorationProperties.ElementRole="User">
-            <Grid ColumnDefinitions="*,Auto,12">
+                WindowDecorationProperties.ElementRole="TitleBar">
+            <Grid ColumnDefinitions="*,Auto">
                 <ListBox x:Name="TabStrip"
                          Grid.Column="0"
+                         HorizontalAlignment="Left"
                          ItemsSource="{Binding Tabs}"
                          SelectedItem="{Binding SelectedTab, Mode=TwoWay}"
                          Background="Transparent"
@@ -55,7 +56,8 @@
                          Padding="0"
                          PointerWheelChanged="OnTabStripWheel"
                          ScrollViewer.VerticalScrollBarVisibility="Disabled"
-                         ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                         ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                         WindowDecorationProperties.ElementRole="User">
                     <ListBox.ItemsPanel>
                         <ItemsPanelTemplate>
                             <StackPanel Orientation="Horizontal" Spacing="2" />
@@ -126,10 +128,6 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
-
-                <Border Grid.Column="2"
-                        Background="Transparent"
-                        WindowDecorationProperties.ElementRole="TitleBar" />
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"
                             WindowDecorationProperties.ElementRole="User">

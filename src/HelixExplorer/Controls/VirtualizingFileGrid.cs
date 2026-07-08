@@ -22,7 +22,7 @@ public sealed class VirtualizingFileGrid : TemplatedControl
     public static readonly StyledProperty<IDataTemplate?> ItemTemplateProperty =
         AvaloniaProperty.Register<VirtualizingFileGrid, IDataTemplate?>(nameof(ItemTemplate));
 
-    private ListBox? _rows;
+    private ItemsControl? _rows;
     private ScrollViewer? _scrollViewer;
 
     static VirtualizingFileGrid()
@@ -53,7 +53,7 @@ public sealed class VirtualizingFileGrid : TemplatedControl
     protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
     {
         base.OnApplyTemplate(e);
-        _rows = e.NameScope.Find<ListBox>("PART_Rows");
+        _rows = e.NameScope.Find<ItemsControl>("PART_Rows");
         _scrollViewer = e.NameScope.Find<ScrollViewer>("PART_ScrollViewer");
         ApplyRowTemplate();
         RebuildRows();

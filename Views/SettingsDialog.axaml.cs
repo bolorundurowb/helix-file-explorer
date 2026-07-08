@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using HelixExplorer.Services;
 using HelixExplorer.ViewModels;
 
 namespace HelixExplorer.Views;

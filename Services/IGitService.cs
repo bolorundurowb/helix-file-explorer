@@ -10,4 +10,10 @@ public interface IGitService
 
     /// <summary>Returns true when <paramref name="path"/> lives inside a git working tree.</summary>
     bool IsInsideRepository(string path);
+
+    /// <summary>Lists local branch names for the repository enclosing <paramref name="path"/>.</summary>
+    ValueTask<IReadOnlyList<string>> ListBranchesAsync(string path, CancellationToken token = default);
+
+    /// <summary>Checks out <paramref name="branch"/> in the repository enclosing <paramref name="path"/>. Returns true on success.</summary>
+    ValueTask<bool> CheckoutBranchAsync(string path, string branch, CancellationToken token = default);
 }

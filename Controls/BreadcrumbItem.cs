@@ -1,8 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Input;
 using Avalonia.Media;
-using Avalonia.Styling;
 
 namespace HelixExplorer.Controls;
 
@@ -68,11 +66,11 @@ public sealed class BreadcrumbItem : Button
         if (IsLast) return;
 
         // Chevron ">" — drawn two thirds toward the right edge of the segment.
-        double w = Bounds.Width;
-        double h = Bounds.Height;
+        var w = Bounds.Width;
+        var h = Bounds.Height;
         var pen = new Pen(Foreground ?? Brushes.Gray, 1);
-        double cx = w - 8;
-        double cy = h / 2;
+        var cx = w - 8;
+        var cy = h / 2;
         context.DrawLine(pen, new Point(cx - 3, cy - 4), new Point(cx, cy));
         context.DrawLine(pen, new Point(cx, cy), new Point(cx - 3, cy + 4));
     }

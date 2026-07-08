@@ -10,10 +10,11 @@ using HelixExplorer.Services;
 
 namespace HelixExplorer.ViewModels;
 
-/// <summary>State for one file pane (left or right).</summary>
+/// <summary>State for one file pane. Each pane owns its own change-watcher and its own
+/// navigation history, so left/right panes are fully independent.</summary>
 public sealed partial class PaneViewModel : ObservableObject, IDisposable
 {
-    private readonly FileChangeWatcherService _watcher;
+    private readonly FileChangeWatcherService _watcher = new();
     private readonly IFileSystemService _fileSystem;
     private readonly IArchiveService _archive;
     private readonly IGitService _git;
@@ -23,26 +24,23 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     private IReadOnlyList<FileSystemEntry> _allEntries = Array.Empty<FileSystemEntry>();
     private IReadOnlyList<FileSystemEntry> _filteredEntries = Array.Empty<FileSystemEntry>();
     private FileSystemEntry? _selected;
+    private CancellationTokenSource? _refreshCts;
 
-    public PaneViewModel(
-        FileChangeWatcherService watcher,
-        IFileSystemService fileSystem,
-        IArchiveService archive,
-        IGitService git)
+    public PaneViewModel(IFileSystemService fileSystem, IArchiveService archive, IGitService git)
     {
-        _watcher = watcher;
         _fileSystem = fileSystem;
         _archive = archive;
         _git = git;
+        _thumbnailSize = ServiceLocator.Settings.ThumbnailSize;
         ServiceLocator.Settings.SettingsChanged += OnSettingsChanged;
     }
 
     private void OnSettingsChanged(object? sender, EventArgs e) => OnPropertyChanged(nameof(FilteredEntries));
 
-    /// <summary>Raised when the user activates an entry (double-click or Enter).</summary>
+    /// <summary>Raised when the user activates a file entry (double-click or Enter).</summary>
     public event EventHandler<FileSystemEntry>? EntryActivated;
 
-    /// <summary>Fired when navigation completes — used by Tab/StatusBar to refresh git info.</summary>
+    /// <summary>Fired when navigation completes — used by Tab/StatusBar to refresh derived info.</summary>
     public event EventHandler? Navigated;
 
     /// <summary>Raised when the user asks to open the current selection in the sibling pane.</summary>
@@ -56,12 +54,23 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     [ObservableProperty] private int _itemCount;
     [ObservableProperty] private bool _isLoading;
     [ObservableProperty] private string _statusText = string.Empty;
+    [ObservableProperty] private bool _isActive;
+    [ObservableProperty] private double _thumbnailSize;
+    [ObservableProperty] private bool _isEditingPath;
+    [ObservableProperty] private string _sortColumn = "Name";
+    [ObservableProperty] private bool _sortDescending;
+    [ObservableProperty] private bool _isBranchFlyoutOpen;
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GoBackCommand))]
     private bool _canGoBack;
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GoForwardCommand))]
     private bool _canGoForward;
+
+    /// <summary>Local branches, populated when the branch flyout opens.</summary>
+    public ObservableCollection<string> Branches { get; } = new();
 
     public IReadOnlyList<FileSystemEntry> FilteredEntries => _filteredEntries;
 
@@ -73,13 +82,23 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
     partial void OnFilterTextChanged(string value) => ScheduleFilter();
 
+    partial void OnThumbnailSizeChanged(double value)
+    {
+        double clamped = Math.Clamp(value, 32, 256);
+        if (clamped != value) { ThumbnailSize = clamped; return; }
+        ServiceLocator.Settings.ThumbnailSize = clamped;
+    }
+
     partial void OnCurrentPathChanged(string value)
     {
         IsArchive = value.StartsWith(ArchiveService.Scheme, StringComparison.OrdinalIgnoreCase);
         _ = RefreshAsync();
     }
 
-    /// <summary>Drives path semantics; resolves .., symlinks, and archive:// schemes.</summary>
+    /// <summary>Adjusts the grid thumbnail size (Ctrl+wheel). Clamped to 32–256 px.</summary>
+    public void AdjustThumbnail(double delta) => ThumbnailSize = Math.Clamp(ThumbnailSize + delta, 32, 256);
+
+    /// <summary>Drives path semantics; resolves .., and archive:// schemes.</summary>
     public void NavigateTo(string path)
     {
         if (string.IsNullOrEmpty(path)) return;
@@ -126,7 +145,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         }
 
         string resolved = _fileSystem.ResolvePath(path);
-        if (resolved.EndsWith(":") && resolved.Length == 2)
+        if (resolved.EndsWith(':') && resolved.Length == 2)
         {
             resolved += Path.DirectorySeparatorChar;
         }
@@ -169,27 +188,29 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         CanGoForward = _forwardStack.Count > 0;
     }
 
-    /// <summary>Lists the current directory, applying filter on completion.</summary>
+    /// <summary>Lists the current directory, cancelling any in-flight refresh first.</summary>
     public async Task RefreshAsync()
     {
         if (string.IsNullOrEmpty(CurrentPath)) return;
 
-        IsLoading = true;
-        CancellationTokenSource? ours = new();
+        // Cancel the previous refresh so a slow listing can't overwrite a newer one.
+        var previous = _refreshCts;
+        var cts = new CancellationTokenSource();
+        _refreshCts = cts;
+        try { previous?.Cancel(); } catch (ObjectDisposedException) { }
+        CancellationToken token = cts.Token;
+
+        await Dispatcher.UIThread.InvokeAsync(() => IsLoading = true);
+
         try
         {
-            CancellationToken token = ours.Token;
-
             IReadOnlyList<FileSystemEntry> entries;
             try
             {
                 if (IsArchive)
                 {
                     string cp = CurrentPath;
-                    if (!cp.EndsWith('/') && !cp.EndsWith('\\'))
-                    {
-                        cp += "/";
-                    }
+                    if (!cp.EndsWith('/') && !cp.EndsWith('\\')) cp += "/";
                     entries = await _archive.EnumerateAsync(cp, token).ConfigureAwait(false);
                 }
                 else
@@ -203,35 +224,34 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
                 Debug.WriteLine($"PaneViewModel.RefreshAsync failed for '{CurrentPath}': {ex.Message}");
                 entries = Array.Empty<FileSystemEntry>();
             }
+
             if (token.IsCancellationRequested) return;
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
+                if (token.IsCancellationRequested) return;
                 _allEntries = entries;
                 ItemCount = entries.Count;
                 ApplyFilter();
                 StatusText = $"{entries.Count} item{(entries.Count == 1 ? "" : "s")}";
-                IsLoading = false;
-            }, DispatcherPriority.Background);
+            });
 
             // Watch the current directory (no-op for archive paths).
-            if (!IsArchive)
-            {
-                _watcher.Watch(CurrentPath, () => _ = RefreshAsync());
-            }
-            else
-            {
-                _watcher.Stop();
-            }
+            _watcher.Watch(IsArchive ? string.Empty : CurrentPath, () => _ = RefreshAsync());
 
-            // Refresh git status off-thread.
             await UpdateGitStatusAsync(token).ConfigureAwait(false);
 
-            Navigated?.Invoke(this, EventArgs.Empty);
+            if (!token.IsCancellationRequested) Navigated?.Invoke(this, EventArgs.Empty);
         }
         finally
         {
-            ours.Dispose();
+            // Only the newest refresh clears the spinner, so a cancelled older one
+            // can't switch it off while a newer listing is still running.
+            if (ReferenceEquals(_refreshCts, cts))
+            {
+                await Dispatcher.UIThread.InvokeAsync(() => IsLoading = false);
+            }
+            cts.Dispose();
         }
     }
 
@@ -264,9 +284,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             }
         }
 
-        // Stably sort: directories first, then name.
-        var ordered = OrderEntries(_filteredEntries);
-        _filteredEntries = ordered;
+        _filteredEntries = OrderEntries(_filteredEntries);
         OnPropertyChanged(nameof(FilteredEntries));
     }
 
@@ -283,7 +301,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     {
         try
         {
-            var status = await _git.GetStatusAsync(CurrentPath, token);
+            var status = await _git.GetStatusAsync(CurrentPath, token).ConfigureAwait(false);
+            if (token.IsCancellationRequested) return;
             await Dispatcher.UIThread.InvokeAsync(() => RepositoryStatus = status);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -292,27 +311,47 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         }
     }
 
-    private static IReadOnlyList<FileSystemEntry> OrderEntries(IReadOnlyList<FileSystemEntry> entries)
+    /// <summary>Directories first, then the active sort column (asc/desc).</summary>
+    private IReadOnlyList<FileSystemEntry> OrderEntries(IReadOnlyList<FileSystemEntry> entries)
     {
         if (entries is not FileSystemEntry[] arr || arr.Length == 0) return entries;
-        Array.Sort(arr, static (a, b) =>
+        string col = SortColumn;
+        bool desc = SortDescending;
+        Array.Sort(arr, (a, b) =>
         {
             int c = a.IsDirectory.CompareTo(b.IsDirectory);
-            if (c != 0) return -c; // directories first
-            return string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
+            if (c != 0) return -c; // directories first, regardless of sort direction
+
+            int r = col switch
+            {
+                "Size" => a.Size.CompareTo(b.Size),
+                "Modified" => a.Modified.CompareTo(b.Modified),
+                "Type" => string.Compare(a.Extension, b.Extension, StringComparison.OrdinalIgnoreCase),
+                _ => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase)
+            };
+            if (r == 0 && col != "Name")
+            {
+                r = string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
+            }
+            return desc ? -r : r;
         });
         return arr;
+    }
+
+    [RelayCommand]
+    private void SortBy(string? column)
+    {
+        if (string.IsNullOrEmpty(column)) return;
+        if (SortColumn == column) SortDescending = !SortDescending;
+        else { SortColumn = column; SortDescending = false; }
+        ApplyFilter();
     }
 
     [RelayCommand]
     private void Activate(FileSystemEntry? entry)
     {
         if (entry is null || string.IsNullOrEmpty(entry.Value.FullPath)) return;
-        if (entry.Value.IsDirectory)
-        {
-            NavigateTo(entry.Value.FullPath);
-        }
-        else if (_archive.IsArchive(entry.Value.FullPath))
+        if (entry.Value.IsDirectory || _archive.IsArchive(entry.Value.FullPath))
         {
             NavigateTo(entry.Value.FullPath);
         }
@@ -323,16 +362,13 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    private void GoUp()
-    {
-        NavigateTo("..");
-    }
+    private void GoUp() => NavigateTo("..");
 
     [RelayCommand]
-    private void Refresh()
-    {
-        _ = RefreshAsync();
-    }
+    private void Refresh() => _ = RefreshAsync();
+
+    [RelayCommand]
+    private void ToggleEditPath() => IsEditingPath = !IsEditingPath;
 
     [RelayCommand]
     private void OpenInOtherPane(FileSystemEntry? entry)
@@ -349,7 +385,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     {
         try
         {
-            if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desk)
+            if (Avalonia.Application.Current?.ApplicationLifetime is
+                Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desk)
             {
                 desk.MainWindow?.Clipboard?.SetTextAsync(CurrentPath);
             }
@@ -357,8 +394,98 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         catch (Exception ex) { Debug.WriteLine($"CopyPath: {ex.Message}"); }
     }
 
+    // ---- git branch flyout ----
+
+    [RelayCommand]
+    private async Task OpenBranchFlyout()
+    {
+        Branches.Clear();
+        var list = await _git.ListBranchesAsync(CurrentPath).ConfigureAwait(true);
+        foreach (var b in list) Branches.Add(b);
+        IsBranchFlyoutOpen = true;
+    }
+
+    [RelayCommand]
+    private async Task CheckoutBranch(string? branch)
+    {
+        if (string.IsNullOrEmpty(branch)) return;
+        IsBranchFlyoutOpen = false;
+        if (await _git.CheckoutBranchAsync(CurrentPath, branch).ConfigureAwait(true))
+        {
+            await RefreshAsync();
+        }
+    }
+
+    // ---- drag & drop transfer ----
+
+    /// <summary>Copies (or moves) the given on-disk paths into this pane's current directory.</summary>
+    public async Task AcceptDropAsync(IReadOnlyList<string> sourcePaths, bool copy)
+    {
+        if (IsArchive || string.IsNullOrEmpty(CurrentPath) || sourcePaths.Count == 0) return;
+        string destDir = CurrentPath;
+
+        await Task.Run(() =>
+        {
+            foreach (var src in sourcePaths)
+            {
+                try
+                {
+                    if (Directory.Exists(src))
+                    {
+                        string name = Path.GetFileName(src.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                        string target = Path.Combine(destDir, name);
+                        if (copy) CopyDirectory(src, target);
+                        else Directory.Move(src, target);
+                    }
+                    else if (File.Exists(src))
+                    {
+                        string target = Path.Combine(destDir, Path.GetFileName(src));
+                        if (copy) File.Copy(src, target, overwrite: true);
+                        else File.Move(src, target, overwrite: true);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"AcceptDrop '{src}': {ex.Message}");
+                }
+            }
+        }).ConfigureAwait(false);
+
+        await RefreshAsync();
+    }
+
+    private static void CopyDirectory(string src, string dst)
+    {
+        Directory.CreateDirectory(dst);
+        foreach (var file in Directory.GetFiles(src))
+            File.Copy(file, Path.Combine(dst, Path.GetFileName(file)), overwrite: true);
+        foreach (var dir in Directory.GetDirectories(src))
+            CopyDirectory(dir, Path.Combine(dst, Path.GetFileName(dir)));
+    }
+
+    // ---- session persistence ----
+
+    public PaneState CaptureState() => new()
+    {
+        Path = CurrentPath,
+        ViewMode = (int)ViewMode,
+        SortColumn = SortColumn,
+        SortDescending = SortDescending
+    };
+
+    public void RestoreState(PaneState state)
+    {
+        ViewMode = (LayoutMode)state.ViewMode;
+        SortColumn = string.IsNullOrEmpty(state.SortColumn) ? "Name" : state.SortColumn;
+        SortDescending = state.SortDescending;
+        if (!string.IsNullOrEmpty(state.Path)) NavigateTo(state.Path);
+    }
+
     public void Dispose()
     {
+        try { _refreshCts?.Cancel(); } catch (ObjectDisposedException) { }
+        _refreshCts?.Dispose();
+        _watcher.Dispose();
         _filterDebouncer.Dispose();
         ServiceLocator.Settings.SettingsChanged -= OnSettingsChanged;
     }

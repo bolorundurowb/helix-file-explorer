@@ -1,7 +1,4 @@
 using Avalonia;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
-using HelixExplorer.Services.Interop;
 
 namespace HelixExplorer.Services;
 

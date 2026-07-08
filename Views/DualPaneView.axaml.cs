@@ -1,7 +1,4 @@
 using Avalonia.Controls;
-using Avalonia.Input;
-using Avalonia.VisualTree;
-using HelixExplorer.Services;
 using HelixExplorer.ViewModels;
 
 namespace HelixExplorer.Views;

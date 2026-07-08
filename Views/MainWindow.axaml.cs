@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -56,13 +55,13 @@ public sealed partial class MainWindow : Window
 
         var pos = e.GetPosition(this);
         var bounds = Bounds;
-        bool outside = pos.X < 0 || pos.Y < 0 || pos.X > bounds.Width || pos.Y > bounds.Height;
+        var outside = pos.X < 0 || pos.Y < 0 || pos.X > bounds.Width || pos.Y > bounds.Height;
         if (outside && DataContext is MainWindowViewModel vm)
         {
             // Tear out — create a new window carrying a copy of this tab's path.
             if (vm.ActiveTab != null)
             {
-                string path = vm.ActiveTab.ActivePane.CurrentPath;
+                var path = vm.ActiveTab.ActivePane.CurrentPath;
                 var newVm = new MainWindowViewModel();
                 if (newVm.ActiveTab != null)
                 {

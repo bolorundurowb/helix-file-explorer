@@ -1,12 +1,9 @@
-using System.IO;
-using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using HelixExplorer.Controls;
-using HelixExplorer.Services;
 using HelixExplorer.ViewModels;
 using Avalonia;
 
@@ -55,15 +52,15 @@ public sealed partial class Omnibar : UserControl
         if (string.IsNullOrEmpty(path)) return;
 
         // Split path respecting the archive:// scheme.
-        string working = path;
+        var working = path;
         if (working.StartsWith(Services.ArchiveService.Scheme, System.StringComparison.OrdinalIgnoreCase))
         {
             // Show as a single root segment for the archive host plus ordinary inner splits.
-            int bang = working.IndexOf('!');
+            var bang = working.IndexOf('!');
             if (bang > 0)
             {
                 AddBreadcrumb(working[..bang]);
-                string inner = working[(bang + 1)..];
+                var inner = working[(bang + 1)..];
                 AddInnerSegments(inner);
                 return;
             }
@@ -73,10 +70,10 @@ public sealed partial class Omnibar : UserControl
 
         var parts = path.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
             StringSplitOptions.RemoveEmptyEntries);
-        string accumulator = string.Empty;
+        var accumulator = string.Empty;
         foreach (var part in parts)
         {
-            bool isDrive = part.Length == 2 && part[1] == ':';
+            var isDrive = part.Length == 2 && part[1] == ':';
             accumulator = isDrive
                 ? part + Path.DirectorySeparatorChar
                 : (accumulator.EndsWith(Path.DirectorySeparatorChar) ? accumulator + part : accumulator + Path.DirectorySeparatorChar + part);
@@ -90,7 +87,7 @@ public sealed partial class Omnibar : UserControl
     {
         if (string.IsNullOrEmpty(inner)) { MarkLast(); return; }
         var parts = inner.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
-        string accumulator = string.Empty;
+        var accumulator = string.Empty;
         foreach (var p in parts)
         {
             accumulator = string.IsNullOrEmpty(accumulator) ? p + "/" : accumulator + p + "/";

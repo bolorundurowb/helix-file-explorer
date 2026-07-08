@@ -1,8 +1,5 @@
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
 using CommunityToolkit.Mvvm.ComponentModel;
 using HelixExplorer.Models;
-using HelixExplorer.Services;
 
 namespace HelixExplorer.ViewModels;
 
@@ -45,7 +42,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     /// <summary>Built on construction with the shared <see cref="Services"/> services.</summary>
     public static TabViewModel Create(string initialPath)
     {
-        string path = string.IsNullOrEmpty(initialPath)
+        var path = string.IsNullOrEmpty(initialPath)
             ? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
             : initialPath;
         if (!path.EndsWith(System.IO.Path.DirectorySeparatorChar))

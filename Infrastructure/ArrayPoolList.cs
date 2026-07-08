@@ -104,12 +104,12 @@ public sealed class ArrayPoolList<T> : IList<T>, IReadOnlyList<T>, IDisposable
 
     IEnumerator<T> IEnumerable<T>.GetEnumerator()
     {
-        for (int i = 0; i < _count; i++) yield return _buffer[i];
+        for (var i = 0; i < _count; i++) yield return _buffer[i];
     }
 
     System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()
     {
-        for (int i = 0; i < _count; i++) yield return _buffer[i];
+        for (var i = 0; i < _count; i++) yield return _buffer[i];
     }
 
     public void Dispose()
@@ -130,13 +130,13 @@ public sealed class ArrayPoolList<T> : IList<T>, IReadOnlyList<T>, IDisposable
 
     private void Grow()
     {
-        int newCapacity = _buffer.Length == 0 ? 64 : _buffer.Length * 2;
+        var newCapacity = _buffer.Length == 0 ? 64 : _buffer.Length * 2;
         GrowTo(newCapacity);
     }
 
     private void GrowTo(int minCapacity)
     {
-        int newCapacity = _buffer.Length;
+        var newCapacity = _buffer.Length;
         while (newCapacity < minCapacity) newCapacity *= 2;
         var newBuffer = ArrayPool<T>.Shared.Rent(newCapacity);
         Array.Copy(_buffer, newBuffer, _count);

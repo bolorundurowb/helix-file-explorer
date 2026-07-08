@@ -1,6 +1,4 @@
 using System.Diagnostics;
-using System.IO;
-using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Collections;
 using Avalonia.Controls;
@@ -164,14 +162,14 @@ public sealed partial class PaneView : UserControl
         if (_pane is null) return;
 
         var topLevel = this.GetVisualRoot() as TopLevel;
-        IntPtr hwnd = topLevel?.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+        var hwnd = topLevel?.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
         if (hwnd == IntPtr.Zero) return;
 
         // Translate pane-local point to screen pixels.
-        PixelPoint pixel = this.PointToScreen(localPoint);
+        var pixel = this.PointToScreen(localPoint);
 
         // For now, request the background context menu (no specific selections).
-        string folderPath = _pane.IsArchive ? string.Empty : _pane.CurrentPath;
+        var folderPath = _pane.IsArchive ? string.Empty : _pane.CurrentPath;
         if (string.IsNullOrEmpty(folderPath)) return;
 
         Task.Run(() => ServiceLocator.ContextMenu.ShowContextMenu(hwnd, folderPath, null, pixel));

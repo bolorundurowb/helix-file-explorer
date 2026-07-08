@@ -1,12 +1,5 @@
 using Avalonia;
-using Avalonia.Collections;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
-using Avalonia.Input;
-using Avalonia.Layout;
-using Avalonia.Media;
-using System;
-using System.Collections;
 
 namespace HelixExplorer.Controls;
 
@@ -71,10 +64,10 @@ public sealed class MillerColumnPanel : Panel, INavigatedContainer
     protected override Size ArrangeOverride(Size finalSize)
     {
         double x = 0;
-        for (int i = 0; i < Children.Count; i++)
+        for (var i = 0; i < Children.Count; i++)
         {
             var child = Children[i];
-            double w = ColumnWidth;
+            var w = ColumnWidth;
             var rect = new Rect(x, 0, w, finalSize.Height);
             child.Arrange(rect);
             x += w + ColumnSpacing;

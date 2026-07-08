@@ -4,14 +4,16 @@ using HelixExplorer.Infrastructure;
 namespace HelixExplorer.Services;
 
 /// <summary>
-/// Debounced file-system change observer. One <see cref="FileSystemWatcher"/> per
-/// monitored directory; change events coalesce via <see cref="AsyncDebouncer"/> so
-/// the consumer only refreshes once after the burst settles.
+/// Debounced file-system change observer. Each pane owns its own instance (do not share
+/// one across panes — that would let a second pane's <see cref="Watch"/> tear down the
+/// first pane's watcher). Change events — including <c>Created</c>, so completed
+/// downloads and terminal file creation are picked up — coalesce via
+/// <see cref="AsyncDebouncer"/> so the consumer refreshes once after the burst settles.
 /// </summary>
 public sealed class FileChangeWatcherService : IDisposable
 {
     private FileSystemWatcher? _watcher;
-    private readonly AsyncDebouncer _debouncer = new(TimeSpan.FromMilliseconds(500));
+    private readonly AsyncDebouncer _debouncer = new(TimeSpan.FromMilliseconds(400));
     private Action? _pendingRefresh;
     private bool _disposed;
 
@@ -19,32 +21,29 @@ public sealed class FileChangeWatcherService : IDisposable
     public void Watch(string path, Action onChanged)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        if (string.IsNullOrEmpty(path) || !Directory.Exists(path))
-        {
-            Stop();
-            return;
-        }
 
         Stop();
 
-        _pendingRefresh = onChanged;
-
-        // Root virtual paths inside archives have no watcher; only real directories.
-        if (path.StartsWith(ArchiveService.Scheme, StringComparison.OrdinalIgnoreCase))
+        // Archive virtual paths and non-existent directories have nothing to watch.
+        if (string.IsNullOrEmpty(path)
+            || path.StartsWith(ArchiveService.Scheme, StringComparison.OrdinalIgnoreCase)
+            || !Directory.Exists(path))
         {
             return;
         }
+
+        _pendingRefresh = onChanged;
 
         try
         {
             _watcher = new FileSystemWatcher(path)
             {
                 IncludeSubdirectories = false,
-                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName,
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.Size,
                 EnableRaisingEvents = true
             };
 
-            _watcher.Created += static (_, _) => { /* handled via shared debouncer trigger below */ };
+            _watcher.Created += OnEvent;
             _watcher.Changed += OnEvent;
             _watcher.Deleted += OnEvent;
             _watcher.Renamed += OnEvent;
@@ -65,10 +64,7 @@ public sealed class FileChangeWatcherService : IDisposable
         if (action is null) return;
         _debouncer.Schedule(_ =>
         {
-            try
-            {
-                action();
-            }
+            try { action(); }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"FileChangeWatcherService refresh threw: {ex.Message}");
@@ -79,13 +75,18 @@ public sealed class FileChangeWatcherService : IDisposable
 
     public void Stop()
     {
+        _pendingRefresh = null;
         if (_watcher is null) return;
         try
         {
             _watcher.EnableRaisingEvents = false;
+            _watcher.Created -= OnEvent;
+            _watcher.Changed -= OnEvent;
+            _watcher.Deleted -= OnEvent;
+            _watcher.Renamed -= OnEvent;
             _watcher.Dispose();
         }
-        catch { }
+        catch { /* best effort */ }
         _watcher = null;
     }
 

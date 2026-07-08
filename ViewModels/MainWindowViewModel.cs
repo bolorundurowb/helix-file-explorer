@@ -1,10 +1,6 @@
 using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Windows.Input;
-using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using HelixExplorer.Services;
 
 namespace HelixExplorer.ViewModels;
 
@@ -110,7 +106,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private void CloseTab()
     {
         if (ActiveTab is null) return;
-        int idx = Tabs.IndexOf(ActiveTab);
+        var idx = Tabs.IndexOf(ActiveTab);
         Tabs.Remove(ActiveTab);
         ActiveTab.Dispose();
         if (Tabs.Count == 0)
@@ -146,7 +142,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private void CopyActivePath()
     {
         if (ActiveTab is null) return;
-        string path = ActiveTab.ActivePane.CurrentPath;
+        var path = ActiveTab.ActivePane.CurrentPath;
         try
         {
             System.Diagnostics.Debug.WriteLine($"CopyActivePath → {path}");

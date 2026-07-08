@@ -7,10 +7,12 @@ using HelixExplorer.Models;
 namespace HelixExplorer.Services;
 
 /// <summary>
-/// Zero-allocation directory enumeration. Uses
-/// <see cref="Directory.EnumerateFileSystemEntries"/> with
-/// <see cref="EnumerationOptions.IgnoreInaccessible"/> and rents buffers from
-/// <see cref="ArrayPoolList{T}"/> for amortised GC-free listing.
+/// Low-allocation directory enumeration. Uses
+/// <see cref="DirectoryInfo.EnumerateFileSystemInfos(string, EnumerationOptions)"/> so the
+/// attributes, size, and timestamps come straight from the single Win32 find pass — no
+/// extra <c>GetAttributes</c>/<c>GetLastWriteTime</c>/<c>FileInfo</c> stat calls per entry.
+/// Results accumulate in a pooled buffer (<see cref="ArrayPoolList{T}"/>) and are snapshotted
+/// once at the end.
 /// </summary>
 public sealed class FileSystemService : IFileSystemService
 {
@@ -45,7 +47,6 @@ public sealed class FileSystemService : IFileSystemService
         {
             int schemeEnd = path.IndexOf('!', StringComparison.Ordinal);
             if (schemeEnd < 0) return Normalize(path);
-            // Only normalise the host-path portion before the bang.
             string scheme = path[..schemeEnd];
             string remainder = path[(schemeEnd + 1)..];
             return scheme + "!" + Normalize(remainder).TrimStart('\\', '/');
@@ -78,50 +79,41 @@ public sealed class FileSystemService : IFileSystemService
     {
         if (IsArchivePath(path))
         {
-            // Archive paths should never reach here; the pane routes them via the ArchiveService.
+            // Archive paths never reach here; the pane routes them via the ArchiveService.
             return Array.Empty<FileSystemEntry>();
         }
 
         using var entries = ArrayPoolList<FileSystemEntry>.Rent(128);
-        ReadOnlySpan<char> name; // dummy to demonstrate we'd keep spans
 
         try
         {
-            foreach (var entry in Directory.EnumerateFileSystemEntries(path, "*", s_options))
+            var dir = new DirectoryInfo(path);
+            foreach (var info in dir.EnumerateFileSystemInfos("*", s_options))
             {
                 token.ThrowIfCancellationRequested();
-                string fileName;
-                bool isDir;
-                long size = 0L;
-                DateTime modified = DateTime.MinValue;
 
+                bool isDir = (info.Attributes & FileAttributes.Directory) != 0;
+                long size = 0L;
+                DateTime modified;
                 try
                 {
-                    FileAttributes attrs = File.GetAttributes(entry);
-                    isDir = (attrs & FileAttributes.Directory) != 0;
-                    fileName = Path.GetFileName(entry);
-                    modified = (attrs & FileAttributes.Directory) == 0 ? File.GetLastWriteTimeUtc(entry) : Directory.GetLastWriteTimeUtc(entry);
-                    if (!isDir)
-                    {
-                        var fi = new FileInfo(entry);
-                        size = fi.Length;
-                    }
+                    modified = info.LastWriteTimeUtc;
+                    if (!isDir && info is FileInfo fi) size = fi.Length;
                 }
                 catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
                 {
-                    Debug.WriteLine($"Skipping inaccessible entry '{entry}': {ex.Message}");
-                    try { fileName = Path.GetFileName(entry); } catch { continue; }
-                    isDir = false;
+                    Debug.WriteLine($"Skipping inaccessible entry '{info.FullName}': {ex.Message}");
+                    modified = DateTime.MinValue;
                 }
 
-                string ext = isDir ? string.Empty : Path.GetExtension(fileName);
-                entries.Add(new FileSystemEntry(entry, fileName, isDir, size, modified, ext));
+                string ext = isDir ? string.Empty : info.Extension;
+                entries.Add(new FileSystemEntry(info.FullName, info.Name, isDir, size, modified, ext));
             }
         }
-        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or DirectoryNotFoundException)
         {
             Debug.WriteLine($"Enumerate failed on '{path}': {ex.Message}");
-            // Return what we managed to collect.
+            // Return whatever we managed to collect.
         }
 
         return entries.ToReadOnlyAndReset();

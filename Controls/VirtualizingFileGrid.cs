@@ -1,8 +1,5 @@
-using System.IO;
-using System.Resources;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Layout;
 
 namespace HelixExplorer.Controls;
 

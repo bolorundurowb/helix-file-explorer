@@ -1,0 +1,50 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HelixExplorer.Services"
+             x:Class="HelixExplorer.Views.OperationBanner"
+             x:DataType="vm:FileOperationReporter"
+             IsVisible="{Binding IsVisible}"
+             IsHitTestVisible="True"
+             VerticalAlignment="Bottom"
+             HorizontalAlignment="Stretch"
+             Margin="16,0,16,12">
+    <Border Background="{DynamicResource HelixContentCardBrush}"
+            BorderBrush="{DynamicResource HelixBorderColor}"
+            BorderThickness="1"
+            CornerRadius="8"
+            Padding="14,10"
+            BoxShadow="0 4 16 0 #40000000">
+        <Grid RowDefinitions="Auto,Auto,Auto">
+            <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0"
+                           Text="{Binding Title}"
+                           FontWeight="SemiBold"
+                           FontSize="12"
+                           VerticalAlignment="Center" />
+                <Button Grid.Column="1"
+                        Content="✕"
+                        Command="{Binding DismissCommand}"
+                        Padding="4,0"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Opacity="0.6"
+                        Cursor="Hand" />
+            </Grid>
+            <ProgressBar Grid.Row="1"
+                         Margin="0,8,0,0"
+                         Minimum="0"
+                         Maximum="1"
+                         Value="{Binding Progress}"
+                         IsIndeterminate="{Binding IsIndeterminate}"
+                         Height="4"
+                         IsVisible="{Binding IsInProgress}" />
+            <TextBlock Grid.Row="2"
+                       Margin="0,6,0,0"
+                       Text="{Binding Detail}"
+                       FontSize="11"
+                       Opacity="0.65"
+                       TextTrimming="CharacterEllipsis"
+                       IsVisible="{Binding HasDetail}" />
+        </Grid>
+    </Border>
+</UserControl>

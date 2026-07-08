@@ -5,50 +5,24 @@ namespace HelixExplorer.Windows.FileSystem;
 
 public sealed class WinFileOperationService : IFileOperationService
 {
-    public async ValueTask CopyAsync(IReadOnlyList<string> sources, string destination, CancellationToken ct = default)
+    public async ValueTask CopyAsync(
+        IReadOnlyList<string> sources,
+        string destination,
+        IProgress<FileOperationProgress>? progress = null,
+        CancellationToken ct = default)
     {
-        await Task.Run(() =>
-        {
-            foreach (var source in sources)
-            {
-                ct.ThrowIfCancellationRequested();
-                var destPath = Path.Combine(destination, Path.GetFileName(source));
-
-                if (File.Exists(source))
-                {
-                    destPath = FileOperationPathHelper.EnsureUniqueFilePath(destPath);
-                    File.Copy(source, destPath, overwrite: false);
-                }
-                else if (Directory.Exists(source))
-                {
-                    destPath = FileOperationPathHelper.EnsureUniqueDirectoryPath(destPath);
-                    CopyDirectory(source, destPath, ct);
-                }
-            }
-        }, ct).ConfigureAwait(false);
+        await Task.Run(() => ProcessSources(sources, destination, FileOperationKind.Copy, progress, ct, CopyOne), ct)
+            .ConfigureAwait(false);
     }
 
-    public async ValueTask MoveAsync(IReadOnlyList<string> sources, string destination, CancellationToken ct = default)
+    public async ValueTask MoveAsync(
+        IReadOnlyList<string> sources,
+        string destination,
+        IProgress<FileOperationProgress>? progress = null,
+        CancellationToken ct = default)
     {
-        await Task.Run(() =>
-        {
-            foreach (var source in sources)
-            {
-                ct.ThrowIfCancellationRequested();
-                var destPath = Path.Combine(destination, Path.GetFileName(source));
-
-                if (File.Exists(source))
-                {
-                    destPath = FileOperationPathHelper.EnsureUniqueFilePath(destPath);
-                    File.Move(source, destPath);
-                }
-                else if (Directory.Exists(source))
-                {
-                    destPath = FileOperationPathHelper.EnsureUniqueDirectoryPath(destPath);
-                    Directory.Move(source, destPath);
-                }
-            }
-        }, ct).ConfigureAwait(false);
+        await Task.Run(() => ProcessSources(sources, destination, FileOperationKind.Move, progress, ct, MoveOne), ct)
+            .ConfigureAwait(false);
     }
 
     public async ValueTask DeleteAsync(IReadOnlyList<string> paths, bool permanently, CancellationToken ct = default)
@@ -108,6 +82,57 @@ public sealed class WinFileOperationService : IFileOperationService
             Directory.CreateDirectory(fullPath);
             return fullPath;
         }, ct).ConfigureAwait(false);
+    }
+
+    private static void ProcessSources(
+        IReadOnlyList<string> sources,
+        string destination,
+        FileOperationKind kind,
+        IProgress<FileOperationProgress>? progress,
+        CancellationToken ct,
+        Action<string, string, CancellationToken> operation)
+    {
+        var total = sources.Count;
+        for (var i = 0; i < total; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var source = sources[i];
+            progress?.Report(new FileOperationProgress(i, total, source, kind));
+            operation(source, destination, ct);
+            progress?.Report(new FileOperationProgress(i + 1, total, source, kind));
+        }
+    }
+
+    private static void CopyOne(string source, string destination, CancellationToken ct)
+    {
+        var destPath = Path.Combine(destination, Path.GetFileName(source));
+
+        if (File.Exists(source))
+        {
+            destPath = FileOperationPathHelper.EnsureUniqueFilePath(destPath);
+            File.Copy(source, destPath, overwrite: false);
+        }
+        else if (Directory.Exists(source))
+        {
+            destPath = FileOperationPathHelper.EnsureUniqueDirectoryPath(destPath);
+            CopyDirectory(source, destPath, ct);
+        }
+    }
+
+    private static void MoveOne(string source, string destination, CancellationToken ct)
+    {
+        var destPath = Path.Combine(destination, Path.GetFileName(source));
+
+        if (File.Exists(source))
+        {
+            destPath = FileOperationPathHelper.EnsureUniqueFilePath(destPath);
+            File.Move(source, destPath);
+        }
+        else if (Directory.Exists(source))
+        {
+            destPath = FileOperationPathHelper.EnsureUniqueDirectoryPath(destPath);
+            Directory.Move(source, destPath);
+        }
     }
 
     private static void CopyDirectory(string source, string destination, CancellationToken ct)

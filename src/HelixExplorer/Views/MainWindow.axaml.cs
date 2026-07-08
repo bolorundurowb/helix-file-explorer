@@ -1,4 +1,4 @@
-using Avalonia;
+using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -14,22 +14,6 @@ public partial class MainWindow : Window
         InitializeComponent();
         Activated += (_, _) => SetWindowActive(true);
         Deactivated += (_, _) => SetWindowActive(false);
-        Loaded += OnLoaded;
-    }
-
-    private void OnLoaded(object? sender, RoutedEventArgs e)
-    {
-        if (SidebarBorder is null)
-            return;
-
-        SidebarBorder.PropertyChanged += (_, args) =>
-        {
-            if (args.Property != Visual.BoundsProperty)
-                return;
-
-            if (DataContext is MainWindowViewModel vm && SidebarBorder.Bounds.Width > 0)
-                vm.SidebarWidth = SidebarBorder.Bounds.Width;
-        };
     }
 
     private void SetWindowActive(bool isActive)
@@ -57,7 +41,6 @@ public partial class MainWindow : Window
         if (DataContext is not MainWindowViewModel vm)
             return;
 
-        // Scroll up → previous tab, scroll down → next tab.
         vm.CycleSelectedTab(e.Delta.Y > 0 ? -1 : 1);
         e.Handled = true;
     }
@@ -120,6 +103,48 @@ public partial class MainWindow : Window
             return;
 
         vm.ClearSidebarFolderColor(item);
+    }
+
+    private void OnSidebarPinClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+            return;
+
+        if (GetSidebarItemFromMenu(sender) is not SidebarItemViewModel { Path: { } path })
+            return;
+
+        vm.PinPath(path);
+    }
+
+    private void OnSidebarUnpinClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+            return;
+
+        if (GetSidebarItemFromMenu(sender) is not SidebarItemViewModel { Path: { } path })
+            return;
+
+        vm.UnpinPath(path);
+    }
+
+    private void OnSidebarContextMenuOpening(object? sender, CancelEventArgs e)
+    {
+        if (sender is not ContextMenu menu || DataContext is not MainWindowViewModel vm)
+            return;
+
+        var item = GetSidebarItemFromMenu(sender);
+        foreach (var menuItem in menu.Items.OfType<MenuItem>())
+        {
+            switch (menuItem.Header?.ToString())
+            {
+                case "Pin to sidebar":
+                    menuItem.IsVisible = item is not null && vm.CanPinSidebarItem(item);
+                    break;
+                case "Unpin from sidebar":
+                    menuItem.IsVisible = item is not null && vm.CanUnpinSidebarItem(item);
+                    break;
+            }
+        }
     }
 
     private static SidebarItemViewModel? GetSidebarItemFromMenu(object? sender)

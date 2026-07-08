@@ -2,9 +2,17 @@ namespace HelixExplorer.Core.FileSystem;
 
 public interface IFileOperationService
 {
-    ValueTask CopyAsync(IReadOnlyList<string> sources, string destination, CancellationToken ct = default);
+    ValueTask CopyAsync(
+        IReadOnlyList<string> sources,
+        string destination,
+        IProgress<FileOperationProgress>? progress = null,
+        CancellationToken ct = default);
 
-    ValueTask MoveAsync(IReadOnlyList<string> sources, string destination, CancellationToken ct = default);
+    ValueTask MoveAsync(
+        IReadOnlyList<string> sources,
+        string destination,
+        IProgress<FileOperationProgress>? progress = null,
+        CancellationToken ct = default);
 
     ValueTask DeleteAsync(IReadOnlyList<string> paths, bool permanently, CancellationToken ct = default);
 

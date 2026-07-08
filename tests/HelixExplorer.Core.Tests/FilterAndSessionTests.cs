@@ -60,6 +60,22 @@ public class FileNameFilterTests
         Assert.Single(dest);
         Assert.Equal("keep.md", dest[0].Name);
     }
+
+    [Fact]
+    public void Apply_10kEntries_CompletesQuickly()
+    {
+        var source = new List<FileSystemEntry>(10_000);
+        for (var i = 0; i < 10_000; i++)
+            source.Add(Entry($"file-{i:D5}.txt"));
+
+        var dest = new List<FileSystemEntry>();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var count = FileNameFilter.Apply(source, "123", dest);
+        sw.Stop();
+
+        Assert.True(count > 0);
+        Assert.True(sw.ElapsedMilliseconds < 500, $"Filter took {sw.ElapsedMilliseconds}ms");
+    }
 }
 
 public class SessionStoreTests

@@ -18,8 +18,8 @@
                     <SolidColorBrush x:Key="HelixContentCardBrush" Color="#FFFFFF" />
                     <SolidColorBrush x:Key="HelixSurfaceBrush" Color="#FAFAFA" />
                     <SolidColorBrush x:Key="HelixAccentBrush" Color="#0078D4" />
-                    <SolidColorBrush x:Key="HelixSelectionFillBrush" Color="#CCE8FF" />
-                    <SolidColorBrush x:Key="HelixSelectionInactiveFillBrush" Color="#D9D9D9" />
+                    <SolidColorBrush x:Key="HelixSelectionFillBrush" Color="#180078D4" />
+                    <SolidColorBrush x:Key="HelixSelectionInactiveFillBrush" Color="#12000000" />
                     <SolidColorBrush x:Key="HelixSelectionBarBrush" Color="#0078D4" />
                     <SolidColorBrush x:Key="HelixFocusBorderBrush" Color="#0078D4" />
                     <SolidColorBrush x:Key="HelixToolbarBrush" Color="#F5F5F5" />
@@ -33,6 +33,11 @@
                     <SolidColorBrush x:Key="HelixGitModifiedBrush" Color="#9A6700" />
                     <SolidColorBrush x:Key="HelixGitConflictBrush" Color="#C42B1C" />
                     <SolidColorBrush x:Key="HelixGitUntrackedBrush" Color="#6B6B6B" />
+                    <SolidColorBrush x:Key="HelixIconCutBrush" Color="#CA5010" />
+                    <SolidColorBrush x:Key="HelixIconCopyBrush" Color="#0078D4" />
+                    <SolidColorBrush x:Key="HelixIconPasteBrush" Color="#107C10" />
+                    <SolidColorBrush x:Key="HelixIconDeleteBrush" Color="#C42B1C" />
+                    <SolidColorBrush x:Key="HelixIconRenameBrush" Color="#5C2D91" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Dark">
                     <SolidColorBrush x:Key="HelixChromeBrush" Color="#202020" />
@@ -40,8 +45,8 @@
                     <SolidColorBrush x:Key="HelixContentCardBrush" Color="#1E1E1E" />
                     <SolidColorBrush x:Key="HelixSurfaceBrush" Color="#252525" />
                     <SolidColorBrush x:Key="HelixAccentBrush" Color="#60CDFF" />
-                    <SolidColorBrush x:Key="HelixSelectionFillBrush" Color="#264F78" />
-                    <SolidColorBrush x:Key="HelixSelectionInactiveFillBrush" Color="#3F3F3F" />
+                    <SolidColorBrush x:Key="HelixSelectionFillBrush" Color="#2860CDFF" />
+                    <SolidColorBrush x:Key="HelixSelectionInactiveFillBrush" Color="#22FFFFFF" />
                     <SolidColorBrush x:Key="HelixSelectionBarBrush" Color="#60CDFF" />
                     <SolidColorBrush x:Key="HelixFocusBorderBrush" Color="#60CDFF" />
                     <SolidColorBrush x:Key="HelixToolbarBrush" Color="#2A2A2A" />
@@ -55,6 +60,11 @@
                     <SolidColorBrush x:Key="HelixGitModifiedBrush" Color="#F2CC60" />
                     <SolidColorBrush x:Key="HelixGitConflictBrush" Color="#FF99A4" />
                     <SolidColorBrush x:Key="HelixGitUntrackedBrush" Color="#A0A0A0" />
+                    <SolidColorBrush x:Key="HelixIconCutBrush" Color="#F7630C" />
+                    <SolidColorBrush x:Key="HelixIconCopyBrush" Color="#60CDFF" />
+                    <SolidColorBrush x:Key="HelixIconPasteBrush" Color="#6CCB5F" />
+                    <SolidColorBrush x:Key="HelixIconDeleteBrush" Color="#FF99A4" />
+                    <SolidColorBrush x:Key="HelixIconRenameBrush" Color="#B4A0FF" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 
@@ -75,6 +85,7 @@
             <conv:GitFileStatusBrushConverter x:Key="GitFileStatusBrushConverter" />
             <conv:FolderColorConverter x:Key="FolderColorConverter" />
             <conv:FolderIconBrushConverter x:Key="FolderIconBrushConverter" />
+            <conv:CutOpacityConverter x:Key="CutOpacityConverter" />
 
             <Geometry x:Key="HelixFolderIconGeometry">M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z</Geometry>
         </ResourceDictionary>

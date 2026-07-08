@@ -27,6 +27,8 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     private readonly ISettingsStore _settingsStore;
     private readonly FileVisualService _visuals;
     private readonly Func<IFileChangeWatcher> _watcherFactory;
+    private readonly IFileOperationReporter _operationReporter;
+    private readonly IQuickAccessProvider _quickAccess;
     private bool _showHiddenFiles;
     private bool _showFileExtensions = true;
     private bool _disposed;
@@ -43,7 +45,9 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         IFolderColorService folderColors,
         ISettingsStore settingsStore,
         FileVisualService visuals,
-        Func<IFileChangeWatcher> watcherFactory)
+        Func<IFileChangeWatcher> watcherFactory,
+        IFileOperationReporter operationReporter,
+        IQuickAccessProvider quickAccess)
     {
         _fileSystem = fileSystem;
         _fileOps = fileOps;
@@ -57,6 +61,9 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         _settingsStore = settingsStore;
         _visuals = visuals;
         _watcherFactory = watcherFactory;
+        _operationReporter = operationReporter;
+        _quickAccess = quickAccess;
+        _clipboard.Changed += OnClipboardChanged;
         LeftPane = CreatePane();
         _activePane = LeftPane;
         LeftPane.IsActive = true;
@@ -64,6 +71,16 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     }
 
     public event EventHandler? CloseRequested;
+    public event EventHandler? SelectionChanged;
+
+    private void OnPaneSelectionChanged(object? sender, EventArgs e)
+        => SelectionChanged?.Invoke(this, EventArgs.Empty);
+
+    private void OnClipboardChanged(object? sender, EventArgs e)
+    {
+        LeftPane.RefreshCutState();
+        RightPane?.RefreshCutState();
+    }
     public event EventHandler? Navigated;
     public event EventHandler? StateChanged;
 
@@ -109,12 +126,15 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
             _git,
             _watcherFactory(),
             _visuals,
-            _settingsStore);
+            _settingsStore,
+            _operationReporter,
+            _quickAccess);
         pane.Navigated += OnPaneNavigated;
         pane.EntryActivated += OnEntryActivated;
         pane.OpenInNewTabRequested += OnOpenInNewTabRequested;
         pane.OpenInOtherPaneRequested += OnOpenInOtherPaneRequested;
         pane.PinPathRequested += OnPanePinPathRequested;
+        pane.SelectionChanged += OnPaneSelectionChanged;
         pane.ApplyViewSettings(_showHiddenFiles, _showFileExtensions);
         return pane;
     }
@@ -342,6 +362,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         pane.OpenInNewTabRequested -= OnOpenInNewTabRequested;
         pane.OpenInOtherPaneRequested -= OnOpenInOtherPaneRequested;
         pane.PinPathRequested -= OnPanePinPathRequested;
+        pane.SelectionChanged -= OnPaneSelectionChanged;
     }
 
     public void RefreshFolderColorBindings()
@@ -362,6 +383,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         if (_disposed)
             return;
         _disposed = true;
+        _clipboard.Changed -= OnClipboardChanged;
         DetachPane(LeftPane);
         LeftPane.Dispose();
         DisposeRightPane();

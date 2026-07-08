@@ -105,6 +105,8 @@ public partial class App : Application
         services.AddSingleton<IArchiveProvider, SharpCompressArchiveProvider>();
         services.AddSingleton<IFolderColorService, FolderColorService>();
         services.AddSingleton<FileVisualService>();
+        services.AddSingleton<FileOperationReporter>();
+        services.AddSingleton<IFileOperationReporter>(sp => sp.GetRequiredService<FileOperationReporter>());
         services.AddSingleton<MainWindowViewModel>();
         services.AddTransient<MainWindow>();
     }

@@ -84,6 +84,9 @@ public sealed partial class EntryItemViewModel : ObservableObject
     private bool _isSelected;
 
     [ObservableProperty]
+    private bool _isCut;
+
+    [ObservableProperty]
     private Bitmap? _entryImage;
 
     private int _visualGeneration;

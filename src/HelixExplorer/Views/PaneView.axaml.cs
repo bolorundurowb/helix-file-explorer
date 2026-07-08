@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -32,6 +33,7 @@ public sealed partial class PaneView : UserControl
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
+        DetailsGrid.ContextRequested += OnDetailsContextRequested;
     }
 
     private PaneViewModel? Pane => DataContext as PaneViewModel;
@@ -87,6 +89,27 @@ public sealed partial class PaneView : UserControl
         {
             UpdateInactiveClass();
         }
+    }
+
+    private void OnEntryContextMenuOpening(object? sender, CancelEventArgs e)
+    {
+        if (sender is not ContextMenu menu)
+            return;
+
+        if (menu.PlacementTarget is Control { DataContext: PaneViewModel pane })
+        {
+            menu.DataContext = pane;
+            pane.NotifyCommandsCanExecuteChanged();
+        }
+    }
+
+    private void OnDetailsContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (Pane is null)
+            return;
+
+        if (TryGetEntryFromSource(e.Source) is { } entry && !Pane.SelectedEntries.Contains(entry))
+            Pane.UpdateSelection([entry]);
     }
 
     private void UpdateInactiveClass()

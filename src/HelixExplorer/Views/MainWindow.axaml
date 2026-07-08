@@ -18,6 +18,9 @@
         <Style Selector="WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel > TextBlock">
             <Setter Property="IsVisible" Value="False" />
         </Style>
+        <Style Selector="WindowDrawnDecorations /template/ Button#PART_FullScreenButton">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
     </Window.Styles>
 
     <Window.KeyBindings>
@@ -34,9 +37,11 @@
         <KeyBinding Gesture="Delete" Command="{Binding DeleteCommand}" />
         <KeyBinding Gesture="F2" Command="{Binding RenameCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+N" Command="{Binding NewFolderCommand}" />
+        <KeyBinding Gesture="Ctrl+Shift+C" Command="{Binding CopyPathCommand}" />
         <KeyBinding Gesture="Ctrl+A" Command="{Binding SelectAllCommand}" />
     </Window.KeyBindings>
 
+    <Grid>
     <DockPanel LastChildFill="True">
 
         <!-- Tab Strip -->
@@ -162,11 +167,6 @@
                             Content="+" Padding="8,2" Background="Transparent" BorderThickness="0"
                             FontSize="18" Opacity="0.7" Cursor="Hand" ToolTip.Tip="New Tab (Ctrl+T)"
                             WindowDecorationProperties.ElementRole="User" />
-                    <Button Command="{Binding ToggleDualPaneCommand}"
-                            ToolTip.Tip="Dual Pane (Ctrl+D)" Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand"
-                            WindowDecorationProperties.ElementRole="User">
-                        <PathIcon Data="M3,3H11V21H3V3M13,3H21V21H13V3M5,5V19H9V5H5M15,5V19H19V5H15Z" Width="16" Height="16" />
-                    </Button>
                 </StackPanel>
             </Grid>
         </Border>
@@ -257,27 +257,38 @@
                     <Button ToolTip.Tip="Cut (Ctrl+X)"
                             Command="{Binding CutCommand}"
                             Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
-                        <PathIcon Data="M19,3L13,9L15,11L22,4V3M12,12.5A0.5,0.5 0 0,1 11.5,12A0.5,0.5 0 0,1 12,11.5A0.5,0.5 0 0,1 12.5,12A0.5,0.5 0 0,1 12,12.5M6,20A2,2 0 0,1 4,18C4,16.89 4.9,16 6,16A2,2 0 0,1 8,18C8,19.11 7.1,20 6,20M6,8A2,2 0 0,1 4,6C4,4.89 4.9,4 6,4A2,2 0 0,1 8,6C8,7.11 7.1,8 6,8M9.64,7.64C9.87,7.14 10,6.59 10,6A4,4 0 0,0 6,2A4,4 0 0,0 2,6A4,4 0 0,0 6,10C6.59,10 7.14,9.87 7.64,9.64L10,12L7.64,14.36C7.14,14.13 6.59,14 6,14A4,4 0 0,0 2,18A4,4 0 0,0 6,22A4,4 0 0,0 10,18C10,17.41 9.87,16.86 9.64,16.36L12,14L19,21H22V20L9.64,7.64Z" Width="14" Height="14" />
+                        <PathIcon Data="M19,3L13,9L15,11L22,4V3M12,12.5A0.5,0.5 0 0,1 11.5,12A0.5,0.5 0 0,1 12,11.5A0.5,0.5 0 0,1 12.5,12A0.5,0.5 0 0,1 12,12.5M6,20A2,2 0 0,1 4,18C4,16.89 4.9,16 6,16A2,2 0 0,1 8,18C8,19.11 7.1,20 6,20M6,8A2,2 0 0,1 4,6C4,4.89 4.9,4 6,4A2,2 0 0,1 8,6C8,7.11 7.1,8 6,8M9.64,7.64C9.87,7.14 10,6.59 10,6A4,4 0 0,0 6,2A4,4 0 0,0 2,6A4,4 0 0,0 6,10C6.59,10 7.14,9.87 7.64,9.64L10,12L7.64,14.36C7.14,14.13 6.59,14 6,14A4,4 0 0,0 2,18A4,4 0 0,0 6,22A4,4 0 0,0 10,18C10,17.41 9.87,16.86 9.64,16.36L12,14L19,21H22V20L9.64,7.64Z" Width="14" Height="14"
+                              Foreground="{DynamicResource HelixIconCutBrush}" />
                     </Button>
                     <Button ToolTip.Tip="Copy (Ctrl+C)"
                             Command="{Binding CopyCommand}"
                             Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
-                        <PathIcon Data="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" Width="14" Height="14" />
+                        <PathIcon Data="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" Width="14" Height="14"
+                              Foreground="{DynamicResource HelixIconCopyBrush}" />
                     </Button>
                     <Button ToolTip.Tip="Paste (Ctrl+V)"
                             Command="{Binding PasteCommand}"
                             Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
-                        <PathIcon Data="M19,20H5V4H7V7H17V4H19M12,2A1,1 0 0,1 13,3A1,1 0 0,1 12,4A1,1 0 0,1 11,3A1,1 0 0,1 12,2M19,2H14.82C14.4,0.84 13.3,0 12,0C10.7,0 9.6,0.84 9.18,2H5A2,2 0 0,0 3,4V20A2,2 0 0,0 5,22H19A2,2 0 0,0 21,20V4A2,2 0 0,0 19,2Z" Width="14" Height="14" />
+                        <PathIcon Data="M19,20H5V4H7V7H17V4H19M12,2A1,1 0 0,1 13,3A1,1 0 0,1 12,4A1,1 0 0,1 11,3A1,1 0 0,1 12,2M19,2H14.82C14.4,0.84 13.3,0 12,0C10.7,0 9.6,0.84 9.18,2H5A2,2 0 0,0 3,4V20A2,2 0 0,0 5,22H19A2,2 0 0,0 21,20V4A2,2 0 0,0 19,2Z" Width="14" Height="14"
+                              Foreground="{DynamicResource HelixIconPasteBrush}" />
                     </Button>
                     <Button ToolTip.Tip="Rename (F2)"
                             Command="{Binding RenameCommand}"
                             Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
-                        <PathIcon Data="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z" Width="14" Height="14" />
+                        <PathIcon Data="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z" Width="14" Height="14"
+                              Foreground="{DynamicResource HelixIconRenameBrush}" />
                     </Button>
                     <Button ToolTip.Tip="Delete"
                             Command="{Binding DeleteCommand}"
                             Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
-                        <PathIcon Data="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z" Width="14" Height="14" />
+                        <PathIcon Data="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z" Width="14" Height="14"
+                              Foreground="{DynamicResource HelixIconDeleteBrush}" />
+                    </Button>
+                    <Button ToolTip.Tip="Copy path (Ctrl+Shift+C)"
+                            Command="{Binding CopyPathCommand}"
+                            Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
+                        <PathIcon Data="M18,16.08C17.24,16.08 16.56,16.38 16.04,16.85L8.91,12.7C8.96,12.47 9,12.24 9,12C9,11.76 8.96,11.53 8.91,11.3L15.96,7.19C16.5,7.69 17.21,8 18,8A3,3 0 0,0 21,5A3,3 0 0,0 18,2A3,3 0 0,0 15,5C15,5.24 15.04,5.47 15.09,5.7L8.04,9.81C7.5,9.31 6.79,9 6,9A3,3 0 0,0 3,12A3,3 0 0,0 6,15C6.79,15 7.5,14.69 8.04,14.19L15.16,18.34C15.11,18.55 15.08,18.77 15.08,19C15.08,20.61 16.39,21.91 18,21.91C19.61,21.91 20.92,20.61 20.92,19C20.92,17.39 19.61,16.08 18,16.08Z" Width="14" Height="14"
+                              Foreground="{DynamicResource HelixIconCopyBrush}" />
                     </Button>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
@@ -322,14 +333,21 @@
                         <PathIcon Data="M3,5H11V19H3V5M13,5H21V11H13V5M13,13H21V19H13V13Z" Width="14" Height="14" />
                     </Button>
                     <Border Width="1" Background="{DynamicResource HelixBorderColor}" Margin="4,4" />
+                    <Button ToolTip.Tip="Dual pane (Ctrl+D)"
+                            Command="{Binding ToggleDualPaneCommand}"
+                            Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
+                        <PathIcon Data="M3,3H11V21H3V3M13,3H21V21H13V3M5,5V19H9V5H5M15,5V19H19V5H15Z" Width="14" Height="14" />
+                    </Button>
                     <Button ToolTip.Tip="Swap panes"
                             Command="{Binding SelectedTab.SwapPanesCommand}"
-                            Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
+                            Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand"
+                            IsVisible="{Binding SelectedTab.IsDualPane}">
                         <PathIcon Data="M6.45,17.45L1,12L6.45,6.55L7.86,7.96L4.83,11H15V13H4.83L7.86,16.04L6.45,17.45M17.55,6.55L23,12L17.55,17.45L16.14,16.04L19.17,13H9V11H19.17L16.14,7.96L17.55,6.55Z" Width="14" Height="14" />
                     </Button>
                     <Button ToolTip.Tip="Flip split orientation"
                             Command="{Binding SelectedTab.FlipOrientationCommand}"
-                            Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
+                            Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand"
+                            IsVisible="{Binding SelectedTab.IsDualPane}">
                         <PathIcon Data="M15,21H17V19H15M19,9H21V7H19M3,5V19A2,2 0 0,0 5,21H9V19H5V5H9V3H5A2,2 0 0,0 3,5M19,3V5H21A2,2 0 0,0 19,3M11,23H13V1H11M19,17H21V15H19M15,5H17V3H15M19,13H21V11H19M19,21A2,2 0 0,0 21,19H19Z" Width="14" Height="14" />
                     </Button>
                 </StackPanel>
@@ -380,11 +398,15 @@
         </Border>
 
         <!-- Main Content: Sidebar + Content Card -->
-        <Grid ColumnDefinitions="Auto,Auto,*">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="{Binding SidebarColumnWidth, Mode=TwoWay}" MinWidth="0" MaxWidth="480" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
             <Border x:Name="SidebarBorder"
                     Grid.Column="0"
                     Background="{DynamicResource HelixSidebarBrush}"
-                    Width="{Binding SidebarWidth}"
                     IsVisible="{Binding IsSidebarOpen}"
                     BorderBrush="{DynamicResource HelixBorderColor}"
                     BorderThickness="0,0,1,0">
@@ -423,7 +445,10 @@
                                                 ToolTip.Tip="{Binding ToolTip}"
                                                 PointerPressed="OnSidebarItemPressed">
                                             <Border.ContextMenu>
-                                                <ContextMenu IsVisible="{Binding IsNavigable}">
+                                                <ContextMenu Opening="OnSidebarContextMenuOpening">
+                                                    <MenuItem Header="Pin to sidebar" Click="OnSidebarPinClick" />
+                                                    <MenuItem Header="Unpin from sidebar" Click="OnSidebarUnpinClick" />
+                                                    <Separator />
                                                     <MenuItem Header="Color">
                                                         <MenuItem Header="Red" Tag="#E81123" Click="OnSidebarSetColorClick" />
                                                         <MenuItem Header="Orange" Tag="#F7630C" Click="OnSidebarSetColorClick" />
@@ -444,15 +469,23 @@
                                                           Height="16"
                                                           Margin="10,0,6,0"
                                                           VerticalAlignment="Center"
-                                                          IsVisible="{Binding ShowsFolderIcon}"
+                                                          IsVisible="{Binding !HasIcon}"
                                                           Data="{DynamicResource HelixFolderIconGeometry}"
                                                           Foreground="{Binding Path, Converter={StaticResource FolderIconBrushConverter}}" />
+                                                <Image Grid.Column="1"
+                                                       Source="{Binding Icon}"
+                                                       Width="16"
+                                                       Height="16"
+                                                       Margin="10,0,6,0"
+                                                       VerticalAlignment="Center"
+                                                       IsVisible="{Binding HasIcon}" />
                                                 <Border Grid.Column="2"
                                                         Padding="10,6,8,6"
                                                         Background="{Binding IsSelected, Converter={StaticResource BoolToSidebarBrushConverter}}">
                                                     <TextBlock Text="{Binding Title}"
                                                                VerticalAlignment="Center"
-                                                               FontSize="{DynamicResource HelixSidebarFontSize}" />
+                                                               FontSize="{DynamicResource HelixSidebarFontSize}"
+                                                               TextTrimming="CharacterEllipsis" />
                                                 </Border>
                                             </Grid>
                                         </Border>
@@ -501,11 +534,14 @@
             </DockPanel>
         </Grid>
 
+    </DockPanel>
+
         <views:CommandPaletteOverlay IsVisible="{Binding IsCommandPaletteOpen}"
                                       IsHitTestVisible="{Binding IsCommandPaletteOpen}"
                                       DataContext="{Binding}" />
         <views:SettingsOverlay IsVisible="{Binding IsSettingsOpen}"
                                IsHitTestVisible="{Binding IsSettingsOpen}"
                                DataContext="{Binding}" />
-    </DockPanel>
+        <views:OperationBanner DataContext="{Binding OperationReporter}" />
+    </Grid>
 </Window>

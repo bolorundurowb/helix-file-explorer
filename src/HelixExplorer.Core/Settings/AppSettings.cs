@@ -16,6 +16,7 @@ public sealed class AppSettings
     public bool DefaultDualPane { get; set; }
     public uint? AccentColorArgb { get; set; }
     public List<string> PinnedPaths { get; set; } = [];
+    public List<string> UnpinnedPaths { get; set; } = [];
     public Dictionary<string, uint> FolderColors { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 

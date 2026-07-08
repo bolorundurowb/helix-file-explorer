@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Models;
@@ -45,6 +46,12 @@ public sealed partial class SidebarItemViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _isSelected;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasIcon))]
+    private Bitmap? _icon;
+
+    public bool HasIcon => Icon is not null;
 }
 
 public enum SidebarItemKind
@@ -63,6 +70,7 @@ public static class SidebarFactory
         IQuickAccessProvider quickAccess,
         IVolumeProvider volumes,
         IReadOnlyList<string>? userPinnedPaths = null,
+        IReadOnlyList<string>? unpinnedPaths = null,
         IReadOnlyList<NetworkLocationInfo>? networkLocations = null,
         string? selectedPath = null)
     {
@@ -84,7 +92,8 @@ public static class SidebarFactory
 
         var mergedPins = PinnedPathHelper.MergeUserPins(
             userPinnedPaths ?? Array.Empty<string>(),
-            defaultPaths);
+            defaultPaths,
+            unpinnedPaths ?? Array.Empty<string>());
 
         var knownByPath = quickAccess.GetPinnedDefaults()
             .Where(t => !string.IsNullOrEmpty(t.Path))

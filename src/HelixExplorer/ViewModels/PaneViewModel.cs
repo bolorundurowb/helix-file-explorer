@@ -33,6 +33,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     private readonly IFileChangeWatcher _watcher;
     private readonly FileVisualService _visuals;
     private readonly ISettingsStore _settingsStore;
+    private readonly IFileOperationReporter _operationReporter;
+    private readonly IQuickAccessProvider _quickAccess;
     private readonly Dictionary<string, EntryItemViewModel> _entryPool = new(StringComparer.OrdinalIgnoreCase);
     private readonly Stack<string> _backStack = new();
     private readonly Stack<string> _forwardStack = new();
@@ -60,7 +62,9 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         IGitProvider git,
         IFileChangeWatcher watcher,
         FileVisualService visuals,
-        ISettingsStore settingsStore)
+        ISettingsStore settingsStore,
+        IFileOperationReporter operationReporter,
+        IQuickAccessProvider quickAccess)
     {
         _fileSystem = fileSystem;
         _archive = archive;
@@ -74,6 +78,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         _watcher = watcher;
         _visuals = visuals;
         _settingsStore = settingsStore;
+        _operationReporter = operationReporter;
+        _quickAccess = quickAccess;
         _watcher.Changed += OnWatcherChanged;
         _clipboard.Changed += OnClipboardChanged;
         SelectedEntries.CollectionChanged += (_, _) => SyncEntrySelectionFlags();
@@ -83,6 +89,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     public event EventHandler<FileSystemEntry>? EntryActivated;
     public event EventHandler<string>? OpenInNewTabRequested;
     public event EventHandler<string>? OpenInOtherPaneRequested;
+    public event EventHandler? SelectionChanged;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsDetailsView))]
@@ -240,6 +247,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             SelectedEntry = SelectedEntries[0];
         else
             SelectedEntry = null;
+
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void SyncEntrySelectionFlags()
@@ -250,7 +259,22 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             var isSelected = selected.Contains(entry);
             if (entry.IsSelected != isSelected)
                 entry.IsSelected = isSelected;
+
+            RefreshCutState(entry);
         }
+    }
+
+    public void RefreshCutState()
+    {
+        foreach (var entry in Entries)
+            RefreshCutState(entry);
+    }
+
+    private void RefreshCutState(EntryItemViewModel entry)
+    {
+        var isCut = ClipboardCutState.IsPathCut(_clipboard, entry.FullPath);
+        if (entry.IsCut != isCut)
+            entry.IsCut = isCut;
     }
 
     public void SelectAll()
@@ -264,7 +288,19 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             SelectedEntry = SelectedEntries[0];
         else
             SelectedEntry = null;
+
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
+
+    public bool HasSelectionForOps => CanModifySelection();
+
+    public bool HasSingleSelectionForOps => CanRename();
+
+    public bool CanPasteHere => CanPaste();
+
+    public bool CanCreateFolderHere => CanModifyHere() && !string.IsNullOrEmpty(CurrentPath);
+
+    public bool CanSelectAllHere => CanModifyHere() && Entries.Count > 0;
 
     public void NavigateTo(string path)
     {
@@ -599,6 +635,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             Entries.Add(item);
         }
 
+        RefreshCutState();
+
         foreach (var stale in _entryPool.Keys.Where(k => !usedPaths.Contains(k)).ToList())
             _entryPool.Remove(stale);
 
@@ -786,7 +824,10 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     // ── File operations ──────────────────────────────────────────────────────
 
     private void OnClipboardChanged(object? sender, EventArgs e)
-        => PasteCommand.NotifyCanExecuteChanged();
+    {
+        RefreshCutState();
+        PasteCommand.NotifyCanExecuteChanged();
+    }
 
     [RelayCommand(CanExecute = nameof(CanModifySelection))]
     private void Cut()
@@ -797,11 +838,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         var paths = SelectedEntries.Select(e => e.FullPath).ToList();
         _clipboard.SetCut(paths, CurrentPath);
         _ = PublishToOsClipboardAsync(paths, ClipboardOperation.Cut);
-        CutCommand.NotifyCanExecuteChanged();
-        CopyCommand.NotifyCanExecuteChanged();
-        DeleteCommand.NotifyCanExecuteChanged();
-        BeginRenameCommand.NotifyCanExecuteChanged();
-        PasteCommand.NotifyCanExecuteChanged();
+        RefreshCutState();
+        NotifyCommandsCanExecuteChanged();
     }
 
     [RelayCommand(CanExecute = nameof(CanModifySelection))]
@@ -831,22 +869,36 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
                 return;
             }
 
+            var kind = payload.Operation == ClipboardOperation.Cut
+                ? FileOperationKind.Move
+                : FileOperationKind.Copy;
+            var title = kind == FileOperationKind.Move ? "Moving items…" : "Copying items…";
+            _operationReporter.Begin(kind, payload.Paths.Count, title);
+
+            var progress = new Progress<FileOperationProgress>(p => _operationReporter.Report(p));
             if (payload.Operation == ClipboardOperation.Cut)
             {
-                await _fileOps.MoveAsync(payload.Paths, CurrentPath).ConfigureAwait(true);
+                await _fileOps.MoveAsync(payload.Paths, CurrentPath, progress).ConfigureAwait(true);
                 _clipboard.Clear();
             }
             else
             {
-                await _fileOps.CopyAsync(payload.Paths, CurrentPath).ConfigureAwait(true);
+                await _fileOps.CopyAsync(payload.Paths, CurrentPath, progress).ConfigureAwait(true);
             }
 
             await RefreshAsync(showLoading: false).ConfigureAwait(true);
+            _operationReporter.Complete(
+                kind,
+                payload.Paths.Count,
+                kind == FileOperationKind.Move
+                    ? $"Moved {payload.Paths.Count} item(s)"
+                    : $"Copied {payload.Paths.Count} item(s)");
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"Paste failed: {ex.Message}");
             StatusText = "Paste failed";
+            _operationReporter.Fail("Paste failed");
         }
     }
 
@@ -1165,7 +1217,12 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             return false;
 
         var settings = _settingsStore.Load();
-        return !PinnedPathHelper.IsPinned(settings.PinnedPaths, SelectedEntries[0].FullPath);
+        var defaults = GetDefaultPinnedPaths();
+        return !PinnedPathHelper.IsPinnedOrDefault(
+            settings.PinnedPaths,
+            settings.UnpinnedPaths,
+            defaults,
+            SelectedEntries[0].FullPath);
     }
 
     private bool CanUnpinSelection()
@@ -1174,8 +1231,20 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             return false;
 
         var settings = _settingsStore.Load();
-        return PinnedPathHelper.IsPinned(settings.PinnedPaths, SelectedEntries[0].FullPath);
+        var defaults = GetDefaultPinnedPaths();
+        return PinnedPathHelper.IsVisibleInSidebar(
+            settings.PinnedPaths,
+            settings.UnpinnedPaths,
+            defaults,
+            SelectedEntries[0].FullPath);
     }
+
+    private IReadOnlyList<string> GetDefaultPinnedPaths()
+        => _quickAccess.GetPinnedDefaults()
+            .Select(t => t.Path)
+            .Where(p => !string.IsNullOrEmpty(p))
+            .Select(p => p!)
+            .ToList();
 
     [RelayCommand]
     private async Task OpenBranchFlyout()
@@ -1360,6 +1429,9 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     }
 
     partial void OnSelectedCountChanged(int value)
+        => NotifyCommandsCanExecuteChanged();
+
+    public void NotifyCommandsCanExecuteChanged()
     {
         CutCommand.NotifyCanExecuteChanged();
         CopyCommand.NotifyCanExecuteChanged();
@@ -1378,6 +1450,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         UnpinFromSidebarCommand.NotifyCanExecuteChanged();
         CopyPathCommand.NotifyCanExecuteChanged();
         ShowPropertiesCommand.NotifyCanExecuteChanged();
+        PasteCommand.NotifyCanExecuteChanged();
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public async Task HandleDropAsync(IReadOnlyList<string> paths, bool isCopy)
@@ -1385,7 +1459,6 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         if (IsArchive || string.IsNullOrEmpty(CurrentPath) || paths.Count == 0)
             return;
 
-        // Ignore drops that would nest an item into itself.
         var filtered = paths
             .Where(p => !IsSameOrChildPath(CurrentPath, p))
             .ToList();
@@ -1394,17 +1467,29 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
         try
         {
+            var kind = isCopy ? FileOperationKind.Copy : FileOperationKind.Move;
+            _operationReporter.Begin(
+                kind,
+                filtered.Count,
+                isCopy ? "Copying items…" : "Moving items…");
+
+            var progress = new Progress<FileOperationProgress>(p => _operationReporter.Report(p));
             if (isCopy)
-                await _fileOps.CopyAsync(filtered, CurrentPath).ConfigureAwait(true);
+                await _fileOps.CopyAsync(filtered, CurrentPath, progress).ConfigureAwait(true);
             else
-                await _fileOps.MoveAsync(filtered, CurrentPath).ConfigureAwait(true);
+                await _fileOps.MoveAsync(filtered, CurrentPath, progress).ConfigureAwait(true);
 
             await RefreshAsync(showLoading: false).ConfigureAwait(true);
+            _operationReporter.Complete(
+                kind,
+                filtered.Count,
+                isCopy ? $"Copied {filtered.Count} item(s)" : $"Moved {filtered.Count} item(s)");
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"Drop failed: {ex.Message}");
             StatusText = "Drop failed";
+            _operationReporter.Fail("Drop failed");
         }
     }
 

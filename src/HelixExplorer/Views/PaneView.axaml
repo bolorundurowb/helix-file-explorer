@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:sys="clr-namespace:System;assembly=System.Runtime"
              xmlns:vm="using:HelixExplorer.ViewModels"
              xmlns:models="using:HelixExplorer.Core.Models"
              x:Class="HelixExplorer.Views.PaneView"
@@ -31,6 +32,32 @@
                   PointerReleased="OnListPointerReleased"
                   Background="Transparent"
                   BorderThickness="0">
+            <DataGrid.ContextMenu>
+                <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                    <StackPanel Orientation="Horizontal" Spacing="2" Margin="4,2">
+                        <Button ToolTip.Tip="Cut" Command="{Binding CutCommand}" Padding="6" Background="Transparent" BorderThickness="0">
+                            <PathIcon Data="M9.64,7.64C9.87,7.14 10,6.59 10,6A4,4 0 0,0 6,2A4,4 0 0,0 2,6A4,4 0 0,0 6,10C6.59,10 7.14,9.87 7.64,9.64L10,12L7.64,14.36C7.14,14.13 6.59,14 6,14A4,4 0 0,0 2,18A4,4 0 0,0 6,22A4,4 0 0,0 10,18C10,17.41 9.87,16.86 9.64,16.36L12,14L19,21H22V20L9.64,7.64M6,8A2,2 0 0,1 4,6A2,2 0 0,1 6,4A2,2 0 0,1 8,6A2,2 0 0,1 6,8M6,20A2,2 0 0,1 4,18A2,2 0 0,1 6,16A2,2 0 0,1 8,18A2,2 0 0,1 6,20M12,12.5L14,10.5L22,2.5V2H19L12,9L10,7L8.5,8.5L12,12.5Z" Width="14" Height="14" />
+                        </Button>
+                        <Button ToolTip.Tip="Copy" Command="{Binding CopyCommand}" Padding="6" Background="Transparent" BorderThickness="0">
+                            <PathIcon Data="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" Width="14" Height="14" />
+                        </Button>
+                        <Button ToolTip.Tip="Rename" Command="{Binding BeginRenameCommand}" Padding="6" Background="Transparent" BorderThickness="0">
+                            <PathIcon Data="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z" Width="14" Height="14" />
+                        </Button>
+                        <Button ToolTip.Tip="Delete" Command="{Binding DeleteCommand}" Padding="6" Background="Transparent" BorderThickness="0">
+                            <PathIcon Data="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6Z" Width="14" Height="14" />
+                        </Button>
+                    </StackPanel>
+                    <Separator />
+                    <MenuItem Header="Cut" Command="{Binding CutCommand}" />
+                    <MenuItem Header="Copy" Command="{Binding CopyCommand}" />
+                    <MenuItem Header="Paste" Command="{Binding PasteCommand}" />
+                    <MenuItem Header="Rename" Command="{Binding BeginRenameCommand}" />
+                    <MenuItem Header="Delete" Command="{Binding DeleteCommand}" />
+                    <Separator />
+                    <MenuItem Header="Show more options" Command="{Binding ShowMoreOptionsCommand}" />
+                </ContextMenu>
+            </DataGrid.ContextMenu>
             <DataGrid.Columns>
                 <DataGridTemplateColumn Header="Name" Width="2*" Tag="Name" SortMemberPath="Name">
                     <DataGridTemplateColumn.CellTemplate>

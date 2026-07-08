@@ -41,6 +41,7 @@ public static class SidebarFactory
     public static ObservableCollection<SidebarItemViewModel> Build(
         IQuickAccessProvider quickAccess,
         IVolumeProvider volumes,
+        IReadOnlyList<NetworkLocationInfo>? networkLocations = null,
         string? selectedPath = null)
     {
         var items = new ObservableCollection<SidebarItemViewModel>();
@@ -74,7 +75,21 @@ public static class SidebarFactory
         }
 
         items.Add(new SidebarItemViewModel("Network", null, SidebarItemKind.Section, isSectionHeader: true));
-        items.Add(new SidebarItemViewModel("Network", null, SidebarItemKind.Network));
+        if (networkLocations is { Count: > 0 })
+        {
+            foreach (var location in networkLocations)
+            {
+                items.Add(new SidebarItemViewModel(
+                    location.DisplayName,
+                    location.Path,
+                    SidebarItemKind.Network,
+                    isSelected: PathsEqual(location.Path, selectedPath)));
+            }
+        }
+        else
+        {
+            items.Add(new SidebarItemViewModel("Network", @"\\", SidebarItemKind.Network));
+        }
 
         items.Add(new SidebarItemViewModel("Cloud", null, SidebarItemKind.Section, isSectionHeader: true));
         items.Add(new SidebarItemViewModel("Tags", null, SidebarItemKind.Section, isSectionHeader: true));

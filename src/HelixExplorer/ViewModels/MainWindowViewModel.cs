@@ -17,6 +17,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly IFileSystemProvider _fileSystem;
     private readonly IQuickAccessProvider _quickAccess;
     private readonly IVolumeProvider _volumes;
+    private readonly INetworkLocationProvider _networkLocations;
     private readonly IFileOperationService _fileOps;
     private readonly IClipboardService _clipboard;
     private readonly IOsFileClipboard _osClipboard;
@@ -31,6 +32,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         IFileSystemProvider fileSystem,
         IQuickAccessProvider quickAccess,
         IVolumeProvider volumes,
+        INetworkLocationProvider networkLocations,
         IFileOperationService fileOps,
         IClipboardService clipboard,
         IOsFileClipboard osClipboard,
@@ -42,6 +44,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _fileSystem = fileSystem;
         _quickAccess = quickAccess;
         _volumes = volumes;
+        _networkLocations = networkLocations;
         _fileOps = fileOps;
         _clipboard = clipboard;
         _osClipboard = osClipboard;
@@ -56,11 +59,34 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         SidebarItems = SidebarFactory.Build(_quickAccess, _volumes);
 
         RestoreSession();
+        _ = RefreshNetworkLocationsAsync();
     }
 
     public ObservableCollection<TabViewModel> Tabs { get; } = new();
 
     public ObservableCollection<SidebarItemViewModel> SidebarItems { get; }
+
+    private async Task RefreshNetworkLocationsAsync()
+    {
+        try
+        {
+            var locations = await _networkLocations.GetNetworkLocationsAsync().ConfigureAwait(true);
+            RebuildSidebar(locations);
+        }
+        catch
+        {
+            // Network discovery is opportunistic; keep the stable fallback item.
+        }
+    }
+
+    private void RebuildSidebar(IReadOnlyList<NetworkLocationInfo> networkLocations)
+    {
+        var selectedPath = ActivePane?.CurrentPath;
+        var items = SidebarFactory.Build(_quickAccess, _volumes, networkLocations, selectedPath);
+        SidebarItems.Clear();
+        foreach (var item in items)
+            SidebarItems.Add(item);
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ActivePane))]

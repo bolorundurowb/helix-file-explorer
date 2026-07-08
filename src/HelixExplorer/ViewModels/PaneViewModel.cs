@@ -20,6 +20,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     private readonly IFileOperationService _fileOps;
     private readonly IClipboardService _clipboard;
     private readonly IOsFileClipboard _osClipboard;
+    private readonly IShellContextMenuService _shellContextMenu;
     private readonly IFileChangeWatcher _watcher;
     private readonly Stack<string> _backStack = new();
     private readonly Stack<string> _forwardStack = new();
@@ -33,12 +34,14 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         IFileOperationService fileOps,
         IClipboardService clipboard,
         IOsFileClipboard osClipboard,
+        IShellContextMenuService shellContextMenu,
         IFileChangeWatcher watcher)
     {
         _fileSystem = fileSystem;
         _fileOps = fileOps;
         _clipboard = clipboard;
         _osClipboard = osClipboard;
+        _shellContextMenu = shellContextMenu;
         _watcher = watcher;
         _watcher.Changed += OnWatcherChanged;
         _clipboard.Changed += OnClipboardChanged;
@@ -614,6 +617,24 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         }
     }
 
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private async Task ShowMoreOptions()
+    {
+        if (SelectedEntries.Count == 0)
+            return;
+
+        try
+        {
+            var paths = SelectedEntries.Select(e => e.FullPath).ToList();
+            await _shellContextMenu.ShowMoreOptionsAsync(paths).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Show more options failed: {ex.Message}");
+            StatusText = "Could not show more options";
+        }
+    }
+
     private bool HasSelection() => SelectedEntries.Count > 0;
 
     // Always allow Paste when a folder is open so OS clipboard (Explorer) works;
@@ -628,6 +649,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         CopyCommand.NotifyCanExecuteChanged();
         DeleteCommand.NotifyCanExecuteChanged();
         BeginRenameCommand.NotifyCanExecuteChanged();
+        ShowMoreOptionsCommand.NotifyCanExecuteChanged();
     }
 
     public async Task HandleDropAsync(IReadOnlyList<string> paths, bool isCopy)

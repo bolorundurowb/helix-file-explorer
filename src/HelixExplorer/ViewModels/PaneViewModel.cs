@@ -613,8 +613,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
         var usedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var visualTargets = new List<EntryItemViewModel>();
+        var nextEntries = new List<EntryItemViewModel>(_viewBuffer.Count);
 
-        Entries.Clear();
         foreach (var entry in _viewBuffer)
         {
             var path = entry.FullPath;
@@ -632,8 +632,10 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
                 item.UpdateEntry(entry, ShowFileExtensions, gitStatus);
             }
 
-            Entries.Add(item);
+            nextEntries.Add(item);
         }
+
+        SyncEntriesCollection(nextEntries);
 
         RefreshCutState();
 
@@ -646,6 +648,24 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         SelectedCount = 0;
         UpdateStatusText();
         RequestEntryVisuals(visualTargets);
+    }
+
+    private void SyncEntriesCollection(IReadOnlyList<EntryItemViewModel> nextEntries)
+    {
+        if (Entries.Count == nextEntries.Count)
+        {
+            for (var i = 0; i < nextEntries.Count; i++)
+            {
+                if (!ReferenceEquals(Entries[i], nextEntries[i]))
+                    Entries[i] = nextEntries[i];
+            }
+
+            return;
+        }
+
+        Entries.Clear();
+        foreach (var item in nextEntries)
+            Entries.Add(item);
     }
 
     private void RequestEntryVisuals(IReadOnlyList<EntryItemViewModel>? targets = null)
@@ -976,7 +996,9 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
         try
         {
-            await _fileOps.RenameAsync(entry.FullPath, newName);
+            var oldPath = entry.FullPath;
+            await _fileOps.RenameAsync(oldPath, newName);
+            _entryPool.Remove(oldPath);
             IsRenaming = false;
             await RefreshAsync(showLoading: false);
         }

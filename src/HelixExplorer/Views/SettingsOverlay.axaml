@@ -13,8 +13,10 @@
             HorizontalAlignment="Stretch"
             VerticalAlignment="Stretch"
             PointerPressed="OnRootPointerPressed" />
+    <!-- Inset below title bar and left of window caption buttons. -->
     <Border Width="400"
             MaxWidth="420"
+            Margin="0,40,192,0"
             HorizontalAlignment="Right"
             VerticalAlignment="Stretch"
             Background="{DynamicResource HelixContentCardBrush}"
@@ -23,20 +25,12 @@
             Padding="20"
             PointerPressed="OnPanelPointerPressed">
         <Grid RowDefinitions="Auto,*,Auto">
-            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
-                <TextBlock Text="Settings"
-                           FontSize="18"
-                           FontWeight="SemiBold"
-                           VerticalAlignment="Center" />
-                <Button Grid.Column="1"
-                        Content="✕"
-                        Command="{Binding CloseSettingsCommand}"
-                        Padding="6,2"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Cursor="Hand"
-                        Opacity="0.7" />
-            </Grid>
+            <TextBlock Grid.Row="0"
+                       Text="Settings"
+                       FontSize="18"
+                       FontWeight="SemiBold"
+                       VerticalAlignment="Center"
+                       Margin="0,0,0,16" />
 
             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                 <StackPanel Spacing="20">

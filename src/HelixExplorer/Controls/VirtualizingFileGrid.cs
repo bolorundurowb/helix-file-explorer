@@ -6,6 +6,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
 using Avalonia.Layout;
 using Avalonia.Threading;
+using HelixExplorer.ViewModels;
 
 namespace HelixExplorer.Controls;
 
@@ -29,6 +30,7 @@ public sealed class VirtualizingFileGrid : TemplatedControl
     private bool _rebuildScheduled;
     private int _lastColumnCount = -1;
     private int _lastItemCount;
+    private string _lastItemsPathsKey = string.Empty;
 
     static VirtualizingFileGrid()
     {
@@ -157,6 +159,7 @@ public sealed class VirtualizingFileGrid : TemplatedControl
             _rows.ItemsSource = Array.Empty<GridRow>();
             _lastColumnCount = -1;
             _lastItemCount = 0;
+            _lastItemsPathsKey = string.Empty;
             return;
         }
 
@@ -167,9 +170,11 @@ public sealed class VirtualizingFileGrid : TemplatedControl
         var tileWidth = Math.Max(48, ItemSize + 12);
         var columns = Math.Max(1, (int)(viewportWidth / tileWidth));
         var rowCount = (items.Count + columns - 1) / columns;
+        var pathsKey = BuildItemsPathsKey(items);
 
         if (columns == _lastColumnCount
             && items.Count == _lastItemCount
+            && pathsKey == _lastItemsPathsKey
             && _rows.ItemsSource is IList<GridRow> existing
             && existing.Count == rowCount)
             return;
@@ -184,7 +189,19 @@ public sealed class VirtualizingFileGrid : TemplatedControl
         _rows.ItemsSource = rows;
         _lastColumnCount = columns;
         _lastItemCount = items.Count;
+        _lastItemsPathsKey = pathsKey;
     }
+
+    private static string BuildItemsPathsKey(IReadOnlyList<object> items)
+    {
+        if (items.Count == 0)
+            return string.Empty;
+
+        return string.Join('\n', items.Select(GetItemPathKey));
+    }
+
+    private static string GetItemPathKey(object item)
+        => item is EntryItemViewModel entry ? entry.FullPath : item.GetHashCode().ToString();
 
     private sealed class GridRow(IReadOnlyList<object> items)
     {

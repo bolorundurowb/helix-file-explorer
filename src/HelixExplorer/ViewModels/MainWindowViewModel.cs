@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Infrastructure;
@@ -26,6 +27,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly IShellContextMenuService _shellContextMenu;
     private readonly IUiHost _uiHost;
     private readonly IGitProvider _git;
+    private readonly IArchiveProvider _archive;
     private readonly Func<IFileChangeWatcher> _watcherFactory;
     private readonly string _homePath;
     private CancellationTokenSource? _networkCts;
@@ -45,6 +47,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         IShellContextMenuService shellContextMenu,
         IUiHost uiHost,
         IGitProvider git,
+        IArchiveProvider archive,
         Func<IFileChangeWatcher> watcherFactory)
     {
         _settingsStore = settingsStore;
@@ -60,6 +63,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _shellContextMenu = shellContextMenu;
         _uiHost = uiHost;
         _git = git;
+        _archive = archive;
         _watcherFactory = watcherFactory;
 
         _homePath = _quickAccess.GetPath(KnownFolderKind.Home)
@@ -187,6 +191,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             _shellContextMenu,
             _uiHost,
             _git,
+            _archive,
             _watcherFactory);
         tab.CloseRequested += OnTabCloseRequested;
         tab.Navigated += OnTabNavigated;

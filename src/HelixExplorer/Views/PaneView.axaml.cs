@@ -1,10 +1,14 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using HelixExplorer.Controls;
+using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.Models;
 using HelixExplorer.ViewModels;
 
@@ -19,6 +23,9 @@ public sealed partial class PaneView : UserControl
     private Point? _pressPoint;
     private PointerPressedEventArgs? _pressArgs;
     private bool _dragStarted;
+    private readonly List<Control> _millerColumns = new();
+    private readonly FuncDataTemplate<EntryItemViewModel> _millerItemTemplate = new(
+        (item, _) => new TextBlock { Text = item?.Name ?? string.Empty });
 
     public PaneView()
     {
@@ -35,12 +42,19 @@ public sealed partial class PaneView : UserControl
 
         _pane = DataContext as PaneViewModel;
         if (_pane is not null)
+        {
             _pane.PropertyChanged += OnPanePropertyChanged;
+            if (_pane.IsMillerView)
+                RebuildMiller();
+        }
     }
 
     private void OnPanePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(PaneViewModel.IsFilterVisible) && _pane?.IsFilterVisible == true)
+        if (_pane is null)
+            return;
+
+        if (e.PropertyName == nameof(PaneViewModel.IsFilterVisible) && _pane.IsFilterVisible)
         {
             Dispatcher.UIThread.Post(() =>
             {
@@ -48,13 +62,20 @@ public sealed partial class PaneView : UserControl
                 FilterBox.SelectAll();
             });
         }
-        else if (e.PropertyName == nameof(PaneViewModel.IsRenaming) && _pane?.IsRenaming == true)
+        else if (e.PropertyName == nameof(PaneViewModel.IsRenaming) && _pane.IsRenaming)
         {
             Dispatcher.UIThread.Post(() =>
             {
                 RenameBox.Focus();
                 RenameBox.SelectAll();
             });
+        }
+        else if (_pane.IsMillerView
+                 && e.PropertyName is nameof(PaneViewModel.ViewMode)
+                     or nameof(PaneViewModel.CurrentPath)
+                     or nameof(PaneViewModel.ItemCount))
+        {
+            RebuildMiller();
         }
     }
 
@@ -250,6 +271,72 @@ public sealed partial class PaneView : UserControl
         return null;
     }
 
+    // ── Miller columns ───────────────────────────────────────────────────────
+
+    private void RebuildMiller()
+    {
+        if (Pane is null)
+            return;
+
+        MillerPanel.Children.Clear();
+        _millerColumns.Clear();
+
+        var entries = new ObservableCollection<EntryItemViewModel>(Pane.Entries);
+        var column = BuildMillerColumn(entries, columnIndex: 0);
+        MillerPanel.Children.Add(column);
+        _millerColumns.Add(column);
+    }
+
+    private ListBox BuildMillerColumn(IEnumerable<EntryItemViewModel> entries, int columnIndex)
+    {
+        var list = new ListBox
+        {
+            Width = 250,
+            ItemsSource = entries,
+            ItemTemplate = _millerItemTemplate
+        };
+        MillerColumnPanel.SetColumnIndex(list, columnIndex);
+        list.DoubleTapped += (_, _) =>
+        {
+            if (list.SelectedItem is EntryItemViewModel entry)
+                MillerPanel.RaiseActivated(columnIndex, entry);
+        };
+        return list;
+    }
+
+    private async void OnMillerColumnActivated(object? sender, MillerColumnActivatedEventArgs e)
+    {
+        if (Pane is null || e.Item is not EntryItemViewModel entry)
+            return;
+
+        if (!entry.IsDirectory && !ArchivePath.IsArchiveFile(entry.FullPath))
+        {
+            Pane.ActivateEntry(entry);
+            return;
+        }
+
+        var keep = e.ColumnIndex + 1;
+        while (_millerColumns.Count > keep)
+        {
+            var last = _millerColumns[^1];
+            MillerPanel.Children.Remove(last);
+            _millerColumns.RemoveAt(_millerColumns.Count - 1);
+        }
+
+        var children = await Pane.EnumerateMillerChildrenAsync(entry.FullPath).ConfigureAwait(true);
+        var column = BuildMillerColumn(children, keep);
+        MillerPanel.Children.Add(column);
+        _millerColumns.Add(column);
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            var width = MillerPanel.Bounds.Width;
+            var viewport = MillerScroll.Viewport.Width;
+            if (width > viewport)
+                MillerScroll.Offset = new Vector(width - viewport, 0);
+        });
+    }
+
     // ── Drag source ──────────────────────────────────────────────────────────
 
     private void OnListPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -284,8 +371,9 @@ public sealed partial class PaneView : UserControl
         _pressPoint = null;
         _pressArgs = null;
 
-        var transfer = await BuildFileTransferAsync(Pane.SelectedEntries.Select(x => x.FullPath).ToList())
-            .ConfigureAwait(true);
+        var virtualPaths = Pane.SelectedEntries.Select(x => x.FullPath).ToList();
+        var physicalPaths = await Pane.ResolvePhysicalPathsAsync(virtualPaths).ConfigureAwait(true);
+        var transfer = await BuildFileTransferAsync(physicalPaths).ConfigureAwait(true);
         if (transfer is null)
             return;
 
@@ -331,7 +419,7 @@ public sealed partial class PaneView : UserControl
 
     private void OnDragOver(object? sender, DragEventArgs e)
     {
-        if (Pane is null)
+        if (Pane is null || Pane.IsArchive)
             return;
 
         if (e.DataTransfer.Contains(DataFormat.File))
@@ -345,7 +433,7 @@ public sealed partial class PaneView : UserControl
 
     private async void OnDrop(object? sender, DragEventArgs e)
     {
-        if (Pane is null)
+        if (Pane is null || Pane.IsArchive)
             return;
 
         if (!e.DataTransfer.Contains(DataFormat.File))

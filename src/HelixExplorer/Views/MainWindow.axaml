@@ -273,6 +273,12 @@
                             Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
                         <PathIcon Data="M3,3H9V9H3V3M3,13H9V19H3V13M13,3H19V9H13V3M13,13H19V19H13V13Z" Width="14" Height="14" />
                     </Button>
+                    <Button ToolTip.Tip="Miller columns"
+                            Command="{Binding SetViewModeCommand}"
+                            CommandParameter="{x:Static models:LayoutMode.Miller}"
+                            Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
+                        <PathIcon Data="M3,5H11V19H3V5M13,5H21V11H13V5M13,13H21V19H13V13Z" Width="14" Height="14" />
+                    </Button>
                     <Border Width="1" Background="{DynamicResource HelixBorderColor}" Margin="4,4" />
                     <Button ToolTip.Tip="Swap panes"
                             Command="{Binding SelectedTab.SwapPanesCommand}"

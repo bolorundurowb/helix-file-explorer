@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Infrastructure;
@@ -71,6 +72,7 @@ public partial class App : Application
         services.AddSingleton<IOsFileClipboard, AvaloniaOsFileClipboard>();
         services.AddSingleton<IUiHost, AvaloniaUiHost>();
         services.AddSingleton<IGitProvider, CliGitProvider>();
+        services.AddSingleton<IArchiveProvider, SharpCompressArchiveProvider>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddTransient<MainWindow>();
     }

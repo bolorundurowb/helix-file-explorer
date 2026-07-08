@@ -3,6 +3,7 @@
              xmlns:sys="clr-namespace:System;assembly=System.Runtime"
              xmlns:vm="using:HelixExplorer.ViewModels"
              xmlns:models="using:HelixExplorer.Core.Models"
+             xmlns:controls="using:HelixExplorer.Controls"
              x:Class="HelixExplorer.Views.PaneView"
              x:DataType="vm:PaneViewModel"
              Focusable="True"
@@ -284,6 +285,17 @@
                 </StackPanel>
             </Border>
         </Grid>
+
+        <!-- Miller columns -->
+        <ScrollViewer x:Name="MillerScroll"
+                      IsVisible="{Binding IsMillerView}"
+                      HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Disabled">
+            <controls:MillerColumnPanel x:Name="MillerPanel"
+                                        ColumnWidth="250"
+                                        ColumnSpacing="4"
+                                        ColumnActivated="OnMillerColumnActivated" />
+        </ScrollViewer>
 
         <!-- Rename overlay -->
         <Border IsVisible="{Binding IsRenaming}"

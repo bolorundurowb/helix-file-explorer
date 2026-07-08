@@ -1,9 +1,11 @@
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Infrastructure;
+using System.Diagnostics;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Session;
 
@@ -18,6 +20,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     private readonly IShellContextMenuService _shellContextMenu;
     private readonly IUiHost _uiHost;
     private readonly IGitProvider _git;
+    private readonly IArchiveProvider _archive;
     private readonly Func<IFileChangeWatcher> _watcherFactory;
     private bool _disposed;
 
@@ -29,6 +32,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         IShellContextMenuService shellContextMenu,
         IUiHost uiHost,
         IGitProvider git,
+        IArchiveProvider archive,
         Func<IFileChangeWatcher> watcherFactory)
     {
         _fileSystem = fileSystem;
@@ -38,6 +42,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         _shellContextMenu = shellContextMenu;
         _uiHost = uiHost;
         _git = git;
+        _archive = archive;
         _watcherFactory = watcherFactory;
         LeftPane = CreatePane();
         _activePane = LeftPane;
@@ -81,6 +86,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     {
         var pane = new PaneViewModel(
             _fileSystem,
+            _archive,
             _fileOps,
             _clipboard,
             _osClipboard,
@@ -89,9 +95,41 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
             _git,
             _watcherFactory());
         pane.Navigated += OnPaneNavigated;
+        pane.EntryActivated += OnEntryActivated;
         pane.OpenInNewTabRequested += OnOpenInNewTabRequested;
         pane.OpenInNewPaneRequested += OnOpenInNewPaneRequested;
         return pane;
+    }
+
+    private async void OnEntryActivated(object? sender, FileSystemEntry entry)
+    {
+        if (sender is not PaneViewModel pane)
+            return;
+
+        var pathToOpen = entry.FullPath;
+        if (ArchivePath.IsVirtual(entry.FullPath))
+        {
+            pathToOpen = await _archive.ExtractEntryAsync(entry.FullPath).ConfigureAwait(true);
+            if (string.IsNullOrEmpty(pathToOpen))
+            {
+                pane.StatusText = $"Could not extract {entry.Name}";
+                return;
+            }
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = pathToOpen,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to open '{entry.FullPath}': {ex.Message}");
+            pane.StatusText = $"Could not open {entry.Name}";
+        }
     }
 
     public event EventHandler<string>? OpenInNewTabRequested;
@@ -208,6 +246,19 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         if (string.IsNullOrEmpty(path))
             return "New Tab";
 
+        if (ArchivePath.IsVirtual(path)
+            && ArchivePath.TryParse(path, out var archiveFile, out var inner))
+        {
+            var archiveName = Path.GetFileName(archiveFile);
+            if (string.IsNullOrEmpty(inner))
+                return archiveName;
+
+            var innerName = inner.TrimEnd('/', '\\');
+            var lastSlash = innerName.LastIndexOf('/');
+            var leaf = lastSlash < 0 ? innerName : innerName[(lastSlash + 1)..];
+            return string.IsNullOrEmpty(leaf) ? archiveName : $"{archiveName}:{leaf}";
+        }
+
         var trimmed = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         if (trimmed.Length == 2 && trimmed[1] == ':')
             return trimmed + Path.DirectorySeparatorChar;
@@ -255,6 +306,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     private void DetachPane(PaneViewModel pane)
     {
         pane.Navigated -= OnPaneNavigated;
+        pane.EntryActivated -= OnEntryActivated;
         pane.OpenInNewTabRequested -= OnOpenInNewTabRequested;
         pane.OpenInNewPaneRequested -= OnOpenInNewPaneRequested;
     }

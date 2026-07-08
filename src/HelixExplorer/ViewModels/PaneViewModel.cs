@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Filtering;
 using HelixExplorer.Core.Git;
@@ -19,6 +20,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     public const double MaxThumbnailSize = 256;
 
     private readonly IFileSystemProvider _fileSystem;
+    private readonly IArchiveProvider _archive;
     private readonly IFileOperationService _fileOps;
     private readonly IClipboardService _clipboard;
     private readonly IOsFileClipboard _osClipboard;
@@ -40,6 +42,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
     public PaneViewModel(
         IFileSystemProvider fileSystem,
+        IArchiveProvider archive,
         IFileOperationService fileOps,
         IClipboardService clipboard,
         IOsFileClipboard osClipboard,
@@ -49,6 +52,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         IFileChangeWatcher watcher)
     {
         _fileSystem = fileSystem;
+        _archive = archive;
         _fileOps = fileOps;
         _clipboard = clipboard;
         _osClipboard = osClipboard;
@@ -65,12 +69,19 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     public event EventHandler<string>? OpenInNewTabRequested;
     public event EventHandler<string>? OpenInNewPaneRequested;
 
-    [ObservableProperty] private string _currentPath = string.Empty;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDetailsView))]
+    [NotifyPropertyChangedFor(nameof(IsListView))]
+    [NotifyPropertyChangedFor(nameof(IsGridView))]
+    [NotifyPropertyChangedFor(nameof(IsMillerView))]
+    [NotifyPropertyChangedFor(nameof(IsArchive))]
+    private string _currentPath = string.Empty;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsDetailsView))]
     [NotifyPropertyChangedFor(nameof(IsListView))]
     [NotifyPropertyChangedFor(nameof(IsGridView))]
+    [NotifyPropertyChangedFor(nameof(IsMillerView))]
     private LayoutMode _viewMode = LayoutMode.Details;
     [ObservableProperty] private SortColumn _sortColumn = SortColumn.Name;
     [ObservableProperty] private bool _sortDescending;
@@ -103,6 +114,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     public bool IsDetailsView => ViewMode == LayoutMode.Details;
     public bool IsListView => ViewMode == LayoutMode.List;
     public bool IsGridView => ViewMode == LayoutMode.Grid;
+    public bool IsMillerView => ViewMode == LayoutMode.Miller;
+    public bool IsArchive => ArchivePath.IsVirtual(CurrentPath);
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GoBackCommand))]
@@ -128,8 +141,13 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         RepositoryStatus = GitStatus.Empty;
         _gitSnapshot = GitStatusSnapshot.Empty;
         CancelGitRefresh();
-        _watcher.Watch(value);
+        _watcher.Watch(IsArchive ? string.Empty : value);
         PasteCommand.NotifyCanExecuteChanged();
+        CutCommand.NotifyCanExecuteChanged();
+        CopyCommand.NotifyCanExecuteChanged();
+        DeleteCommand.NotifyCanExecuteChanged();
+        BeginRenameCommand.NotifyCanExecuteChanged();
+        ShowMoreOptionsCommand.NotifyCanExecuteChanged();
         _ = RefreshAsync(showLoading: true);
     }
 
@@ -225,10 +243,16 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
     private string ResolveDestination(string path)
     {
+        if (ArchivePath.IsVirtual(path))
+            return ArchivePath.NormalizeDirectory(path);
+
         if (path == "..")
         {
             if (string.IsNullOrEmpty(CurrentPath))
                 return CurrentPath;
+
+            if (ArchivePath.IsVirtual(CurrentPath))
+                return ArchivePath.GetParent(CurrentPath);
 
             var parent = Directory.GetParent(CurrentPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
             return parent is null
@@ -237,6 +261,9 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         }
 
         var resolved = _fileSystem.ResolvePath(path);
+        if (_archive.IsArchiveFile(resolved))
+            return ArchivePath.Mount(resolved);
+
         return EnsureTrailingSeparator(resolved);
     }
 
@@ -330,7 +357,15 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             DirectoryListing listing;
             try
             {
-                listing = await _fileSystem.GetDirectoryContentsAsync(path, token).ConfigureAwait(false);
+                if (ArchivePath.IsVirtual(path))
+                {
+                    var entries = await _archive.EnumerateAsync(path, token).ConfigureAwait(false);
+                    listing = new DirectoryListing(path, entries);
+                }
+                else
+                {
+                    listing = await _fileSystem.GetDirectoryContentsAsync(path, token).ConfigureAwait(false);
+                }
             }
             catch (OperationCanceledException)
             {
@@ -371,7 +406,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
                 _refreshCts = null;
                 _refreshInFlight = false;
 
-                if (!_disposed && !string.IsNullOrEmpty(CurrentPath))
+                if (!_disposed && !string.IsNullOrEmpty(CurrentPath) && !IsArchive)
                     _watcher.Watch(CurrentPath);
 
                 if (_watcherRefreshPending && !_disposed)
@@ -512,26 +547,54 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
     public void ActivateEntry(FileSystemEntry entry)
     {
-        if (entry.IsDirectory)
+        if (entry.IsDirectory || _archive.IsArchiveFile(entry.FullPath))
         {
             NavigateTo(entry.FullPath);
             return;
         }
 
         EntryActivated?.Invoke(this, entry);
+    }
+
+    public async Task<IReadOnlyList<EntryItemViewModel>> EnumerateMillerChildrenAsync(string path)
+    {
+        IReadOnlyList<FileSystemEntry> entries;
         try
         {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = entry.FullPath,
-                UseShellExecute = true
-            });
+            if (ArchivePath.IsVirtual(path))
+                entries = await _archive.EnumerateAsync(path).ConfigureAwait(true);
+            else
+                entries = (await _fileSystem.GetDirectoryContentsAsync(path).ConfigureAwait(true)).Entries;
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Failed to open '{entry.FullPath}': {ex.Message}");
-            StatusText = $"Could not open {entry.Name}";
+            Debug.WriteLine($"EnumerateMillerChildrenAsync failed for '{path}': {ex.Message}");
+            entries = Array.Empty<FileSystemEntry>();
         }
+
+        var buffer = new List<FileSystemEntry>(entries);
+        buffer.Sort(FileSystemEntryComparer.For(SortColumn, SortDescending));
+        return buffer.ConvertAll(entry => new EntryItemViewModel(entry));
+    }
+
+    public async Task<IReadOnlyList<string>> ResolvePhysicalPathsAsync(IReadOnlyList<string> paths)
+    {
+        var result = new List<string>(paths.Count);
+        foreach (var path in paths)
+        {
+            if (ArchivePath.IsVirtual(path))
+            {
+                var extracted = await _archive.ExtractEntryAsync(path).ConfigureAwait(true);
+                if (!string.IsNullOrEmpty(extracted))
+                    result.Add(extracted);
+            }
+            else if (File.Exists(path) || Directory.Exists(path))
+            {
+                result.Add(path);
+            }
+        }
+
+        return result;
     }
 
     public void CommitEditablePath()
@@ -587,6 +650,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         {
             LayoutMode.Details => LayoutMode.List,
             LayoutMode.List => LayoutMode.Grid,
+            LayoutMode.Grid => LayoutMode.Miller,
             _ => LayoutMode.Details
         };
 
@@ -598,7 +662,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     private void OnClipboardChanged(object? sender, EventArgs e)
         => PasteCommand.NotifyCanExecuteChanged();
 
-    [RelayCommand(CanExecute = nameof(HasSelection))]
+    [RelayCommand(CanExecute = nameof(CanModifySelection))]
     private void Cut()
     {
         if (SelectedEntries.Count == 0)
@@ -614,7 +678,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         PasteCommand.NotifyCanExecuteChanged();
     }
 
-    [RelayCommand(CanExecute = nameof(HasSelection))]
+    [RelayCommand(CanExecute = nameof(CanModifySelection))]
     private void Copy()
     {
         if (SelectedEntries.Count == 0)
@@ -684,7 +748,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         }
     }
 
-    [RelayCommand(CanExecute = nameof(HasSelection))]
+    [RelayCommand(CanExecute = nameof(CanModifySelection))]
     private async Task Delete()
     {
         if (SelectedEntries.Count == 0)
@@ -749,10 +813,10 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void CancelRename() => IsRenaming = false;
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanModifyHere))]
     private async Task NewFolder()
     {
-        if (string.IsNullOrEmpty(CurrentPath))
+        if (string.IsNullOrEmpty(CurrentPath) || IsArchive)
             return;
 
         try
@@ -908,9 +972,12 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         StatusText = "Share is not available yet";
     }
 
-    [RelayCommand(CanExecute = nameof(HasSelection))]
+    [RelayCommand(CanExecute = nameof(CanShowMoreOptions))]
     private async Task ShowMoreOptions()
     {
+        if (IsArchive)
+            return;
+
         if (SelectedEntries.Count == 0 && string.IsNullOrEmpty(CurrentPath))
             return;
 
@@ -936,11 +1003,17 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
     private bool HasSingleSelection() => SelectedEntries.Count == 1;
 
+    private bool CanModifyHere() => !IsArchive;
+
+    private bool CanModifySelection() => CanModifyHere() && HasSelection();
+
+    private bool CanShowMoreOptions() => CanModifyHere() && (HasSelection() || !string.IsNullOrEmpty(CurrentPath));
+
     // Always allow Paste when a folder is open so OS clipboard (Explorer) works;
     // Paste resolves internal payload first, then falls back to IOsFileClipboard.
-    private bool CanPaste() => !string.IsNullOrEmpty(CurrentPath);
+    private bool CanPaste() => CanModifyHere() && !string.IsNullOrEmpty(CurrentPath);
 
-    private bool CanRename() => SelectedEntries.Count == 1;
+    private bool CanRename() => CanModifySelection() && SelectedEntries.Count == 1;
 
     partial void OnSelectedCountChanged(int value)
     {
@@ -960,7 +1033,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
     public async Task HandleDropAsync(IReadOnlyList<string> paths, bool isCopy)
     {
-        if (string.IsNullOrEmpty(CurrentPath) || paths.Count == 0)
+        if (IsArchive || string.IsNullOrEmpty(CurrentPath) || paths.Count == 0)
             return;
 
         // Ignore drops that would nest an item into itself.
@@ -1024,6 +1097,19 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         Breadcrumbs.Clear();
         if (string.IsNullOrEmpty(path))
             return;
+
+        if (ArchivePath.IsVirtual(path))
+        {
+            foreach (var crumb in ArchivePath.GetBreadcrumbs(path))
+            {
+                Breadcrumbs.Add(new BreadcrumbSegment(
+                    DisplayName: crumb.DisplayName,
+                    Path: crumb.Path,
+                    IsLast: crumb.IsLast));
+            }
+
+            return;
+        }
 
         var parts = path.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
             StringSplitOptions.RemoveEmptyEntries);

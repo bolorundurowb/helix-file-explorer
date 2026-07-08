@@ -7,31 +7,35 @@ using HelixExplorer.Core.Session;
 
 namespace HelixExplorer.ViewModels;
 
-/// <summary>
-/// One workspace tab. Owns a left pane and (when dual-pane) a right pane, tracks which pane is
-/// active, the split orientation, and an optional tint colour surfaced on the tab chrome.
-/// </summary>
 public sealed partial class TabViewModel : ObservableObject, IDisposable
 {
     private readonly IFileSystemProvider _fileSystem;
+    private readonly IFileOperationService _fileOps;
+    private readonly IClipboardService _clipboard;
+    private readonly IOsFileClipboard _osClipboard;
+    private readonly Func<IFileChangeWatcher> _watcherFactory;
     private bool _disposed;
 
-    public TabViewModel(IFileSystemProvider fileSystem)
+    public TabViewModel(
+        IFileSystemProvider fileSystem,
+        IFileOperationService fileOps,
+        IClipboardService clipboard,
+        IOsFileClipboard osClipboard,
+        Func<IFileChangeWatcher> watcherFactory)
     {
         _fileSystem = fileSystem;
+        _fileOps = fileOps;
+        _clipboard = clipboard;
+        _osClipboard = osClipboard;
+        _watcherFactory = watcherFactory;
         LeftPane = CreatePane();
         _activePane = LeftPane;
         LeftPane.IsActive = true;
         UpdateTitle();
     }
 
-    /// <summary>Raised when the user asks to close this tab (middle-click / × button).</summary>
     public event EventHandler? CloseRequested;
-
-    /// <summary>Raised when the active pane navigates or the active pane changes.</summary>
     public event EventHandler? Navigated;
-
-    /// <summary>Raised when persistable state changes (layout, tint, orientation).</summary>
     public event EventHandler? StateChanged;
 
     public PaneViewModel LeftPane { get; }
@@ -64,14 +68,13 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
 
     private PaneViewModel CreatePane()
     {
-        var pane = new PaneViewModel(_fileSystem);
+        var pane = new PaneViewModel(_fileSystem, _fileOps, _clipboard, _osClipboard, _watcherFactory());
         pane.Navigated += OnPaneNavigated;
         return pane;
     }
 
     private void OnPaneNavigated(object? sender, EventArgs e)
     {
-        // Only the active pane drives the tab title / window chrome.
         if (ReferenceEquals(sender, ActivePane))
         {
             UpdateTitle();
@@ -109,7 +112,6 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     {
         if (IsDualPane)
         {
-            // Collapse: keep the active pane's location on the left, drop the right pane.
             if (ReferenceEquals(ActivePane, RightPane) && RightPane is not null)
                 LeftPane.NavigateTo(RightPane.CurrentPath);
 

@@ -11,15 +11,16 @@ using HelixExplorer.Core.Sorting;
 
 namespace HelixExplorer.ViewModels;
 
-/// <summary>
-/// State for one file pane: path, history, sort, filter, and the current listing snapshot.
-/// </summary>
 public sealed partial class PaneViewModel : ObservableObject, IDisposable
 {
     public const double MinThumbnailSize = 32;
     public const double MaxThumbnailSize = 256;
 
     private readonly IFileSystemProvider _fileSystem;
+    private readonly IFileOperationService _fileOps;
+    private readonly IClipboardService _clipboard;
+    private readonly IOsFileClipboard _osClipboard;
+    private readonly IFileChangeWatcher _watcher;
     private readonly Stack<string> _backStack = new();
     private readonly Stack<string> _forwardStack = new();
     private readonly List<FileSystemEntry> _viewBuffer = new();
@@ -27,9 +28,20 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     private CancellationTokenSource? _refreshCts;
     private bool _disposed;
 
-    public PaneViewModel(IFileSystemProvider fileSystem)
+    public PaneViewModel(
+        IFileSystemProvider fileSystem,
+        IFileOperationService fileOps,
+        IClipboardService clipboard,
+        IOsFileClipboard osClipboard,
+        IFileChangeWatcher watcher)
     {
         _fileSystem = fileSystem;
+        _fileOps = fileOps;
+        _clipboard = clipboard;
+        _osClipboard = osClipboard;
+        _watcher = watcher;
+        _watcher.Changed += OnWatcherChanged;
+        _clipboard.Changed += OnClipboardChanged;
     }
 
     public event EventHandler? Navigated;
@@ -54,6 +66,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     [ObservableProperty] private FileSystemEntry? _selectedEntry;
     [ObservableProperty] private bool _isActive;
     [ObservableProperty] private double _thumbnailSize = 72;
+    [ObservableProperty] private bool _isRenaming;
+    [ObservableProperty] private string _renameText = string.Empty;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsFilterActive))]
@@ -63,7 +77,6 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(IsFilterActive))]
     private string _filterText = string.Empty;
 
-    /// <summary>True when a non-empty quick filter is currently narrowing the listing.</summary>
     public bool IsFilterActive => IsFilterVisible && !string.IsNullOrWhiteSpace(FilterText);
 
     public bool IsDetailsView => ViewMode == LayoutMode.Details;
@@ -80,6 +93,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<FileSystemEntry> Entries { get; } = new();
 
+    public ObservableCollection<FileSystemEntry> SelectedEntries { get; } = new();
+
     public ObservableCollection<BreadcrumbSegment> Breadcrumbs { get; } = new();
 
     partial void OnCurrentPathChanged(string value)
@@ -87,6 +102,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         RebuildBreadcrumbs(value);
         EditablePath = value;
         ClearFilter();
+        _watcher.Watch(value);
+        PasteCommand.NotifyCanExecuteChanged();
         _ = RefreshAsync();
     }
 
@@ -104,7 +121,61 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     }
 
     partial void OnSelectedEntryChanged(FileSystemEntry? value)
-        => SelectedCount = value is null ? 0 : 1;
+    {
+        if (value is null)
+        {
+            SelectedCount = 0;
+            return;
+        }
+
+        if (SelectedEntries.Count <= 1)
+        {
+            if (SelectedEntries.Count == 0 || !SelectedEntries[0].Equals(value))
+            {
+                SelectedEntries.Clear();
+                SelectedEntries.Add(value.Value);
+            }
+            SelectedCount = 1;
+        }
+    }
+
+    private void OnWatcherChanged(object? sender, EventArgs e)
+    {
+        if (_disposed)
+            return;
+
+        Dispatcher.UIThread.Post(async () =>
+        {
+            if (!_disposed && !string.IsNullOrEmpty(CurrentPath))
+                await RefreshAsync();
+        });
+    }
+
+    public void UpdateSelection(IList<FileSystemEntry> entries)
+    {
+        SelectedEntries.Clear();
+        foreach (var entry in entries)
+            SelectedEntries.Add(entry);
+
+        SelectedCount = SelectedEntries.Count;
+        if (SelectedEntries.Count == 1)
+            SelectedEntry = SelectedEntries[0];
+        else
+            SelectedEntry = null;
+    }
+
+    public void SelectAll()
+    {
+        SelectedEntries.Clear();
+        foreach (var entry in Entries)
+            SelectedEntries.Add(entry);
+
+        SelectedCount = SelectedEntries.Count;
+        if (SelectedEntries.Count == 1)
+            SelectedEntry = SelectedEntries[0];
+        else
+            SelectedEntry = null;
+    }
 
     public void NavigateTo(string path)
     {
@@ -235,27 +306,26 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
                 Navigated?.Invoke(this, EventArgs.Empty);
             });
         }
-finally
+        finally
+        {
+            if (ReferenceEquals(_refreshCts, cts))
             {
-                if (ReferenceEquals(_refreshCts, cts))
+                await Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    await Dispatcher.UIThread.InvokeAsync(() =>
-                    {
-                        if (!_disposed)
-                            IsLoading = false;
-                    });
-                    _refreshCts = null;
-                }
-
-                cts.Dispose();
+                    if (!_disposed)
+                        IsLoading = false;
+                });
+                _refreshCts = null;
             }
+
+            cts.Dispose();
+        }
     }
 
     private void ApplySortAndPublish()
     {
         TotalCount = _allEntries.Count;
 
-        // Filter (allocation-free substring match) then sort into the reusable view buffer.
         FileNameFilter.Apply(_allEntries, IsFilterVisible ? FilterText : null, _viewBuffer);
         _viewBuffer.Sort(FileSystemEntryComparer.For(SortColumn, SortDescending));
 
@@ -265,6 +335,8 @@ finally
 
         ItemCount = _viewBuffer.Count;
         SelectedEntry = null;
+        SelectedEntries.Clear();
+        SelectedCount = 0;
         UpdateStatusText();
     }
 
@@ -346,7 +418,7 @@ finally
         var wasFiltering = IsFilterActive;
         IsFilterVisible = false;
         if (FilterText.Length != 0)
-            FilterText = string.Empty; // triggers re-publish
+            FilterText = string.Empty;
         else if (wasFiltering)
             ApplySortAndPublish();
     }
@@ -365,9 +437,237 @@ finally
             _ => LayoutMode.Details
         };
 
-    /// <summary>Adjusts grid thumbnail size (used by Ctrl+wheel), clamped to the supported range.</summary>
     public void AdjustThumbnailSize(double delta)
         => ThumbnailSize = Math.Clamp(ThumbnailSize + delta, MinThumbnailSize, MaxThumbnailSize);
+
+    // ── File operations ──────────────────────────────────────────────────────
+
+    private void OnClipboardChanged(object? sender, EventArgs e)
+        => PasteCommand.NotifyCanExecuteChanged();
+
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private void Cut()
+    {
+        if (SelectedEntries.Count == 0)
+            return;
+
+        var paths = SelectedEntries.Select(e => e.FullPath).ToList();
+        _clipboard.SetCut(paths, CurrentPath);
+        _ = PublishToOsClipboardAsync(paths, ClipboardOperation.Cut);
+        CutCommand.NotifyCanExecuteChanged();
+        CopyCommand.NotifyCanExecuteChanged();
+        DeleteCommand.NotifyCanExecuteChanged();
+        BeginRenameCommand.NotifyCanExecuteChanged();
+        PasteCommand.NotifyCanExecuteChanged();
+    }
+
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private void Copy()
+    {
+        if (SelectedEntries.Count == 0)
+            return;
+
+        var paths = SelectedEntries.Select(e => e.FullPath).ToList();
+        _clipboard.SetCopy(paths, CurrentPath);
+        _ = PublishToOsClipboardAsync(paths, ClipboardOperation.Copy);
+        PasteCommand.NotifyCanExecuteChanged();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanPaste))]
+    private async Task Paste()
+    {
+        if (string.IsNullOrEmpty(CurrentPath))
+            return;
+
+        try
+        {
+            var payload = await ResolvePastePayloadAsync().ConfigureAwait(true);
+            if (payload is null || payload.Paths.Count == 0)
+            {
+                StatusText = "Clipboard has no files";
+                return;
+            }
+
+            if (payload.Operation == ClipboardOperation.Cut)
+            {
+                await _fileOps.MoveAsync(payload.Paths, CurrentPath).ConfigureAwait(true);
+                _clipboard.Clear();
+            }
+            else
+            {
+                await _fileOps.CopyAsync(payload.Paths, CurrentPath).ConfigureAwait(true);
+            }
+
+            await RefreshAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Paste failed: {ex.Message}");
+            StatusText = "Paste failed";
+        }
+    }
+
+    private async Task<ClipboardPayload?> ResolvePastePayloadAsync()
+    {
+        if (_clipboard.Current is { } internalPayload)
+            return internalPayload;
+
+        var os = await _osClipboard.TryGetFilesAsync().ConfigureAwait(true);
+        if (os is null)
+            return null;
+
+        return new ClipboardPayload(os.Value.Operation, os.Value.Paths, CurrentPath);
+    }
+
+    private async Task PublishToOsClipboardAsync(IReadOnlyList<string> paths, ClipboardOperation operation)
+    {
+        try
+        {
+            await _osClipboard.SetFilesAsync(paths, operation).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"OS clipboard publish failed: {ex.Message}");
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private async Task Delete()
+    {
+        if (SelectedEntries.Count == 0)
+            return;
+
+        var paths = SelectedEntries.Select(e => e.FullPath).ToList();
+        try
+        {
+            await _fileOps.DeleteAsync(paths, permanently: false);
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Delete failed: {ex.Message}");
+            StatusText = "Delete failed";
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRename))]
+    private void BeginRename()
+    {
+        if (SelectedEntries.Count != 1)
+            return;
+
+        var entry = SelectedEntries[0];
+        RenameText = entry.Name;
+        IsRenaming = true;
+    }
+
+    [RelayCommand]
+    private async Task CommitRename()
+    {
+        if (!IsRenaming || SelectedEntries.Count != 1)
+        {
+            IsRenaming = false;
+            return;
+        }
+
+        var entry = SelectedEntries[0];
+        var newName = RenameText.Trim();
+
+        if (string.IsNullOrWhiteSpace(newName) || newName == entry.Name)
+        {
+            IsRenaming = false;
+            return;
+        }
+
+        try
+        {
+            await _fileOps.RenameAsync(entry.FullPath, newName);
+            IsRenaming = false;
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Rename failed: {ex.Message}");
+            StatusText = "Rename failed";
+            IsRenaming = false;
+        }
+    }
+
+    [RelayCommand]
+    private void CancelRename() => IsRenaming = false;
+
+    [RelayCommand]
+    private async Task NewFolder()
+    {
+        if (string.IsNullOrEmpty(CurrentPath))
+            return;
+
+        try
+        {
+            await _fileOps.CreateFolderAsync(CurrentPath, "New Folder");
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"NewFolder failed: {ex.Message}");
+            StatusText = "Could not create folder";
+        }
+    }
+
+    private bool HasSelection() => SelectedEntries.Count > 0;
+
+    // Always allow Paste when a folder is open so OS clipboard (Explorer) works;
+    // Paste resolves internal payload first, then falls back to IOsFileClipboard.
+    private bool CanPaste() => !string.IsNullOrEmpty(CurrentPath);
+
+    private bool CanRename() => SelectedEntries.Count == 1;
+
+    partial void OnSelectedCountChanged(int value)
+    {
+        CutCommand.NotifyCanExecuteChanged();
+        CopyCommand.NotifyCanExecuteChanged();
+        DeleteCommand.NotifyCanExecuteChanged();
+        BeginRenameCommand.NotifyCanExecuteChanged();
+    }
+
+    public async Task HandleDropAsync(IReadOnlyList<string> paths, bool isCopy)
+    {
+        if (string.IsNullOrEmpty(CurrentPath) || paths.Count == 0)
+            return;
+
+        // Ignore drops that would nest an item into itself.
+        var filtered = paths
+            .Where(p => !IsSameOrChildPath(CurrentPath, p))
+            .ToList();
+        if (filtered.Count == 0)
+            return;
+
+        try
+        {
+            if (isCopy)
+                await _fileOps.CopyAsync(filtered, CurrentPath).ConfigureAwait(true);
+            else
+                await _fileOps.MoveAsync(filtered, CurrentPath).ConfigureAwait(true);
+
+            await RefreshAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Drop failed: {ex.Message}");
+            StatusText = "Drop failed";
+        }
+    }
+
+    private static bool IsSameOrChildPath(string directory, string path)
+    {
+        var dir = directory.TrimEnd('\\', '/');
+        var candidate = path.TrimEnd('\\', '/');
+        if (string.Equals(dir, candidate, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var prefix = dir + Path.DirectorySeparatorChar;
+        return candidate.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+    }
 
     // ── Session snapshot ─────────────────────────────────────────────────────
 
@@ -380,7 +680,6 @@ finally
         ThumbnailSize = ThumbnailSize
     };
 
-    /// <summary>Applies persisted presentation state, then navigates to the saved path.</summary>
     public void RestoreFrom(PaneSnapshot snapshot)
     {
         ViewMode = snapshot.ViewMode;
@@ -422,6 +721,9 @@ finally
         if (_disposed)
             return;
         _disposed = true;
+        _clipboard.Changed -= OnClipboardChanged;
+        _watcher.Changed -= OnWatcherChanged;
+        _watcher.Dispose();
         try { _refreshCts?.Cancel(); } catch (ObjectDisposedException) { }
         _refreshCts?.Dispose();
         _refreshCts = null;

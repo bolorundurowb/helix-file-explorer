@@ -17,6 +17,10 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly IFileSystemProvider _fileSystem;
     private readonly IQuickAccessProvider _quickAccess;
     private readonly IVolumeProvider _volumes;
+    private readonly IFileOperationService _fileOps;
+    private readonly IClipboardService _clipboard;
+    private readonly IOsFileClipboard _osClipboard;
+    private readonly Func<IFileChangeWatcher> _watcherFactory;
     private readonly string _homePath;
     private bool _disposed;
 
@@ -26,7 +30,11 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         IThemeService themeService,
         IFileSystemProvider fileSystem,
         IQuickAccessProvider quickAccess,
-        IVolumeProvider volumes)
+        IVolumeProvider volumes,
+        IFileOperationService fileOps,
+        IClipboardService clipboard,
+        IOsFileClipboard osClipboard,
+        Func<IFileChangeWatcher> watcherFactory)
     {
         _settingsStore = settingsStore;
         _sessionStore = sessionStore;
@@ -34,6 +42,10 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _fileSystem = fileSystem;
         _quickAccess = quickAccess;
         _volumes = volumes;
+        _fileOps = fileOps;
+        _clipboard = clipboard;
+        _osClipboard = osClipboard;
+        _watcherFactory = watcherFactory;
 
         _homePath = _quickAccess.GetPath(KnownFolderKind.Home)
                     ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -64,8 +76,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     public PaneViewModel? ActivePane => SelectedTab?.ActivePane;
 
     public bool HasMultipleTabs => Tabs.Count > 1;
-
-    // ── Session ──────────────────────────────────────────────────────────────
 
     private void RestoreSession()
     {
@@ -106,15 +116,12 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         }
         catch
         {
-            // Session persistence is best-effort; never block shutdown on a write failure.
         }
     }
 
-    // ── Tab lifecycle ────────────────────────────────────────────────────────
-
     private TabViewModel CreateTab()
     {
-        var tab = new TabViewModel(_fileSystem);
+        var tab = new TabViewModel(_fileSystem, _fileOps, _clipboard, _osClipboard, _watcherFactory);
         tab.CloseRequested += OnTabCloseRequested;
         tab.Navigated += OnTabNavigated;
         return tab;
@@ -218,8 +225,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ActivePane));
     }
 
-    // ── Dual pane / filter / view passthroughs ──────────────────────────────
-
     [RelayCommand]
     private void ToggleDualPane() => SelectedTab?.ToggleDualPaneCommand.Execute(null);
 
@@ -228,6 +233,27 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     [RelayCommand]
     private void SetViewMode(LayoutMode mode) => SelectedTab?.ActivePane.SetViewModeCommand.Execute(mode);
+
+    [RelayCommand]
+    private void Cut() => SelectedTab?.ActivePane.CutCommand.Execute(null);
+
+    [RelayCommand]
+    private void Copy() => SelectedTab?.ActivePane.CopyCommand.Execute(null);
+
+    [RelayCommand]
+    private void Paste() => SelectedTab?.ActivePane.PasteCommand.Execute(null);
+
+    [RelayCommand]
+    private void Delete() => SelectedTab?.ActivePane.DeleteCommand.Execute(null);
+
+    [RelayCommand]
+    private void Rename() => SelectedTab?.ActivePane.BeginRenameCommand.Execute(null);
+
+    [RelayCommand]
+    private void NewFolder() => SelectedTab?.ActivePane.NewFolderCommand.Execute(null);
+
+    [RelayCommand]
+    private void SelectAll() => SelectedTab?.ActivePane.SelectAll();
 
     private void UpdateSidebarSelection(string path)
     {

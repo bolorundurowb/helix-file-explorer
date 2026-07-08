@@ -47,7 +47,8 @@
 
             <CornerRadius x:Key="HelixContentCornerRadius">8</CornerRadius>
             <x:Double x:Key="HelixControlSpacing">8</x:Double>
-            <x:Double x:Key="HelixRowHeight">36</x:Double>
+            <x:Double x:Key="HelixRowHeight">28</x:Double>
+            <x:Double x:Key="HelixEntryFontSize">12</x:Double>
             <x:Double x:Key="HelixSidebarDefaultWidth">240</x:Double>
             <Thickness x:Key="HelixContentPadding">12</Thickness>
 

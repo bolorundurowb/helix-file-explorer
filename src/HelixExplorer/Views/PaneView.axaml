@@ -5,7 +5,10 @@
              x:Class="HelixExplorer.Views.PaneView"
              x:DataType="vm:PaneViewModel"
              Focusable="True"
-             KeyDown="OnPaneKeyDown">
+             KeyDown="OnPaneKeyDown"
+             DragDrop.AllowDrop="True"
+             DragDrop.Drop="OnDrop"
+             DragDrop.DragOver="OnDragOver">
 
     <Grid>
         <!-- Details view -->
@@ -16,42 +19,55 @@
                   IsReadOnly="True"
                   CanUserSortColumns="True"
                   CanUserResizeColumns="True"
-                  SelectionMode="Single"
+                  SelectionMode="Extended"
                   GridLinesVisibility="Horizontal"
                   HeadersVisibility="Column"
                   RowHeight="{DynamicResource HelixRowHeight}"
                   DoubleTapped="OnItemActivated"
                   SelectionChanged="OnSelectionChanged"
                   Sorting="OnDetailsSorting"
+                  PointerPressed="OnListPointerPressed"
+                  PointerMoved="OnListPointerMoved"
+                  PointerReleased="OnListPointerReleased"
                   Background="Transparent"
                   BorderThickness="0">
             <DataGrid.Columns>
                 <DataGridTemplateColumn Header="Name" Width="2*" Tag="Name" SortMemberPath="Name">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate x:DataType="models:FileSystemEntry">
-                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                <PathIcon Data="{Binding Converter={StaticResource EntryIconConverter}}"
-                                          Width="16" Height="16"
+                            <Grid ColumnDefinitions="Auto,*"
+                                  VerticalAlignment="Center"
+                                  ToolTip.Tip="{Binding Name}">
+                                <PathIcon Grid.Column="0"
+                                          Data="{Binding Converter={StaticResource EntryIconConverter}}"
+                                          Width="14" Height="14" Margin="0,0,6,0"
                                           Foreground="{DynamicResource HelixAccentBrush}" />
-                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
-                            </StackPanel>
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding Name}"
+                                           FontSize="{DynamicResource HelixEntryFontSize}"
+                                           TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Center" />
+                            </Grid>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
                 <DataGridTextColumn Header="Date modified"
                                     Binding="{Binding ModifiedUtc, Converter={StaticResource RelativeTimeConverter}}"
-                                    Width="160"
+                                    Width="140"
                                     Tag="Modified"
-                                    SortMemberPath="ModifiedUtc" />
+                                    SortMemberPath="ModifiedUtc"
+                                    FontSize="{DynamicResource HelixEntryFontSize}" />
                 <DataGridTextColumn Header="Type"
                                     Binding="{Binding TypeLabel}"
-                                    Width="120"
+                                    Width="100"
                                     Tag="Type"
-                                    SortMemberPath="Extension" />
-                <DataGridTemplateColumn Header="Size" Width="100" Tag="Size" SortMemberPath="SizeBytes">
+                                    SortMemberPath="Extension"
+                                    FontSize="{DynamicResource HelixEntryFontSize}" />
+                <DataGridTemplateColumn Header="Size" Width="90" Tag="Size" SortMemberPath="SizeBytes">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate x:DataType="models:FileSystemEntry">
                             <TextBlock Text="{Binding Converter={StaticResource FileSizeConverter}}"
+                                       FontSize="{DynamicResource HelixEntryFontSize}"
                                        VerticalAlignment="Center" />
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
@@ -63,26 +79,36 @@
         <ListBox x:Name="ListView"
                  IsVisible="{Binding IsListView}"
                  ItemsSource="{Binding Entries}"
-                 SelectionMode="Single"
+                 SelectionMode="Multiple"
                  Background="Transparent"
                  BorderThickness="0"
                  DoubleTapped="OnItemActivated"
                  SelectionChanged="OnSelectionChanged"
+                 PointerPressed="OnListPointerPressed"
+                 PointerMoved="OnListPointerMoved"
+                 PointerReleased="OnListPointerReleased"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
             <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="models:FileSystemEntry">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <PathIcon Data="{Binding Converter={StaticResource EntryIconConverter}}"
-                                  Width="16" Height="16"
+                    <Grid ColumnDefinitions="Auto,*"
+                          ToolTip.Tip="{Binding Name}">
+                        <PathIcon Grid.Column="0"
+                                  Data="{Binding Converter={StaticResource EntryIconConverter}}"
+                                  Width="14" Height="14" Margin="0,0,6,0"
                                   Foreground="{DynamicResource HelixAccentBrush}" />
-                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
-                    </StackPanel>
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding Name}"
+                                   FontSize="{DynamicResource HelixEntryFontSize}"
+                                   TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center" />
+                    </Grid>
                 </DataTemplate>
             </ListBox.ItemTemplate>
             <ListBox.Styles>
                 <Style Selector="ListBoxItem">
-                    <Setter Property="Padding" Value="8,2" />
-                    <Setter Property="MinHeight" Value="26" />
+                    <Setter Property="Padding" Value="8,1" />
+                    <Setter Property="MinHeight" Value="22" />
+                    <Setter Property="FontSize" Value="{DynamicResource HelixEntryFontSize}" />
                 </Style>
             </ListBox.Styles>
         </ListBox>
@@ -92,12 +118,15 @@
             <ListBox x:Name="GridView"
                      Grid.Row="0"
                      ItemsSource="{Binding Entries}"
-                     SelectionMode="Single"
+                     SelectionMode="Multiple"
                      Background="Transparent"
                      BorderThickness="0"
                      DoubleTapped="OnItemActivated"
                      SelectionChanged="OnSelectionChanged"
                      PointerWheelChanged="OnGridPointerWheel"
+                     PointerPressed="OnListPointerPressed"
+                     PointerMoved="OnListPointerMoved"
+                     PointerReleased="OnListPointerReleased"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListBox.ItemsPanel>
                     <ItemsPanelTemplate>
@@ -107,12 +136,14 @@
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="models:FileSystemEntry" x:CompileBindings="False">
                         <StackPanel Width="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                    Margin="6" Spacing="4">
+                                    Margin="6" Spacing="4"
+                                    ToolTip.Tip="{Binding Name}">
                             <PathIcon Data="{Binding Converter={StaticResource EntryIconConverter}}"
                                       Width="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=ListBox}}"
                                       Height="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=ListBox}}"
                                       Foreground="{DynamicResource HelixAccentBrush}" />
                             <TextBlock Text="{Binding Name}"
+                                       FontSize="{DynamicResource HelixEntryFontSize}"
                                        TextAlignment="Center"
                                        TextWrapping="Wrap"
                                        MaxLines="2"
@@ -144,6 +175,42 @@
                 </StackPanel>
             </Border>
         </Grid>
+
+        <!-- Rename overlay -->
+        <Border IsVisible="{Binding IsRenaming}"
+                VerticalAlignment="Top" HorizontalAlignment="Center"
+                Margin="0,60,0,0"
+                Background="{DynamicResource HelixContentCardBrush}"
+                BorderBrush="{DynamicResource HelixAccentBrush}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="12,8"
+                BoxShadow="0 4 12 0 #30000000">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBox x:Name="RenameBox"
+                         Text="{Binding RenameText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         Width="250"
+                         BorderThickness="0"
+                         Background="Transparent"
+                         Padding="0"
+                         VerticalAlignment="Center"
+                         KeyDown="OnRenameKeyDown" />
+                <Button Content="OK"
+                        Command="{Binding CommitRenameCommand}"
+                        Padding="8,4"
+                        Background="{DynamicResource HelixAccentBrush}"
+                        Foreground="White"
+                        BorderThickness="0"
+                        Cursor="Hand" />
+                <Button Content="Cancel"
+                        Command="{Binding CancelRenameCommand}"
+                        Padding="8,4"
+                        Background="Transparent"
+                        BorderThickness="1"
+                        BorderBrush="{DynamicResource HelixBorderColor}"
+                        Cursor="Hand" />
+            </StackPanel>
+        </Border>
 
         <!-- Quick filter pill (Ctrl+F) -->
         <Border IsVisible="{Binding IsFilterVisible}"

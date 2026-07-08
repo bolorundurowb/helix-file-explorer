@@ -14,8 +14,6 @@
         WindowDecorations="Full"
         Background="{DynamicResource HelixChromeBrush}">
 
-    <!-- Avalonia 12 paints a system title overlay over extended chrome; hide its text and
-         route pointer hits on our tab strip through as User controls instead of title-bar drag. -->
     <Window.Styles>
         <Style Selector="WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel > TextBlock">
             <Setter Property="IsVisible" Value="False" />
@@ -29,11 +27,18 @@
         <KeyBinding Gesture="Ctrl+W" Command="{Binding CloseSelectedTabCommand}" />
         <KeyBinding Gesture="Ctrl+D" Command="{Binding ToggleDualPaneCommand}" />
         <KeyBinding Gesture="Ctrl+F" Command="{Binding ToggleFilterCommand}" />
+        <KeyBinding Gesture="Ctrl+X" Command="{Binding CutCommand}" />
+        <KeyBinding Gesture="Ctrl+C" Command="{Binding CopyCommand}" />
+        <KeyBinding Gesture="Ctrl+V" Command="{Binding PasteCommand}" />
+        <KeyBinding Gesture="Delete" Command="{Binding DeleteCommand}" />
+        <KeyBinding Gesture="F2" Command="{Binding RenameCommand}" />
+        <KeyBinding Gesture="Ctrl+Shift+N" Command="{Binding NewFolderCommand}" />
+        <KeyBinding Gesture="Ctrl+A" Command="{Binding SelectAllCommand}" />
     </Window.KeyBindings>
 
     <DockPanel LastChildFill="True">
 
-        <!-- Tab Strip (sits in the extended title-bar band) -->
+        <!-- Tab Strip -->
         <Border DockPanel.Dock="Top"
                 Background="{DynamicResource HelixTabStripBrush}"
                 Padding="8,4,140,0"
@@ -121,7 +126,6 @@
                     </ListBox.ItemTemplate>
                 </ListBox>
 
-                <!-- Empty drag gutter between tabs and caption buttons -->
                 <Border Grid.Column="2"
                         Background="Transparent"
                         WindowDecorationProperties.ElementRole="TitleBar" />
@@ -214,19 +218,40 @@
                 BorderBrush="{DynamicResource HelixBorderColor}"
                 BorderThickness="0,0,0,1">
             <Grid ColumnDefinitions="*,Auto">
-                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="2" Opacity="0.45">
-                    <Button ToolTip.Tip="New" Padding="6,4" Background="Transparent" BorderThickness="0" IsEnabled="False">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="2">
+                    <Button ToolTip.Tip="New folder (Ctrl+Shift+N)"
+                            Command="{Binding NewFolderCommand}"
+                            Padding="6,4" Background="Transparent" BorderThickness="0" Cursor="Hand">
                         <StackPanel Orientation="Horizontal" Spacing="4">
                             <PathIcon Data="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" Width="14" Height="14" />
                             <TextBlock Text="New" VerticalAlignment="Center" FontSize="12" />
                         </StackPanel>
                     </Button>
                     <Border Width="1" Background="{DynamicResource HelixBorderColor}" Margin="4,4" />
-                    <Button ToolTip.Tip="Cut" Padding="6" Background="Transparent" BorderThickness="0" IsEnabled="False">
+                    <Button ToolTip.Tip="Cut (Ctrl+X)"
+                            Command="{Binding CutCommand}"
+                            Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
                         <PathIcon Data="M19,3L13,9L15,11L22,4V3M12,12.5A0.5,0.5 0 0,1 11.5,12A0.5,0.5 0 0,1 12,11.5A0.5,0.5 0 0,1 12.5,12A0.5,0.5 0 0,1 12,12.5M6,20A2,2 0 0,1 4,18C4,16.89 4.9,16 6,16A2,2 0 0,1 8,18C8,19.11 7.1,20 6,20M6,8A2,2 0 0,1 4,6C4,4.89 4.9,4 6,4A2,2 0 0,1 8,6C8,7.11 7.1,8 6,8M9.64,7.64C9.87,7.14 10,6.59 10,6A4,4 0 0,0 6,2A4,4 0 0,0 2,6A4,4 0 0,0 6,10C6.59,10 7.14,9.87 7.64,9.64L10,12L7.64,14.36C7.14,14.13 6.59,14 6,14A4,4 0 0,0 2,18A4,4 0 0,0 6,22A4,4 0 0,0 10,18C10,17.41 9.87,16.86 9.64,16.36L12,14L19,21H22V20L9.64,7.64Z" Width="14" Height="14" />
                     </Button>
-                    <Button ToolTip.Tip="Copy" Padding="6" Background="Transparent" BorderThickness="0" IsEnabled="False">
+                    <Button ToolTip.Tip="Copy (Ctrl+C)"
+                            Command="{Binding CopyCommand}"
+                            Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
                         <PathIcon Data="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" Width="14" Height="14" />
+                    </Button>
+                    <Button ToolTip.Tip="Paste (Ctrl+V)"
+                            Command="{Binding PasteCommand}"
+                            Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
+                        <PathIcon Data="M19,20H5V4H7V7H17V4H19M12,2A1,1 0 0,1 13,3A1,1 0 0,1 12,4A1,1 0 0,1 11,3A1,1 0 0,1 12,2M19,2H14.82C14.4,0.84 13.3,0 12,0C10.7,0 9.6,0.84 9.18,2H5A2,2 0 0,0 3,4V20A2,2 0 0,0 5,22H19A2,2 0 0,0 21,20V4A2,2 0 0,0 19,2Z" Width="14" Height="14" />
+                    </Button>
+                    <Button ToolTip.Tip="Rename (F2)"
+                            Command="{Binding RenameCommand}"
+                            Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
+                        <PathIcon Data="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z" Width="14" Height="14" />
+                    </Button>
+                    <Button ToolTip.Tip="Delete"
+                            Command="{Binding DeleteCommand}"
+                            Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
+                        <PathIcon Data="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z" Width="14" Height="14" />
                     </Button>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">

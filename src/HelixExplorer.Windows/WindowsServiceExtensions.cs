@@ -10,6 +10,9 @@ public static class WindowsServiceExtensions
         services.AddSingleton<IFileSystemProvider, FileSystem.WinFileSystemProvider>();
         services.AddSingleton<IQuickAccessProvider, FileSystem.WinQuickAccessProvider>();
         services.AddSingleton<IVolumeProvider, FileSystem.WinVolumeProvider>();
+        services.AddSingleton<IFileOperationService, FileSystem.WinFileOperationService>();
+        services.AddTransient<IFileChangeWatcher, FileSystem.FileChangeWatcherService>();
+        services.AddSingleton<Func<IFileChangeWatcher>>(sp => () => sp.GetRequiredService<IFileChangeWatcher>());
         return services;
     }
 }

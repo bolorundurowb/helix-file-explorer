@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Filtering;
+using HelixExplorer.Core.Formatting;
 using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Core.Settings;
@@ -20,6 +21,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 {
     public const double MinThumbnailSize = 32;
     public const double MaxThumbnailSize = 256;
+
+    public const string HomeRoute = "__home__";
 
     private readonly IFileSystemProvider _fileSystem;
     private readonly IArchiveProvider _archive;
@@ -100,6 +103,24 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     private string _currentPath = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsHome))]
+    [NotifyPropertyChangedFor(nameof(IsFileSystem))]
+    [NotifyPropertyChangedFor(nameof(IsPathMode))]
+    private PaneLocationKind _locationKind = PaneLocationKind.FileSystem;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsPathMode))]
+    [NotifyPropertyChangedFor(nameof(IsSearchMode))]
+    [NotifyPropertyChangedFor(nameof(IsHomeMode))]
+    private OmnibarMode _omnibarMode = OmnibarMode.Path;
+
+    public bool IsPathMode => OmnibarMode == OmnibarMode.Path && IsFileSystem;
+    public bool IsSearchMode => OmnibarMode == OmnibarMode.Search;
+    public bool IsHomeMode => OmnibarMode == OmnibarMode.Home || IsHome;
+
+    [ObservableProperty] private long _listingSizeBytes;
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsDetailsView))]
     [NotifyPropertyChangedFor(nameof(IsListView))]
     [NotifyPropertyChangedFor(nameof(IsGridView))]
@@ -142,6 +163,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     public bool IsGridView => ViewMode == LayoutMode.Grid;
     public bool IsMillerView => ViewMode == LayoutMode.Miller;
     public bool IsArchive => ArchivePath.IsVirtual(CurrentPath);
+    public bool IsHome => LocationKind == PaneLocationKind.Home;
+    public bool IsFileSystem => LocationKind == PaneLocationKind.FileSystem;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GoBackCommand))]
@@ -161,14 +184,17 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
     partial void OnCurrentPathChanged(string value)
     {
+        var isHomeRoute = string.Equals(value, HomeRoute, StringComparison.Ordinal);
+        LocationKind = isHomeRoute ? PaneLocationKind.Home : PaneLocationKind.FileSystem;
+
         _entryPool.Clear();
-        RebuildBreadcrumbs(value);
-        EditablePath = value;
+        RebuildBreadcrumbs(isHomeRoute ? string.Empty : value);
+        EditablePath = isHomeRoute ? string.Empty : value;
         ClearFilter();
         RepositoryStatus = GitStatus.Empty;
         _gitSnapshot = GitStatusSnapshot.Empty;
         CancelGitRefresh();
-        _watcher.Watch(IsArchive ? string.Empty : value);
+        _watcher.Watch(isHomeRoute || IsArchive ? string.Empty : value);
         PasteCommand.NotifyCanExecuteChanged();
         CutCommand.NotifyCanExecuteChanged();
         CopyCommand.NotifyCanExecuteChanged();
@@ -177,7 +203,43 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         ShowMoreOptionsCommand.NotifyCanExecuteChanged();
         CompressToZipCommand.NotifyCanExecuteChanged();
         ExtractHereCommand.NotifyCanExecuteChanged();
+        NewFolderCommand.NotifyCanExecuteChanged();
+
+        if (isHomeRoute)
+        {
+            OmnibarMode = OmnibarMode.Home;
+            _allEntries = Array.Empty<FileSystemEntry>();
+            Entries.Clear();
+            SelectedEntries.Clear();
+            SelectedEntry = null;
+            SelectedCount = 0;
+            ItemCount = 0;
+            TotalCount = 0;
+            StatusText = string.Empty;
+            Navigated?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+
+        if (OmnibarMode == OmnibarMode.Home)
+            OmnibarMode = OmnibarMode.Path;
+
         _ = RefreshAsync(showLoading: true);
+    }
+
+    partial void OnLocationKindChanged(PaneLocationKind value)
+    {
+        if (value == PaneLocationKind.Home)
+            OmnibarMode = OmnibarMode.Home;
+        else if (OmnibarMode == OmnibarMode.Home)
+            OmnibarMode = OmnibarMode.Path;
+    }
+
+    public void NavigateToHome()
+    {
+        if (IsHome)
+            return;
+
+        RecordNavigation(HomeRoute);
     }
 
     partial void OnSortColumnChanged(SortColumn value) => ApplySortAndPublish();
@@ -389,7 +451,13 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    private void GoUp() => NavigateTo("..");
+    private void GoUp()
+    {
+        if (IsHome)
+            return;
+
+        NavigateTo("..");
+    }
 
     [RelayCommand]
     private Task Refresh() => RefreshAsync(showLoading: true);
@@ -398,7 +466,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
     public async Task RefreshAsync(bool showLoading)
     {
-        if (string.IsNullOrEmpty(CurrentPath) || _disposed)
+        if (string.IsNullOrEmpty(CurrentPath) || IsHome || _disposed)
             return;
 
         var generation = Interlocked.Increment(ref _refreshGeneration);
@@ -611,6 +679,13 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         FileNameFilter.Apply(_visibleBuffer, IsFilterVisible ? FilterText : null, _viewBuffer);
         _viewBuffer.Sort(FileSystemEntryComparer.For(SortColumn, SortDescending));
 
+        ListingSizeBytes = 0;
+        foreach (var entry in _viewBuffer)
+        {
+            if (!entry.IsDirectory)
+                ListingSizeBytes += entry.SizeBytes;
+        }
+
         var usedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var visualTargets = new List<EntryItemViewModel>();
         var nextEntries = new List<EntryItemViewModel>(_viewBuffer.Count);
@@ -685,11 +760,12 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     {
         if (IsFilterActive)
         {
-            StatusText = $"{ItemCount} of {TotalCount} item{(TotalCount == 1 ? "" : "s")}";
+            StatusText = $"{ItemCount} of {TotalCount} items";
             return;
         }
 
-        StatusText = $"{ItemCount} item{(ItemCount == 1 ? "" : "s")}";
+        var size = FileSizeFormatter.FormatBinary(ListingSizeBytes);
+        StatusText = $"{ItemCount} item{(ItemCount == 1 ? "" : "s")} | {size}";
     }
 
     public void ActivateSelected()
@@ -800,18 +876,27 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         IsEditingPath = true;
     }
 
-    // ── Quick filter (Ctrl+F) ────────────────────────────────────────────────
+    [RelayCommand]
+    private void ToggleFilter() => EnterSearchMode();
 
     [RelayCommand]
-    private void ToggleFilter()
+    public void EnterSearchMode()
     {
-        if (IsFilterVisible)
-            ClearFilter();
-        else
-            IsFilterVisible = true;
+        if (!IsFileSystem)
+            return;
+
+        OmnibarMode = OmnibarMode.Search;
+        IsFilterVisible = true;
     }
 
-    public void ShowFilter() => IsFilterVisible = true;
+    [RelayCommand]
+    public void ExitSearchMode()
+    {
+        OmnibarMode = IsHome ? OmnibarMode.Home : OmnibarMode.Path;
+        ClearFilter();
+    }
+
+    public void ShowFilter() => EnterSearchMode();
 
     public void ClearFilter()
     {
@@ -821,9 +906,10 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             FilterText = string.Empty;
         else if (wasFiltering)
             ApplySortAndPublish();
-    }
 
-    // ── View mode & thumbnail sizing ─────────────────────────────────────────
+        if (OmnibarMode == OmnibarMode.Search)
+            OmnibarMode = IsHome ? OmnibarMode.Home : OmnibarMode.Path;
+    }
 
     [RelayCommand]
     public void SetViewMode(LayoutMode mode) => ViewMode = mode;
@@ -840,8 +926,6 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
     public void AdjustThumbnailSize(double delta)
         => ThumbnailSize = Math.Clamp(ThumbnailSize + delta, MinThumbnailSize, MaxThumbnailSize);
-
-    // ── File operations ──────────────────────────────────────────────────────
 
     private void OnClipboardChanged(object? sender, EventArgs e)
     {
@@ -1382,7 +1466,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
     private bool HasSingleSelection() => SelectedEntries.Count == 1;
 
-    private bool CanModifyHere() => !IsArchive;
+    private bool CanModifyHere() => !IsArchive && !IsHome;
 
     private bool CanModifySelection() => CanModifyHere() && HasSelection();
 
@@ -1526,11 +1610,9 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         return candidate.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
     }
 
-    // ── Session snapshot ─────────────────────────────────────────────────────
-
     public PaneSnapshot CreateSnapshot() => new()
     {
-        Path = CurrentPath,
+        Path = IsHome ? string.Empty : CurrentPath,
         ViewMode = ViewMode,
         SortColumn = SortColumn,
         SortDescending = SortDescending,
@@ -1546,6 +1628,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
         if (!string.IsNullOrWhiteSpace(snapshot.Path))
             NavigateTo(snapshot.Path);
+        else
+            NavigateToHome();
     }
 
     private void RebuildBreadcrumbs(string path)

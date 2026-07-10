@@ -5,4 +5,6 @@ public sealed record VolumeInfo(
     string Label,
     string DisplayName,
     DriveType DriveType,
-    bool IsReady);
+    bool IsReady,
+    long TotalBytes = 0,
+    long FreeBytes = 0);

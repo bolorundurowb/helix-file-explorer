@@ -1,0 +1,215 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HelixExplorer.ViewModels"
+             xmlns:theme="using:HelixExplorer.Core.Theming"
+             xmlns:settings="using:HelixExplorer.Core.Settings"
+             xmlns:models="using:HelixExplorer.Core.Models"
+             x:Class="HelixExplorer.Views.SettingsPage"
+             x:DataType="vm:SettingsPageViewModel"
+             Background="{DynamicResource HelixSettingsContentBrush}">
+    <Grid ColumnDefinitions="220,*">
+
+        <!-- Settings nav column -->
+        <Border Grid.Column="0"
+                Background="{DynamicResource HelixSidebarBrush}"
+                BorderBrush="{DynamicResource HelixBorderColor}"
+                BorderThickness="0,0,1,0">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top"
+                           Text="Settings"
+                           FontSize="20"
+                           FontWeight="SemiBold"
+                           Margin="16,16,16,12" />
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ItemsControl ItemsSource="{Binding Sections}" Margin="6,0">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:SettingsSection">
+                                <Button Classes="settingsNavItem"
+                                        Margin="0,1"
+                                        Click="OnSectionClick">
+                                    <Grid ColumnDefinitions="3,Auto,*" MinHeight="34">
+                                        <Border Grid.Column="0"
+                                                Width="3"
+                                                CornerRadius="0,2,2,0"
+                                                Background="{DynamicResource HelixSettingsNavAccentBar}"
+                                                IsVisible="{Binding IsSelected}" />
+                                        <Border Grid.Column="1" Grid.ColumnSpan="2"
+                                                CornerRadius="4"
+                                                Margin="4,0,0,0"
+                                                Background="{DynamicResource HelixSettingsNavSelectedBrush}"
+                                                IsVisible="{Binding IsSelected}" />
+                                        <PathIcon Grid.Column="1"
+                                                  Data="{Binding IconGeometry}"
+                                                  Width="16" Height="16"
+                                                  Margin="10,0,10,0"
+                                                  VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="2"
+                                                   Text="{Binding Title}"
+                                                   FontSize="14"
+                                                   VerticalAlignment="Center"
+                                                   Padding="0,7,8,7"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </Grid>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+
+        <!-- Settings content -->
+        <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="24,20" MaxWidth="720" HorizontalAlignment="Left" Spacing="8">
+                <TextBlock Text="{Binding SelectedTitle}"
+                           FontSize="20"
+                           FontWeight="SemiBold"
+                           Margin="0,0,0,12" />
+
+                <!-- General -->
+                <StackPanel Spacing="4" IsVisible="{Binding IsGeneral}">
+                    <TextBlock Text="Dual pane mode"
+                               FontSize="14" FontWeight="SemiBold" Margin="2,4,0,4" />
+                    <Border Classes="settingsRow">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock Text="Open tabs in dual pane mode" FontSize="14" />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1"
+                                          IsChecked="{Binding Main.DefaultDualPane, Mode=TwoWay}" />
+                        </Grid>
+                    </Border>
+                    <Border Classes="settingsRow">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0" Text="Default split direction"
+                                       FontSize="14" VerticalAlignment="Center" />
+                            <ComboBox Grid.Column="1" MinWidth="150"
+                                      SelectedItem="{Binding Main.DefaultSplitOrientation, Mode=TwoWay}">
+                                <models:PaneSplitOrientation>Vertical</models:PaneSplitOrientation>
+                                <models:PaneSplitOrientation>Horizontal</models:PaneSplitOrientation>
+                            </ComboBox>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+
+                <!-- Appearance -->
+                <StackPanel Spacing="4" IsVisible="{Binding IsAppearance}">
+                    <Border Classes="settingsRow">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0" Text="Theme" FontSize="14" VerticalAlignment="Center" />
+                            <ComboBox Grid.Column="1" MinWidth="150"
+                                      SelectedItem="{Binding Main.Theme, Mode=TwoWay}">
+                                <theme:ThemeMode>System</theme:ThemeMode>
+                                <theme:ThemeMode>Light</theme:ThemeMode>
+                                <theme:ThemeMode>Dark</theme:ThemeMode>
+                            </ComboBox>
+                        </Grid>
+                    </Border>
+                    <Border Classes="settingsRow">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="Background colour" FontSize="14" />
+                            <WrapPanel Orientation="Horizontal">
+                                <Button Classes="settingsNavItem" Width="64" Height="64" Margin="0,0,10,10"
+                                        Click="OnAccentClick" Tag="">
+                                    <StackPanel VerticalAlignment="Center">
+                                        <PathIcon Data="{DynamicResource HelixFolderIconGeometry}"
+                                                  Width="30" Height="30" HorizontalAlignment="Center"
+                                                  Foreground="{DynamicResource HelixSecondaryTextBrush}" />
+                                        <TextBlock Text="Default" FontSize="11" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Classes="settingsNavItem" Width="64" Height="64" Margin="0,0,10,10"
+                                        Click="OnAccentClick" Tag="#0078D4">
+                                    <StackPanel VerticalAlignment="Center">
+                                        <PathIcon Data="{DynamicResource HelixFolderIconGeometry}"
+                                                  Width="30" Height="30" HorizontalAlignment="Center"
+                                                  Foreground="#0078D4" />
+                                        <TextBlock Text="Blue" FontSize="11" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Classes="settingsNavItem" Width="64" Height="64" Margin="0,0,10,10"
+                                        Click="OnAccentClick" Tag="#107C10">
+                                    <StackPanel VerticalAlignment="Center">
+                                        <PathIcon Data="{DynamicResource HelixFolderIconGeometry}"
+                                                  Width="30" Height="30" HorizontalAlignment="Center"
+                                                  Foreground="#107C10" />
+                                        <TextBlock Text="Green" FontSize="11" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Classes="settingsNavItem" Width="64" Height="64" Margin="0,0,10,10"
+                                        Click="OnAccentClick" Tag="#8764B8">
+                                    <StackPanel VerticalAlignment="Center">
+                                        <PathIcon Data="{DynamicResource HelixFolderIconGeometry}"
+                                                  Width="30" Height="30" HorizontalAlignment="Center"
+                                                  Foreground="#8764B8" />
+                                        <TextBlock Text="Purple" FontSize="11" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </Button>
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- Layout -->
+                <StackPanel Spacing="4" IsVisible="{Binding IsLayout}">
+                    <Border Classes="settingsRow">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0" Text="Default view mode" FontSize="14" VerticalAlignment="Center" />
+                            <ComboBox Grid.Column="1" MinWidth="150"
+                                      SelectedItem="{Binding Main.DefaultViewMode, Mode=TwoWay}">
+                                <models:LayoutMode>Details</models:LayoutMode>
+                                <models:LayoutMode>List</models:LayoutMode>
+                                <models:LayoutMode>Grid</models:LayoutMode>
+                                <models:LayoutMode>Miller</models:LayoutMode>
+                            </ComboBox>
+                        </Grid>
+                    </Border>
+                    <Border Classes="settingsRow">
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="Default thumbnail size (grid view)" FontSize="14" />
+                            <Slider Minimum="32" Maximum="256"
+                                    Value="{Binding Main.DefaultThumbnailSize, Mode=TwoWay}"
+                                    TickFrequency="16" IsSnapToTickEnabled="True" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- Files & folders -->
+                <StackPanel Spacing="4" IsVisible="{Binding IsFilesFolders}">
+                    <Border Classes="settingsRow">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0" Text="Show hidden items" FontSize="14" VerticalAlignment="Center" />
+                            <ToggleSwitch Grid.Column="1" IsChecked="{Binding Main.ShowHiddenFiles, Mode=TwoWay}" />
+                        </Grid>
+                    </Border>
+                    <Border Classes="settingsRow">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0" Text="Show file name extensions" FontSize="14" VerticalAlignment="Center" />
+                            <ToggleSwitch Grid.Column="1" IsChecked="{Binding Main.ShowFileExtensions, Mode=TwoWay}" />
+                        </Grid>
+                    </Border>
+                    <Border Classes="settingsRow">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock Text="File size units" FontSize="14" />
+                                <TextBlock Text="Binary uses KiB/MiB. Decimal uses KB/MB."
+                                           FontSize="12" Opacity="0.6" />
+                            </StackPanel>
+                            <ComboBox Grid.Column="1" MinWidth="150"
+                                      SelectedItem="{Binding Main.SizeDisplay, Mode=TwoWay}">
+                                <settings:SizeDisplayMode>Binary</settings:SizeDisplayMode>
+                                <settings:SizeDisplayMode>Decimal</settings:SizeDisplayMode>
+                            </ComboBox>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+
+                <!-- Placeholder sections -->
+                <TextBlock IsVisible="{Binding IsPlaceholder}"
+                           Text="There are no configurable options here yet."
+                           FontSize="13" Opacity="0.6" Margin="2,4" />
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

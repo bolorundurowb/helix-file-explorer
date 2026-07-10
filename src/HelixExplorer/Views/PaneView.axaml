@@ -35,7 +35,76 @@
         </Style>
     </UserControl.Styles>
 
-    <Grid>
+    <UserControl.Resources>
+        <ContextMenu x:Key="EntryContextMenu"
+                     x:CompileBindings="False"
+                     Opening="OnEntryContextMenuOpening">
+            <StackPanel Orientation="Horizontal" Spacing="2" Margin="4,2">
+                <Button Classes="toolButton" ToolTip.Tip="Cut" Command="{Binding CutCommand}">
+                    <PathIcon Data="M9.64,7.64C9.87,7.14 10,6.59 10,6A4,4 0 0,0 6,2A4,4 0 0,0 2,6A4,4 0 0,0 6,10C6.59,10 7.14,9.87 7.64,9.64L10,12L7.64,14.36C7.14,14.13 6.59,14 6,14A4,4 0 0,0 2,18A4,4 0 0,0 6,22A4,4 0 0,0 10,18C10,17.41 9.87,16.86 9.64,16.36L12,14L19,21H22V20L9.64,7.64M6,8A2,2 0 0,1 4,6A2,2 0 0,1 6,4A2,2 0 0,1 8,6A2,2 0 0,1 6,8M6,20A2,2 0 0,1 4,18A2,2 0 0,1 6,16A2,2 0 0,1 8,18A2,2 0 0,1 6,20M12,12.5L14,10.5L22,2.5V2H19L12,9L10,7L8.5,8.5L12,12.5Z" Width="14" Height="14" />
+                </Button>
+                <Button Classes="toolButton" ToolTip.Tip="Copy" Command="{Binding CopyCommand}">
+                    <PathIcon Data="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" Width="14" Height="14" />
+                </Button>
+                <Button Classes="toolButton" ToolTip.Tip="Rename" Command="{Binding BeginRenameCommand}">
+                    <PathIcon Data="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z" Width="14" Height="14" />
+                </Button>
+                <Button Classes="toolButton" ToolTip.Tip="Delete" Command="{Binding DeleteCommand}">
+                    <PathIcon Data="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6Z" Width="14" Height="14" />
+                </Button>
+                <Button Classes="toolButton" ToolTip.Tip="Properties" Command="{Binding ShowPropertiesCommand}">
+                    <PathIcon Data="M13,9H11V7H13M13,17H11V11H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z" Width="14" Height="14" />
+                </Button>
+            </StackPanel>
+            <Separator />
+            <MenuItem Header="Open" Command="{Binding OpenCommand}" />
+            <MenuItem Header="Open in new tab" Command="{Binding OpenInNewTabCommand}" />
+            <MenuItem Header="Open in new window" Command="{Binding OpenInNewWindowCommand}" />
+            <MenuItem Header="Open in other pane" Command="{Binding OpenInOtherPaneCommand}" />
+            <Separator />
+            <MenuItem Header="Copy path" Command="{Binding CopyPathCommand}" />
+            <MenuItem Header="Pin to sidebar" Command="{Binding PinToSidebarCommand}" />
+            <MenuItem Header="Unpin from sidebar" Command="{Binding UnpinFromSidebarCommand}" />
+            <MenuItem Header="Paste" Command="{Binding PasteCommand}" />
+            <Separator />
+            <MenuItem Header="Compress to ZIP" Command="{Binding CompressToZipCommand}" />
+            <MenuItem Header="Extract here" Command="{Binding ExtractHereCommand}" />
+            <Separator />
+            <MenuItem Header="Layout">
+                <MenuItem Header="Details" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.Details}" />
+                <MenuItem Header="List" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.List}" />
+                <MenuItem Header="Grid" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.Grid}" />
+                <MenuItem Header="Columns" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.Miller}" />
+            </MenuItem>
+            <MenuItem Header="Folder color">
+                <MenuItem Header="Red" Command="{Binding SetFolderColorCommand}" CommandParameter="#E81123" />
+                <MenuItem Header="Orange" Command="{Binding SetFolderColorCommand}" CommandParameter="#F7630C" />
+                <MenuItem Header="Green" Command="{Binding SetFolderColorCommand}" CommandParameter="#107C10" />
+                <MenuItem Header="Blue" Command="{Binding SetFolderColorCommand}" CommandParameter="#0078D4" />
+                <MenuItem Header="Purple" Command="{Binding SetFolderColorCommand}" CommandParameter="#8764B8" />
+                <MenuItem Header="Clear color" Command="{Binding ClearFolderColorCommand}" />
+            </MenuItem>
+            <Separator />
+            <MenuItem Header="Show more options" Command="{Binding ShowMoreOptionsCommand}" />
+        </ContextMenu>
+        <ContextMenu x:Key="EmptyAreaContextMenu"
+                     x:CompileBindings="False"
+                     Opening="OnEntryContextMenuOpening">
+            <MenuItem Header="Paste" Command="{Binding PasteCommand}" />
+            <MenuItem Header="New folder" Command="{Binding NewFolderCommand}" />
+            <MenuItem Header="Refresh" Command="{Binding RefreshCommand}" />
+            <Separator />
+            <MenuItem Header="Layout">
+                <MenuItem Header="Details" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.Details}" />
+                <MenuItem Header="List" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.List}" />
+                <MenuItem Header="Grid" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.Grid}" />
+                <MenuItem Header="Columns" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.Miller}" />
+            </MenuItem>
+        </ContextMenu>
+    </UserControl.Resources>
+
+    <Grid Background="{DynamicResource HelixFileAreaBrush}"
+          ContextMenu="{StaticResource EmptyAreaContextMenu}">
         <!-- Details view -->
         <DataGrid x:Name="DetailsGrid"
                   IsVisible="{Binding IsDetailsView}"
@@ -57,50 +126,7 @@
                   Background="Transparent"
                   BorderThickness="0">
             <DataGrid.ContextMenu>
-                <ContextMenu x:CompileBindings="False"
-                             Opening="OnEntryContextMenuOpening">
-                    <StackPanel Orientation="Horizontal" Spacing="2" Margin="4,2">
-                        <Button ToolTip.Tip="Cut" Command="{Binding CutCommand}" Padding="6" Background="Transparent" BorderThickness="0">
-                            <PathIcon Data="M9.64,7.64C9.87,7.14 10,6.59 10,6A4,4 0 0,0 6,2A4,4 0 0,0 2,6A4,4 0 0,0 6,10C6.59,10 7.14,9.87 7.64,9.64L10,12L7.64,14.36C7.14,14.13 6.59,14 6,14A4,4 0 0,0 2,18A4,4 0 0,0 6,22A4,4 0 0,0 10,18C10,17.41 9.87,16.86 9.64,16.36L12,14L19,21H22V20L9.64,7.64M6,8A2,2 0 0,1 4,6A2,2 0 0,1 6,4A2,2 0 0,1 8,6A2,2 0 0,1 6,8M6,20A2,2 0 0,1 4,18A2,2 0 0,1 6,16A2,2 0 0,1 8,18A2,2 0 0,1 6,20M12,12.5L14,10.5L22,2.5V2H19L12,9L10,7L8.5,8.5L12,12.5Z" Width="14" Height="14" />
-                        </Button>
-                        <Button ToolTip.Tip="Copy" Command="{Binding CopyCommand}" Padding="6" Background="Transparent" BorderThickness="0">
-                            <PathIcon Data="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" Width="14" Height="14" />
-                        </Button>
-                        <Button ToolTip.Tip="Rename" Command="{Binding BeginRenameCommand}" Padding="6" Background="Transparent" BorderThickness="0">
-                            <PathIcon Data="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z" Width="14" Height="14" />
-                        </Button>
-                        <Button ToolTip.Tip="Delete" Command="{Binding DeleteCommand}" Padding="6" Background="Transparent" BorderThickness="0">
-                            <PathIcon Data="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6Z" Width="14" Height="14" />
-                        </Button>
-                        <Button ToolTip.Tip="Properties" Command="{Binding ShowPropertiesCommand}" Padding="6" Background="Transparent" BorderThickness="0">
-                            <PathIcon Data="M13,9H11V7H13M13,17H11V11H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z" Width="14" Height="14" />
-                        </Button>
-                    </StackPanel>
-                    <Separator />
-                    <MenuItem Header="Open" Command="{Binding OpenCommand}" />
-                    <MenuItem Header="Open in new tab" Command="{Binding OpenInNewTabCommand}" />
-                    <MenuItem Header="Open in new window" Command="{Binding OpenInNewWindowCommand}" />
-                    <MenuItem Header="Open in other pane" Command="{Binding OpenInOtherPaneCommand}" />
-                    <Separator />
-                    <MenuItem Header="Copy path" Command="{Binding CopyPathCommand}" />
-                    <MenuItem Header="Pin to sidebar" Command="{Binding PinToSidebarCommand}" />
-                    <MenuItem Header="Unpin from sidebar" Command="{Binding UnpinFromSidebarCommand}" />
-                    <MenuItem Header="Paste" Command="{Binding PasteCommand}" />
-                    <Separator />
-                    <MenuItem Header="Compress to ZIP" Command="{Binding CompressToZipCommand}" />
-                    <MenuItem Header="Extract here" Command="{Binding ExtractHereCommand}" />
-                    <Separator />
-                    <MenuItem Header="Folder color">
-                        <MenuItem Header="Red" Command="{Binding SetFolderColorCommand}" CommandParameter="#E81123" />
-                        <MenuItem Header="Orange" Command="{Binding SetFolderColorCommand}" CommandParameter="#F7630C" />
-                        <MenuItem Header="Green" Command="{Binding SetFolderColorCommand}" CommandParameter="#107C10" />
-                        <MenuItem Header="Blue" Command="{Binding SetFolderColorCommand}" CommandParameter="#0078D4" />
-                        <MenuItem Header="Purple" Command="{Binding SetFolderColorCommand}" CommandParameter="#8764B8" />
-                        <MenuItem Header="Clear color" Command="{Binding ClearFolderColorCommand}" />
-                    </MenuItem>
-                    <Separator />
-                    <MenuItem Header="Show more options" Command="{Binding ShowMoreOptionsCommand}" />
-                </ContextMenu>
+                <StaticResource ResourceKey="EntryContextMenu" />
             </DataGrid.ContextMenu>
             <DataGrid.Columns>
                 <DataGridTemplateColumn Header="Name" Width="2*" Tag="Name" SortMemberPath="Name">
@@ -161,50 +187,7 @@
                  PointerReleased="OnListPointerReleased"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
             <ListBox.ContextMenu>
-                <ContextMenu x:CompileBindings="False"
-                             Opening="OnEntryContextMenuOpening">
-                    <StackPanel Orientation="Horizontal" Spacing="2" Margin="4,2">
-                        <Button ToolTip.Tip="Cut" Command="{Binding CutCommand}" Padding="6" Background="Transparent" BorderThickness="0">
-                            <PathIcon Data="M9.64,7.64C9.87,7.14 10,6.59 10,6A4,4 0 0,0 6,2A4,4 0 0,0 2,6A4,4 0 0,0 6,10C6.59,10 7.14,9.87 7.64,9.64L10,12L7.64,14.36C7.14,14.13 6.59,14 6,14A4,4 0 0,0 2,18A4,4 0 0,0 6,22A4,4 0 0,0 10,18C10,17.41 9.87,16.86 9.64,16.36L12,14L19,21H22V20L9.64,7.64M6,8A2,2 0 0,1 4,6A2,2 0 0,1 6,4A2,2 0 0,1 8,6A2,2 0 0,1 6,8M6,20A2,2 0 0,1 4,18A2,2 0 0,1 6,16A2,2 0 0,1 8,18A2,2 0 0,1 6,20M12,12.5L14,10.5L22,2.5V2H19L12,9L10,7L8.5,8.5L12,12.5Z" Width="14" Height="14" />
-                        </Button>
-                        <Button ToolTip.Tip="Copy" Command="{Binding CopyCommand}" Padding="6" Background="Transparent" BorderThickness="0">
-                            <PathIcon Data="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" Width="14" Height="14" />
-                        </Button>
-                        <Button ToolTip.Tip="Rename" Command="{Binding BeginRenameCommand}" Padding="6" Background="Transparent" BorderThickness="0">
-                            <PathIcon Data="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z" Width="14" Height="14" />
-                        </Button>
-                        <Button ToolTip.Tip="Delete" Command="{Binding DeleteCommand}" Padding="6" Background="Transparent" BorderThickness="0">
-                            <PathIcon Data="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6Z" Width="14" Height="14" />
-                        </Button>
-                        <Button ToolTip.Tip="Properties" Command="{Binding ShowPropertiesCommand}" Padding="6" Background="Transparent" BorderThickness="0">
-                            <PathIcon Data="M13,9H11V7H13M13,17H11V11H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z" Width="14" Height="14" />
-                        </Button>
-                    </StackPanel>
-                    <Separator />
-                    <MenuItem Header="Open" Command="{Binding OpenCommand}" />
-                    <MenuItem Header="Open in new tab" Command="{Binding OpenInNewTabCommand}" />
-                    <MenuItem Header="Open in new window" Command="{Binding OpenInNewWindowCommand}" />
-                    <MenuItem Header="Open in other pane" Command="{Binding OpenInOtherPaneCommand}" />
-                    <Separator />
-                    <MenuItem Header="Copy path" Command="{Binding CopyPathCommand}" />
-                    <MenuItem Header="Pin to sidebar" Command="{Binding PinToSidebarCommand}" />
-                    <MenuItem Header="Unpin from sidebar" Command="{Binding UnpinFromSidebarCommand}" />
-                    <MenuItem Header="Paste" Command="{Binding PasteCommand}" />
-                    <Separator />
-                    <MenuItem Header="Compress to ZIP" Command="{Binding CompressToZipCommand}" />
-                    <MenuItem Header="Extract here" Command="{Binding ExtractHereCommand}" />
-                    <Separator />
-                    <MenuItem Header="Folder color">
-                        <MenuItem Header="Red" Command="{Binding SetFolderColorCommand}" CommandParameter="#E81123" />
-                        <MenuItem Header="Orange" Command="{Binding SetFolderColorCommand}" CommandParameter="#F7630C" />
-                        <MenuItem Header="Green" Command="{Binding SetFolderColorCommand}" CommandParameter="#107C10" />
-                        <MenuItem Header="Blue" Command="{Binding SetFolderColorCommand}" CommandParameter="#0078D4" />
-                        <MenuItem Header="Purple" Command="{Binding SetFolderColorCommand}" CommandParameter="#8764B8" />
-                        <MenuItem Header="Clear color" Command="{Binding ClearFolderColorCommand}" />
-                    </MenuItem>
-                    <Separator />
-                    <MenuItem Header="Show more options" Command="{Binding ShowMoreOptionsCommand}" />
-                </ContextMenu>
+                <StaticResource ResourceKey="EntryContextMenu" />
             </ListBox.ContextMenu>
             <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:EntryItemViewModel">
@@ -246,50 +229,7 @@
                      PointerReleased="OnListPointerReleased"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <controls:VirtualizingFileGrid.ContextMenu>
-                    <ContextMenu x:CompileBindings="False"
-                                 Opening="OnEntryContextMenuOpening">
-                        <StackPanel Orientation="Horizontal" Spacing="2" Margin="4,2">
-                            <Button ToolTip.Tip="Cut" Command="{Binding CutCommand}" Padding="6" Background="Transparent" BorderThickness="0">
-                                <PathIcon Data="M9.64,7.64C9.87,7.14 10,6.59 10,6A4,4 0 0,0 6,2A4,4 0 0,0 2,6A4,4 0 0,0 6,10C6.59,10 7.14,9.87 7.64,9.64L10,12L7.64,14.36C7.14,14.13 6.59,14 6,14A4,4 0 0,0 2,18A4,4 0 0,0 6,22A4,4 0 0,0 10,18C10,17.41 9.87,16.86 9.64,16.36L12,14L19,21H22V20L9.64,7.64M6,8A2,2 0 0,1 4,6A2,2 0 0,1 6,4A2,2 0 0,1 8,6A2,2 0 0,1 6,8M6,20A2,2 0 0,1 4,18A2,2 0 0,1 6,16A2,2 0 0,1 8,18A2,2 0 0,1 6,20M12,12.5L14,10.5L22,2.5V2H19L12,9L10,7L8.5,8.5L12,12.5Z" Width="14" Height="14" />
-                            </Button>
-                            <Button ToolTip.Tip="Copy" Command="{Binding CopyCommand}" Padding="6" Background="Transparent" BorderThickness="0">
-                                <PathIcon Data="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" Width="14" Height="14" />
-                            </Button>
-                            <Button ToolTip.Tip="Rename" Command="{Binding BeginRenameCommand}" Padding="6" Background="Transparent" BorderThickness="0">
-                                <PathIcon Data="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z" Width="14" Height="14" />
-                            </Button>
-                            <Button ToolTip.Tip="Delete" Command="{Binding DeleteCommand}" Padding="6" Background="Transparent" BorderThickness="0">
-                                <PathIcon Data="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6Z" Width="14" Height="14" />
-                            </Button>
-                            <Button ToolTip.Tip="Properties" Command="{Binding ShowPropertiesCommand}" Padding="6" Background="Transparent" BorderThickness="0">
-                                <PathIcon Data="M13,9H11V7H13M13,17H11V11H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z" Width="14" Height="14" />
-                            </Button>
-                        </StackPanel>
-                        <Separator />
-                        <MenuItem Header="Open" Command="{Binding OpenCommand}" />
-                        <MenuItem Header="Open in new tab" Command="{Binding OpenInNewTabCommand}" />
-                        <MenuItem Header="Open in new window" Command="{Binding OpenInNewWindowCommand}" />
-                        <MenuItem Header="Open in other pane" Command="{Binding OpenInOtherPaneCommand}" />
-                        <Separator />
-                        <MenuItem Header="Copy path" Command="{Binding CopyPathCommand}" />
-                    <MenuItem Header="Pin to sidebar" Command="{Binding PinToSidebarCommand}" />
-                    <MenuItem Header="Unpin from sidebar" Command="{Binding UnpinFromSidebarCommand}" />
-                        <MenuItem Header="Paste" Command="{Binding PasteCommand}" />
-                        <Separator />
-                        <MenuItem Header="Compress to ZIP" Command="{Binding CompressToZipCommand}" />
-                        <MenuItem Header="Extract here" Command="{Binding ExtractHereCommand}" />
-                        <Separator />
-                        <MenuItem Header="Folder color">
-                            <MenuItem Header="Red" Command="{Binding SetFolderColorCommand}" CommandParameter="#E81123" />
-                            <MenuItem Header="Orange" Command="{Binding SetFolderColorCommand}" CommandParameter="#F7630C" />
-                            <MenuItem Header="Green" Command="{Binding SetFolderColorCommand}" CommandParameter="#107C10" />
-                            <MenuItem Header="Blue" Command="{Binding SetFolderColorCommand}" CommandParameter="#0078D4" />
-                            <MenuItem Header="Purple" Command="{Binding SetFolderColorCommand}" CommandParameter="#8764B8" />
-                            <MenuItem Header="Clear color" Command="{Binding ClearFolderColorCommand}" />
-                        </MenuItem>
-                        <Separator />
-                        <MenuItem Header="Show more options" Command="{Binding ShowMoreOptionsCommand}" />
-                    </ContextMenu>
+                    <StaticResource ResourceKey="EntryContextMenu" />
                 </controls:VirtualizingFileGrid.ContextMenu>
                 <controls:VirtualizingFileGrid.ItemTemplate>
                     <DataTemplate x:DataType="vm:EntryItemViewModel" x:CompileBindings="False">
@@ -309,10 +249,18 @@
                                         IsVisible="{Binding IsSelected}"
                                         IsHitTestVisible="False" />
                                 <Border CornerRadius="6"
-                                        Classes="selectionInactive"
-                                        Background="{DynamicResource HelixSelectionInactiveFillBrush}"
+                                        BorderBrush="{DynamicResource HelixAccentBrush}"
+                                        BorderThickness="2"
                                         IsVisible="{Binding IsSelected}"
                                         IsHitTestVisible="False" />
+                                <PathIcon Data="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"
+                                          Width="14" Height="14"
+                                          HorizontalAlignment="Right"
+                                          VerticalAlignment="Top"
+                                          Margin="4"
+                                          Foreground="{DynamicResource HelixAccentBrush}"
+                                          IsVisible="{Binding IsSelected}"
+                                          IsHitTestVisible="False" />
                                 <StackPanel Spacing="4" ToolTip.Tip="{Binding Name}"
                                             Opacity="{Binding IsCut, Converter={StaticResource CutOpacityConverter}}">
                                 <controls:EntryVisualView Width="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=controls:VirtualizingFileGrid}}"

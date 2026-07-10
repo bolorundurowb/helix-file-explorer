@@ -107,6 +107,7 @@ public partial class App : Application
         services.AddSingleton<FileVisualService>();
         services.AddSingleton<FileOperationReporter>();
         services.AddSingleton<IFileOperationReporter>(sp => sp.GetRequiredService<FileOperationReporter>());
+        services.AddSingleton<HomePageViewModel>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddTransient<MainWindow>();
     }

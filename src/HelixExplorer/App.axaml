@@ -7,6 +7,7 @@
         <FluentTheme />
         <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
         <StyleInclude Source="avares://HelixExplorer/Controls/VirtualizingFileGrid.axaml" />
+        <StyleInclude Source="avares://HelixExplorer/Styles/FilesTheme.axaml" />
     </Application.Styles>
 
     <Application.Resources>
@@ -17,6 +18,8 @@
                     <SolidColorBrush x:Key="HelixSidebarBrush" Color="#F3F3F3" />
                     <SolidColorBrush x:Key="HelixContentCardBrush" Color="#FFFFFF" />
                     <SolidColorBrush x:Key="HelixSurfaceBrush" Color="#FAFAFA" />
+                    <SolidColorBrush x:Key="HelixFileAreaBrush" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="HelixAddressBarBrush" Color="#FFFFFF" />
                     <SolidColorBrush x:Key="HelixAccentBrush" Color="#0078D4" />
                     <SolidColorBrush x:Key="HelixSelectionFillBrush" Color="#180078D4" />
                     <SolidColorBrush x:Key="HelixSelectionInactiveFillBrush" Color="#12000000" />
@@ -28,7 +31,19 @@
                     <SolidColorBrush x:Key="HelixNavButtonBrush" Color="#E0E0E0" />
                     <SolidColorBrush x:Key="HelixBorderColor" Color="#E0E0E0" />
                     <SolidColorBrush x:Key="HelixSidebarSelectedBrush" Color="#180078D4" />
+                    <SolidColorBrush x:Key="HelixSidebarPillBrush" Color="#1F000000" />
+                    <SolidColorBrush x:Key="HelixHoverBrush" Color="#12000000" />
                     <SolidColorBrush x:Key="HelixEntryForegroundBrush" Color="#1A1A1A" />
+                    <SolidColorBrush x:Key="HelixSecondaryTextBrush" Color="#6B6B6B" />
+                    <SolidColorBrush x:Key="HelixMenuBackgroundBrush" Color="#FAFAFA" />
+                    <SolidColorBrush x:Key="HelixHomeCardBrush" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="HelixHomeCardHoverBrush" Color="#F0F0F0" />
+                    <SolidColorBrush x:Key="HelixSettingsContentBrush" Color="#F9F9F9" />
+                    <SolidColorBrush x:Key="HelixSettingsRowBrush" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="HelixSettingsNavSelectedBrush" Color="#1F000000" />
+                    <SolidColorBrush x:Key="HelixSettingsNavAccentBar" Color="#00785C" />
+                    <SolidColorBrush x:Key="HelixToggleOnBrush" Color="#00785C" />
+                    <SolidColorBrush x:Key="HelixProgressBrush" Color="#0078D4" />
                     <SolidColorBrush x:Key="HelixGitStagedBrush" Color="#107C10" />
                     <SolidColorBrush x:Key="HelixGitModifiedBrush" Color="#9A6700" />
                     <SolidColorBrush x:Key="HelixGitConflictBrush" Color="#C42B1C" />
@@ -44,6 +59,8 @@
                     <SolidColorBrush x:Key="HelixSidebarBrush" Color="#2D2D2D" />
                     <SolidColorBrush x:Key="HelixContentCardBrush" Color="#1E1E1E" />
                     <SolidColorBrush x:Key="HelixSurfaceBrush" Color="#252525" />
+                    <SolidColorBrush x:Key="HelixFileAreaBrush" Color="#1E1E1E" />
+                    <SolidColorBrush x:Key="HelixAddressBarBrush" Color="#2A2A2A" />
                     <SolidColorBrush x:Key="HelixAccentBrush" Color="#60CDFF" />
                     <SolidColorBrush x:Key="HelixSelectionFillBrush" Color="#2860CDFF" />
                     <SolidColorBrush x:Key="HelixSelectionInactiveFillBrush" Color="#22FFFFFF" />
@@ -55,7 +72,19 @@
                     <SolidColorBrush x:Key="HelixNavButtonBrush" Color="#3A3A3A" />
                     <SolidColorBrush x:Key="HelixBorderColor" Color="#3A3A3A" />
                     <SolidColorBrush x:Key="HelixSidebarSelectedBrush" Color="#2860CDFF" />
+                    <SolidColorBrush x:Key="HelixSidebarPillBrush" Color="#25FFFFFF" />
+                    <SolidColorBrush x:Key="HelixHoverBrush" Color="#18FFFFFF" />
                     <SolidColorBrush x:Key="HelixEntryForegroundBrush" Color="#E6E6E6" />
+                    <SolidColorBrush x:Key="HelixSecondaryTextBrush" Color="#A0A0A0" />
+                    <SolidColorBrush x:Key="HelixMenuBackgroundBrush" Color="#252526" />
+                    <SolidColorBrush x:Key="HelixHomeCardBrush" Color="#2A2A2A" />
+                    <SolidColorBrush x:Key="HelixHomeCardHoverBrush" Color="#333333" />
+                    <SolidColorBrush x:Key="HelixSettingsContentBrush" Color="#1E1E1E" />
+                    <SolidColorBrush x:Key="HelixSettingsRowBrush" Color="#2A2A2A" />
+                    <SolidColorBrush x:Key="HelixSettingsNavSelectedBrush" Color="#25FFFFFF" />
+                    <SolidColorBrush x:Key="HelixSettingsNavAccentBar" Color="#60CDFF" />
+                    <SolidColorBrush x:Key="HelixToggleOnBrush" Color="#60CDFF" />
+                    <SolidColorBrush x:Key="HelixProgressBrush" Color="#60CDFF" />
                     <SolidColorBrush x:Key="HelixGitStagedBrush" Color="#6CCB5F" />
                     <SolidColorBrush x:Key="HelixGitModifiedBrush" Color="#F2CC60" />
                     <SolidColorBrush x:Key="HelixGitConflictBrush" Color="#FF99A4" />
@@ -68,13 +97,19 @@
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 
+            <!-- Files-aligned typography: default control font is Segoe UI Variable on Windows. -->
+            <FontFamily x:Key="ContentControlThemeFontFamily">Segoe UI Variable Text, Segoe UI, Inter</FontFamily>
+
             <CornerRadius x:Key="HelixContentCornerRadius">8</CornerRadius>
+            <CornerRadius x:Key="HelixMenuCornerRadius">8</CornerRadius>
             <x:Double x:Key="HelixControlSpacing">8</x:Double>
-            <x:Double x:Key="HelixRowHeight">28</x:Double>
-            <x:Double x:Key="HelixEntryFontSize">12</x:Double>
-            <x:Double x:Key="HelixSidebarFontSize">11</x:Double>
-            <x:Double x:Key="HelixSidebarSectionFontSize">10</x:Double>
+            <x:Double x:Key="HelixRowHeight">32</x:Double>
+            <x:Double x:Key="HelixEntryFontSize">14</x:Double>
+            <x:Double x:Key="HelixSidebarFontSize">14</x:Double>
+            <x:Double x:Key="HelixSidebarSectionFontSize">12</x:Double>
             <x:Double x:Key="HelixSidebarDefaultWidth">240</x:Double>
+            <x:Double x:Key="HelixContextPrimaryRowHeight">48</x:Double>
+            <x:Double x:Key="HelixContextSecondaryRowHeight">36</x:Double>
             <Thickness x:Key="HelixContentPadding">12</Thickness>
 
             <conv:FileSizeConverter x:Key="FileSizeConverter" />
@@ -88,6 +123,7 @@
             <conv:CutOpacityConverter x:Key="CutOpacityConverter" />
 
             <Geometry x:Key="HelixFolderIconGeometry">M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z</Geometry>
+            <Geometry x:Key="HelixHomeIconGeometry">M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z</Geometry>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

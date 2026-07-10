@@ -30,7 +30,7 @@
         <KeyBinding Gesture="Ctrl+T" Command="{Binding NewTabCommand}" />
         <KeyBinding Gesture="Ctrl+W" Command="{Binding CloseSelectedTabCommand}" />
         <KeyBinding Gesture="Ctrl+D" Command="{Binding ToggleDualPaneCommand}" />
-        <KeyBinding Gesture="Ctrl+F" Command="{Binding ToggleFilterCommand}" />
+        <KeyBinding Gesture="Ctrl+F" Command="{Binding FocusSearchCommand}" />
         <KeyBinding Gesture="Ctrl+X" Command="{Binding CutCommand}" />
         <KeyBinding Gesture="Ctrl+C" Command="{Binding CopyCommand}" />
         <KeyBinding Gesture="Ctrl+V" Command="{Binding PasteCommand}" />
@@ -42,7 +42,112 @@
     </Window.KeyBindings>
 
     <Grid>
-    <DockPanel LastChildFill="True">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="{Binding SidebarColumnWidth, Mode=TwoWay}" MinWidth="0" MaxWidth="480" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Border x:Name="SidebarBorder"
+                    Grid.Column="0"
+                    Background="{DynamicResource HelixSidebarBrush}"
+                    IsVisible="{Binding IsSidebarOpen}"
+                    BorderBrush="{DynamicResource HelixBorderColor}"
+                    BorderThickness="0,0,1,0">
+                <DockPanel>
+                    <Button DockPanel.Dock="Bottom"
+                            Command="{Binding OpenSettingsCommand}"
+                            Padding="12,8"
+                            Background="Transparent"
+                            BorderBrush="{DynamicResource HelixBorderColor}"
+                            BorderThickness="0,1,0,0"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Left"
+                            Cursor="Hand">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <PathIcon Data="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.04 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.04 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z" Width="16" Height="16" />
+                            <TextBlock Text="Settings"
+                                       VerticalAlignment="Center"
+                                       FontSize="{DynamicResource HelixSidebarFontSize}" />
+                        </StackPanel>
+                    </Button>
+
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding SidebarItems}" Margin="0,8">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:SidebarItemViewModel">
+                                    <Panel>
+                                        <TextBlock Text="{Binding Title}"
+                                                   IsVisible="{Binding IsSectionHeader}"
+                                                   Padding="12,12,12,4"
+                                                   FontSize="{DynamicResource HelixSidebarSectionFontSize}"
+                                                   Opacity="0.5"
+                                                   FontWeight="SemiBold" />
+                                        <Border IsVisible="{Binding !IsSectionHeader}"
+                                                Padding="0"
+                                                Cursor="Hand"
+                                                ToolTip.Tip="{Binding ToolTip}"
+                                                PointerPressed="OnSidebarItemPressed">
+                                            <Border.ContextMenu>
+                                                <ContextMenu Opening="OnSidebarContextMenuOpening">
+                                                    <MenuItem Header="Pin to sidebar" Click="OnSidebarPinClick" />
+                                                    <MenuItem Header="Unpin from sidebar" Click="OnSidebarUnpinClick" />
+                                                    <Separator />
+                                                    <MenuItem Header="Color">
+                                                        <MenuItem Header="Red" Tag="#E81123" Click="OnSidebarSetColorClick" />
+                                                        <MenuItem Header="Orange" Tag="#F7630C" Click="OnSidebarSetColorClick" />
+                                                        <MenuItem Header="Green" Tag="#107C10" Click="OnSidebarSetColorClick" />
+                                                        <MenuItem Header="Blue" Tag="#0078D4" Click="OnSidebarSetColorClick" />
+                                                        <MenuItem Header="Purple" Tag="#8764B8" Click="OnSidebarSetColorClick" />
+                                                    </MenuItem>
+                                                    <MenuItem Header="Clear color" Click="OnSidebarClearColorClick" />
+                                                </ContextMenu>
+                                            </Border.ContextMenu>
+                                            <Grid ColumnDefinitions="3,Auto,*" MinHeight="32">
+                                                <Border Grid.Column="0"
+                                                        Background="{DynamicResource HelixSelectionBarBrush}"
+                                                        IsVisible="{Binding IsSelected}"
+                                                        CornerRadius="0,2,2,0" />
+                                                <PathIcon Grid.Column="1"
+                                                          Width="16"
+                                                          Height="16"
+                                                          Margin="10,0,6,0"
+                                                          VerticalAlignment="Center"
+                                                          IsVisible="{Binding !HasIcon}"
+                                                          Data="{DynamicResource HelixFolderIconGeometry}"
+                                                          Foreground="{Binding Path, Converter={StaticResource FolderIconBrushConverter}}" />
+                                                <Image Grid.Column="1"
+                                                       Source="{Binding Icon}"
+                                                       Width="16"
+                                                       Height="16"
+                                                       Margin="10,0,6,0"
+                                                       VerticalAlignment="Center"
+                                                       IsVisible="{Binding HasIcon}" />
+                                                <Border Grid.Column="2"
+                                                        Padding="10,6,8,6"
+                                                        Background="{Binding IsSelected, Converter={StaticResource BoolToSidebarBrushConverter}}">
+                                                    <TextBlock Text="{Binding Title}"
+                                                               VerticalAlignment="Center"
+                                                               FontSize="{DynamicResource HelixSidebarFontSize}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                </Border>
+                                            </Grid>
+                                        </Border>
+                                    </Panel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+
+            <GridSplitter Grid.Column="1"
+                          Width="4"
+                          ResizeDirection="Columns"
+                          Background="Transparent"
+                          IsVisible="{Binding IsSidebarOpen}" />
+
+            <DockPanel Grid.Column="2" LastChildFill="True">
 
         <!-- Tab Strip: right padding reserves the full caption-button cluster (3×46px + gap). -->
         <Border DockPanel.Dock="Top"
@@ -177,11 +282,12 @@
 
         <!-- Navigation Row -->
         <Border DockPanel.Dock="Top"
+                IsVisible="{Binding ShowBrowserChrome}"
                 Background="{DynamicResource HelixToolbarBrush}"
                 Padding="8,6">
             <Grid ColumnDefinitions="Auto,*,Auto">
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="2">
-                    <Button ToolTip.Tip="Back"
+                    <Button Classes="toolButton" ToolTip.Tip="Back"
                             Command="{Binding SelectedTab.ActivePane.GoBackCommand}"
                             Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
                         <PathIcon Data="M20,11H7.83L13.42,5.41L12,4L4,12L12,20L13.41,18.59L7.83,13H20V11Z" Width="16" Height="16" />
@@ -211,21 +317,30 @@
                         BorderBrush="{DynamicResource HelixBorderColor}"
                         BorderThickness="1"
                         MinHeight="28">
-                    <views:Omnibar DataContext="{Binding SelectedTab.ActivePane}" />
+                    <Panel>
+                        <StackPanel IsVisible="{Binding IsSettingsTab}"
+                                    Orientation="Horizontal"
+                                    Spacing="8"
+                                    VerticalAlignment="Center"
+                                    Margin="4,0">
+                            <PathIcon Data="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.04 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.04 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"
+                                      Width="16" Height="16" />
+                            <TextBlock Text="Settings" FontSize="14" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <Panel IsVisible="{Binding IsBrowserTab}">
+                            <views:Omnibar DataContext="{Binding SelectedTab.ActivePane}" />
+                        </Panel>
+                    </Panel>
                 </Border>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
-                    <Button Command="{Binding ToggleFilterCommand}"
-                            ToolTip.Tip="Filter items (Ctrl+F)"
-                            Background="{DynamicResource HelixContentCardBrush}"
-                            BorderBrush="{DynamicResource HelixBorderColor}"
-                            BorderThickness="1"
+                    <Button Classes="toolButton"
+                            Command="{Binding FocusSearchCommand}"
+                            ToolTip.Tip="Search (Ctrl+F)"
+                            IsVisible="{Binding IsBrowserTab}"
                             Padding="8,4"
                             Cursor="Hand">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <PathIcon Data="M9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.44,13.73L14.71,14H15.5L20.5,19L19,20.5L14,15.5V14.71L13.73,14.44C12.59,15.41 11.11,16 9.5,16A6.5,6.5 0 0,1 3,9.5A6.5,6.5 0 0,1 9.5,3M9.5,5C7,5 5,7 5,9.5C5,12 7,14 9.5,14C12,14 14,12 14,9.5C14,7 12,5 9.5,5Z" Width="14" Height="14" Opacity="0.6" />
-                            <TextBlock Text="Filter" VerticalAlignment="Center" Opacity="0.7" />
-                        </StackPanel>
+                        <PathIcon Data="M9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.44,13.73L14.71,14H15.5L20.5,19L19,20.5L14,15.5V14.71L13.73,14.44C12.59,15.41 11.11,16 9.5,16A6.5,6.5 0 0,1 3,9.5A6.5,6.5 0 0,1 9.5,3M9.5,5C7,5 5,7 5,9.5C5,12 7,14 9.5,14C12,14 14,12 14,9.5C14,7 12,5 9.5,5Z" Width="16" Height="16" Opacity="0.7" />
                     </Button>
                     <Button ToolTip.Tip="Toggle theme (Ctrl+Shift+T)"
                             Command="{Binding ToggleThemeCommand}"
@@ -243,6 +358,7 @@
 
         <!-- Action Toolbar -->
         <Border DockPanel.Dock="Top"
+                IsVisible="{Binding ShowFileToolbar}"
                 Background="{DynamicResource HelixToolbarBrush}"
                 Padding="8,4"
                 BorderBrush="{DynamicResource HelixBorderColor}"
@@ -395,126 +511,28 @@
                            FontSize="12"
                            Opacity="0.7"
                            Margin="12,0,0,0" />
-                <TextBlock Grid.Column="2"
-                           Text="{Binding SelectedTab.ActivePane.SelectedCount, StringFormat='{}{0} selected'}"
-                           VerticalAlignment="Center" FontSize="12" Opacity="0.7" />
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="{Binding SelectedTab.ActivePane.SelectedCount, StringFormat='{}{0} selected'}"
+                               VerticalAlignment="Center" FontSize="12" Opacity="0.7"
+                               IsVisible="{Binding ShowFileToolbar}" />
+                    <Button Classes="toolButton"
+                            Command="{Binding ToggleStatusCentreCommand}"
+                            ToolTip.Tip="Status centre"
+                            Padding="6,2"
+                            Cursor="Hand">
+                        <PathIcon Data="M13,9H11V7H13M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z"
+                                  Width="14" Height="14" />
+                    </Button>
+                </StackPanel>
             </Grid>
         </Border>
 
-        <!-- Main Content: Sidebar + Content Card -->
-        <Grid>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="{Binding SidebarColumnWidth, Mode=TwoWay}" MinWidth="0" MaxWidth="480" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <Border x:Name="SidebarBorder"
-                    Grid.Column="0"
-                    Background="{DynamicResource HelixSidebarBrush}"
-                    IsVisible="{Binding IsSidebarOpen}"
-                    BorderBrush="{DynamicResource HelixBorderColor}"
-                    BorderThickness="0,0,1,0">
-                <DockPanel>
-                    <Button DockPanel.Dock="Bottom"
-                            Command="{Binding OpenSettingsCommand}"
-                            Padding="12,8"
-                            Background="Transparent"
-                            BorderBrush="{DynamicResource HelixBorderColor}"
-                            BorderThickness="0,1,0,0"
-                            HorizontalAlignment="Stretch"
-                            HorizontalContentAlignment="Left"
-                            Cursor="Hand">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <PathIcon Data="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.04 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.04 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z" Width="16" Height="16" />
-                            <TextBlock Text="Settings"
-                                       VerticalAlignment="Center"
-                                       FontSize="{DynamicResource HelixSidebarFontSize}" />
-                        </StackPanel>
-                    </Button>
-
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <ItemsControl ItemsSource="{Binding SidebarItems}" Margin="0,8">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="vm:SidebarItemViewModel">
-                                    <Panel>
-                                        <TextBlock Text="{Binding Title}"
-                                                   IsVisible="{Binding IsSectionHeader}"
-                                                   Padding="12,12,12,4"
-                                                   FontSize="{DynamicResource HelixSidebarSectionFontSize}"
-                                                   Opacity="0.5"
-                                                   FontWeight="SemiBold" />
-                                        <Border IsVisible="{Binding !IsSectionHeader}"
-                                                Padding="0"
-                                                Cursor="Hand"
-                                                ToolTip.Tip="{Binding ToolTip}"
-                                                PointerPressed="OnSidebarItemPressed">
-                                            <Border.ContextMenu>
-                                                <ContextMenu Opening="OnSidebarContextMenuOpening">
-                                                    <MenuItem Header="Pin to sidebar" Click="OnSidebarPinClick" />
-                                                    <MenuItem Header="Unpin from sidebar" Click="OnSidebarUnpinClick" />
-                                                    <Separator />
-                                                    <MenuItem Header="Color">
-                                                        <MenuItem Header="Red" Tag="#E81123" Click="OnSidebarSetColorClick" />
-                                                        <MenuItem Header="Orange" Tag="#F7630C" Click="OnSidebarSetColorClick" />
-                                                        <MenuItem Header="Green" Tag="#107C10" Click="OnSidebarSetColorClick" />
-                                                        <MenuItem Header="Blue" Tag="#0078D4" Click="OnSidebarSetColorClick" />
-                                                        <MenuItem Header="Purple" Tag="#8764B8" Click="OnSidebarSetColorClick" />
-                                                    </MenuItem>
-                                                    <MenuItem Header="Clear color" Click="OnSidebarClearColorClick" />
-                                                </ContextMenu>
-                                            </Border.ContextMenu>
-                                            <Grid ColumnDefinitions="3,Auto,*" MinHeight="32">
-                                                <Border Grid.Column="0"
-                                                        Background="{DynamicResource HelixSelectionBarBrush}"
-                                                        IsVisible="{Binding IsSelected}"
-                                                        CornerRadius="0,2,2,0" />
-                                                <PathIcon Grid.Column="1"
-                                                          Width="16"
-                                                          Height="16"
-                                                          Margin="10,0,6,0"
-                                                          VerticalAlignment="Center"
-                                                          IsVisible="{Binding !HasIcon}"
-                                                          Data="{DynamicResource HelixFolderIconGeometry}"
-                                                          Foreground="{Binding Path, Converter={StaticResource FolderIconBrushConverter}}" />
-                                                <Image Grid.Column="1"
-                                                       Source="{Binding Icon}"
-                                                       Width="16"
-                                                       Height="16"
-                                                       Margin="10,0,6,0"
-                                                       VerticalAlignment="Center"
-                                                       IsVisible="{Binding HasIcon}" />
-                                                <Border Grid.Column="2"
-                                                        Padding="10,6,8,6"
-                                                        Background="{Binding IsSelected, Converter={StaticResource BoolToSidebarBrushConverter}}">
-                                                    <TextBlock Text="{Binding Title}"
-                                                               VerticalAlignment="Center"
-                                                               FontSize="{DynamicResource HelixSidebarFontSize}"
-                                                               TextTrimming="CharacterEllipsis" />
-                                                </Border>
-                                            </Grid>
-                                        </Border>
-                                    </Panel>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
-                </DockPanel>
-            </Border>
-
-            <GridSplitter Grid.Column="1"
-                          Width="4"
-                          ResizeDirection="Columns"
-                          Background="Transparent"
-                          IsVisible="{Binding IsSidebarOpen}" />
-
-            <DockPanel Grid.Column="2">
+        <DockPanel>
                 <Border DockPanel.Dock="Top"
                         IsVisible="{Binding IsDiscoveringNetwork}"
-                        Margin="8,8,8,0"
                         Background="{DynamicResource HelixToolbarBrush}"
                         BorderBrush="{DynamicResource HelixBorderColor}"
-                        BorderThickness="1"
-                        CornerRadius="8"
+                        BorderThickness="0,0,0,1"
                         Padding="12,8">
                     <StackPanel Orientation="Horizontal" Spacing="10">
                         <PathIcon Data="M17,3A2,2 0 0,1 19,5V15A2,2 0 0,1 17,17H13V19H14A1,1 0 0,1 15,20H9A1,1 0 0,1 10,19H11V17H7A2,2 0 0,1 5,15V5A2,2 0 0,1 7,3H17M17,5H7V15H17V5Z"
@@ -527,25 +545,15 @@
                     </StackPanel>
                 </Border>
 
-                <Border Margin="8"
-                        Background="{DynamicResource HelixContentCardBrush}"
-                        CornerRadius="{DynamicResource HelixContentCornerRadius}"
-                        BorderBrush="{DynamicResource HelixBorderColor}"
-                        BorderThickness="1"
-                        ClipToBounds="True">
-                    <views:DualPaneView DataContext="{Binding SelectedTab}" />
-                </Border>
+                <views:DualPaneView DataContext="{Binding SelectedTab}" />
+        </DockPanel>
+
             </DockPanel>
         </Grid>
-
-    </DockPanel>
 
         <views:CommandPaletteOverlay IsVisible="{Binding IsCommandPaletteOpen}"
                                       IsHitTestVisible="{Binding IsCommandPaletteOpen}"
                                       DataContext="{Binding}" />
-        <views:SettingsOverlay IsVisible="{Binding IsSettingsOpen}"
-                               IsHitTestVisible="{Binding IsSettingsOpen}"
-                               DataContext="{Binding}" />
-        <views:OperationBanner DataContext="{Binding OperationReporter}" />
+        <views:StatusCentreFlyout DataContext="{Binding}" />
     </Grid>
 </Window>

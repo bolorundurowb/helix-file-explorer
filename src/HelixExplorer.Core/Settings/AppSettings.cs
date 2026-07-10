@@ -14,6 +14,7 @@ public sealed class AppSettings
     public LayoutMode DefaultViewMode { get; set; } = LayoutMode.Details;
     public double DefaultThumbnailSize { get; set; } = 72;
     public bool DefaultDualPane { get; set; }
+    public PaneSplitOrientation DefaultSplitOrientation { get; set; } = PaneSplitOrientation.Vertical;
     public uint? AccentColorArgb { get; set; }
     public List<string> PinnedPaths { get; set; } = [];
     public List<string> UnpinnedPaths { get; set; } = [];

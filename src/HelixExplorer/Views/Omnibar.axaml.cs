@@ -84,4 +84,22 @@ public sealed partial class Omnibar : UserControl
 
     private void OnPathBoxLostFocus(object? sender, RoutedEventArgs e)
         => _pane?.CancelEditablePath();
+
+    private void OnSearchBoxKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (_pane is null)
+            return;
+
+        if (e.Key == Key.Escape)
+        {
+            _pane.ExitSearchModeCommand.Execute(null);
+            e.Handled = true;
+        }
+    }
+
+    private void OnSearchBoxLostFocus(object? sender, RoutedEventArgs e)
+    {
+        if (_pane is { IsSearchMode: true, IsFilterActive: false })
+            _pane.ExitSearchModeCommand.Execute(null);
+    }
 }

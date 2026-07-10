@@ -36,6 +36,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly FileVisualService _visuals;
     private readonly Func<IFileChangeWatcher> _watcherFactory;
     private readonly FileOperationReporter _operationReporter;
+    private readonly HomePageViewModel _homePage;
+    private readonly SettingsPageViewModel _settingsPage;
     private readonly string _homePath;
     private readonly List<CommandItem> _allCommands = new();
     private readonly List<string> _recentPaths = new();
@@ -65,7 +67,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         IFolderColorService folderColors,
         FileVisualService visuals,
         Func<IFileChangeWatcher> watcherFactory,
-        FileOperationReporter operationReporter)
+        FileOperationReporter operationReporter,
+        HomePageViewModel homePage)
     {
         _settingsStore = settingsStore;
         _sessionStore = sessionStore;
@@ -87,6 +90,9 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _watcherFactory = watcherFactory;
         _operationReporter = operationReporter;
         OperationReporter = operationReporter;
+        _homePage = homePage;
+        _settingsPage = new SettingsPageViewModel(this);
+        _homePage.NavigateRequested += OnHomeNavigateRequested;
 
         _homePath = _quickAccess.GetPath(KnownFolderKind.Home)
                     ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -101,6 +107,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         DefaultViewMode = settings.DefaultViewMode;
         DefaultThumbnailSize = Math.Clamp(settings.DefaultThumbnailSize, PaneViewModel.MinThumbnailSize, PaneViewModel.MaxThumbnailSize);
         DefaultDualPane = settings.DefaultDualPane;
+        DefaultSplitOrientation = settings.DefaultSplitOrientation;
         AccentColorArgb = settings.AccentColorArgb;
 
         _accentBrushes.ApplyCustomAccent(AccentColorArgb);
@@ -143,8 +150,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     [ObservableProperty] private bool _isCommandPaletteOpen;
 
-    [ObservableProperty] private bool _isSettingsOpen;
-
     [ObservableProperty] private string _commandPaletteQuery = string.Empty;
 
     [ObservableProperty]
@@ -179,7 +184,10 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         finally
         {
             if (!ct.IsCancellationRequested)
+            {
                 IsDiscoveringNetwork = false;
+                RefreshHomeDashboard();
+            }
         }
     }
 
@@ -228,7 +236,21 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ActivePane))]
     [NotifyPropertyChangedFor(nameof(HasMultipleTabs))]
+    [NotifyPropertyChangedFor(nameof(IsBrowserTab))]
+    [NotifyPropertyChangedFor(nameof(IsSettingsTab))]
+    [NotifyPropertyChangedFor(nameof(ShowFileToolbar))]
+    [NotifyPropertyChangedFor(nameof(ShowBrowserChrome))]
     private TabViewModel? _selectedTab;
+
+    [ObservableProperty] private bool _isStatusCentreOpen;
+
+    public bool IsBrowserTab => SelectedTab?.IsBrowserTab ?? true;
+
+    public bool IsSettingsTab => SelectedTab?.IsSettingsTab ?? false;
+
+    public bool ShowFileToolbar => IsBrowserTab && ActivePane?.IsFileSystem == true;
+
+    public bool ShowBrowserChrome => IsBrowserTab;
 
     [ObservableProperty]
     private string _title = "Helix Explorer";
@@ -247,6 +269,9 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private bool _defaultDualPane;
+
+    [ObservableProperty]
+    private PaneSplitOrientation _defaultSplitOrientation = PaneSplitOrientation.Vertical;
 
     [ObservableProperty]
     private uint? _accentColorArgb;
@@ -329,6 +354,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     partial void OnDefaultDualPaneChanged(bool value) => PersistChromeSettings();
 
+    partial void OnDefaultSplitOrientationChanged(PaneSplitOrientation value) => PersistChromeSettings();
+
     partial void OnAccentColorArgbChanged(uint? value)
     {
         _accentBrushes.ApplyCustomAccent(value);
@@ -356,6 +383,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         settings.DefaultViewMode = DefaultViewMode;
         settings.DefaultThumbnailSize = DefaultThumbnailSize;
         settings.DefaultDualPane = DefaultDualPane;
+        settings.DefaultSplitOrientation = DefaultSplitOrientation;
         settings.AccentColorArgb = AccentColorArgb;
         _settingsStore.Save(settings);
     }
@@ -416,7 +444,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             RecentPaths = _recentPaths.Take(12).ToList()
         };
 
-        foreach (var tab in Tabs)
+        foreach (var tab in Tabs.Where(t => t.IsBrowserTab))
             document.Tabs.Add(tab.CreateSnapshot());
 
         try
@@ -428,7 +456,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         }
     }
 
-    private TabViewModel CreateTab()
+    private TabViewModel CreateTab(TabKind kind = TabKind.Browser)
     {
         var tab = new TabViewModel(
             _fileSystem,
@@ -444,7 +472,10 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             _visuals,
             _watcherFactory,
             _operationReporter,
-            _quickAccess);
+            _quickAccess,
+            _homePage,
+            kind,
+            kind == TabKind.Settings ? _settingsPage : null);
         tab.CloseRequested += OnTabCloseRequested;
         tab.Navigated += OnTabNavigated;
         tab.OpenInNewTabRequested += OnOpenInNewTabRequested;
@@ -483,7 +514,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private TabViewModel CreateDefaultTab()
     {
         var tab = CreateTab();
-        tab.LeftPane.NavigateTo(_homePath);
+        tab.LeftPane.NavigateToHome();
         return tab;
     }
 
@@ -599,7 +630,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _allCommands.Add(new CommandItem("Toggle Theme", "Appearance", vm => vm.ToggleThemeCommand.Execute(null), "Ctrl+Shift+T"));
         _allCommands.Add(new CommandItem("Toggle Sidebar", "View", vm => vm.ToggleSidebarCommand.Execute(null), "Ctrl+B"));
         _allCommands.Add(new CommandItem("Toggle Dual Pane", "View", vm => vm.ToggleDualPaneCommand.Execute(null), "Ctrl+D"));
-        _allCommands.Add(new CommandItem("Toggle Filter", "View", vm => vm.ToggleFilterCommand.Execute(null), "Ctrl+F"));
+        _allCommands.Add(new CommandItem("Search", "View", vm => vm.FocusSearchCommand.Execute(null), "Ctrl+F"));
         _allCommands.Add(new CommandItem("Settings", "View", vm => vm.OpenSettingsCommand.Execute(null)));
         _allCommands.Add(new CommandItem("Go Back", "Navigation", vm => vm.ActivePane?.GoBackCommand.Execute(null)));
         _allCommands.Add(new CommandItem("Go Forward", "Navigation", vm => vm.ActivePane?.GoForwardCommand.Execute(null)));
@@ -658,7 +689,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     private void RecordRecent(string? path)
     {
-        if (string.IsNullOrWhiteSpace(path))
+        if (string.IsNullOrWhiteSpace(path)
+            || string.Equals(path, PaneViewModel.HomeRoute, StringComparison.Ordinal))
             return;
 
         _recentPaths.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
@@ -676,8 +708,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         if (!IsCommandPaletteOpen)
             return;
 
-        IsSettingsOpen = false;
-        foreach (var tab in Tabs)
+        IsStatusCentreOpen = false;
+        foreach (var tab in Tabs.Where(t => t.IsBrowserTab))
             RecordRecent(tab.ActivePane.CurrentPath);
 
         CommandPaletteQuery = string.Empty;
@@ -688,11 +720,31 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private void OpenSettings()
     {
         IsCommandPaletteOpen = false;
-        IsSettingsOpen = true;
+        var existing = Tabs.FirstOrDefault(t => t.IsSettingsTab);
+        if (existing is not null)
+        {
+            SelectedTab = existing;
+            return;
+        }
+
+        var tab = CreateTab(TabKind.Settings);
+        AddTab(tab);
+        SelectedTab = tab;
     }
 
     [RelayCommand]
-    private void CloseSettings() => IsSettingsOpen = false;
+    private void CloseSettings()
+    {
+        var settingsTab = SelectedTab?.IsSettingsTab == true
+            ? SelectedTab
+            : Tabs.FirstOrDefault(t => t.IsSettingsTab);
+
+        if (settingsTab is not null)
+            CloseTab(settingsTab);
+    }
+
+    [RelayCommand]
+    private void ToggleStatusCentre() => IsStatusCentreOpen = !IsStatusCentreOpen;
 
     [RelayCommand]
     private void ExecuteCommand(CommandItem? command)
@@ -742,12 +794,39 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         var path = SelectedTab?.ActivePane.CurrentPath ?? string.Empty;
         UpdateSidebarSelection(path);
+        RefreshHomeDashboard();
         Title = SelectedTab is null || string.IsNullOrEmpty(SelectedTab.Title)
             ? "Helix Explorer"
             : $"{SelectedTab.Title} — Helix Explorer";
         OnPropertyChanged(nameof(ActivePane));
         OnPropertyChanged(nameof(IsDualPaneActive));
+        OnPropertyChanged(nameof(IsBrowserTab));
+        OnPropertyChanged(nameof(IsSettingsTab));
+        OnPropertyChanged(nameof(ShowFileToolbar));
+        OnPropertyChanged(nameof(ShowBrowserChrome));
         NotifyGlobalFileCommandsCanExecuteChanged();
+    }
+
+    private void RefreshHomeDashboard()
+    {
+        _homePage.SetRecentFiles(_recentPaths);
+        _homePage.SetNetworkLocations(_lastNetworkLocations);
+        _homePage.RefreshPins();
+        _homePage.RefreshDrives();
+    }
+
+    private void OnHomeNavigateRequested(object? sender, string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+
+        if (string.Equals(path.TrimEnd('\\', '/'), _homePath.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase))
+        {
+            SelectedTab?.ActivePane.NavigateToHome();
+            return;
+        }
+
+        SelectedTab?.ActivePane.NavigateTo(path);
     }
 
     private void NotifyGlobalFileCommandsCanExecuteChanged()
@@ -767,7 +846,10 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private void ToggleDualPane() => SelectedTab?.ToggleDualPaneCommand.Execute(null);
 
     [RelayCommand]
-    private void ToggleFilter() => SelectedTab?.ActivePane.ToggleFilterCommand.Execute(null);
+    private void ToggleFilter() => FocusSearch();
+
+    [RelayCommand]
+    private void FocusSearch() => SelectedTab?.ActivePane.EnterSearchModeCommand.Execute(null);
 
     private static bool CanUseGlobalFileShortcuts() => !TextInputFocus.IsActive();
 
@@ -849,6 +931,12 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             if (item.IsSectionHeader)
                 continue;
 
+            if (item.Kind == SidebarItemKind.Home)
+            {
+                item.IsSelected = ActivePane?.IsHome == true;
+                continue;
+            }
+
             item.IsSelected = !string.IsNullOrEmpty(item.Path)
                 && string.Equals(
                     item.Path.TrimEnd('\\', '/'),
@@ -880,6 +968,12 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
                 SelectedTab!.ActivePane.StatusText = "Could not open in File Explorer";
             }
 
+            return;
+        }
+
+        if (item.Kind == SidebarItemKind.Home)
+        {
+            SelectedTab?.ActivePane.NavigateToHome();
             return;
         }
 

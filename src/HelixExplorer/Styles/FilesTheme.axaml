@@ -1,0 +1,127 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ══ Toolbar & navigation buttons ══════════════════════════════════════ -->
+    <Style Selector="Button.toolButton">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="6" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.toolButton:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource HelixHoverBrush}" />
+    </Style>
+    <Style Selector="Button.toolButton:disabled">
+        <Setter Property="Opacity" Value="0.4" />
+    </Style>
+
+    <!-- ══ Home dashboard cards ══════════════════════════════════════════════ -->
+    <Style Selector="Border.homeCard">
+        <Setter Property="Background" Value="{DynamicResource HelixHomeCardBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource HelixBorderColor}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Border.homeCard:pointerover">
+        <Setter Property="Background" Value="{DynamicResource HelixHomeCardHoverBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource HelixAccentBrush}" />
+    </Style>
+    <Style Selector="Button.homeCard">
+        <Setter Property="Background" Value="{DynamicResource HelixHomeCardBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource HelixBorderColor}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="Button.homeCard:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource HelixHomeCardHoverBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource HelixAccentBrush}" />
+    </Style>
+
+    <Style Selector="Border.recentRow">
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Border.recentRow:pointerover">
+        <Setter Property="Background" Value="{DynamicResource HelixHoverBrush}" />
+    </Style>
+    <Style Selector="Button.recentRow">
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="Button.recentRow:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource HelixHoverBrush}" />
+    </Style>
+
+    <!-- ══ Settings rows & nav ═══════════════════════════════════════════════ -->
+    <Style Selector="Border.settingsRow">
+        <Setter Property="Background" Value="{DynamicResource HelixSettingsRowBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource HelixBorderColor}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="14,10" />
+        <Setter Property="MinHeight" Value="52" />
+    </Style>
+
+    <Style Selector="Button.settingsNavItem">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <!-- ══ Sidebar item pill ═════════════════════════════════════════════════ -->
+    <Style Selector="Border.sidebarItem">
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Margin" Value="6,1" />
+    </Style>
+    <Style Selector="Border.sidebarItem:pointerover">
+        <Setter Property="Background" Value="{DynamicResource HelixHoverBrush}" />
+    </Style>
+
+    <!-- ══ Context menus (Files-style acrylic shell) ═════════════════════════ -->
+    <Style Selector="ContextMenu">
+        <Setter Property="Background" Value="{DynamicResource HelixMenuBackgroundBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource HelixBorderColor}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="4" />
+        <Setter Property="MaxHeight" Value="560" />
+    </Style>
+    <Style Selector="MenuFlyoutPresenter">
+        <Setter Property="Background" Value="{DynamicResource HelixMenuBackgroundBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource HelixBorderColor}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="4" />
+    </Style>
+    <Style Selector="MenuItem">
+        <Setter Property="MinHeight" Value="34" />
+        <Setter Property="FontSize" Value="14" />
+    </Style>
+
+    <!-- ══ Context menu icon-only primary bar buttons ════════════════════════ -->
+    <Style Selector="Button.ctxIcon">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="8" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Width" Value="40" />
+        <Setter Property="Height" Value="36" />
+    </Style>
+    <Style Selector="Button.ctxIcon:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource HelixHoverBrush}" />
+    </Style>
+    <Style Selector="Button.ctxIcon:disabled">
+        <Setter Property="Opacity" Value="0.35" />
+    </Style>
+
+</Styles>

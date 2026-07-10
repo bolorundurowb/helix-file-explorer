@@ -11,6 +11,9 @@ public sealed class SessionDocument
     public List<TabSnapshot> Tabs { get; set; } = [];
     public int ActiveTabIndex { get; set; }
     public List<string> RecentPaths { get; set; } = [];
+
+    /// <summary>Recently opened files (most recent first), shown on the Home dashboard.</summary>
+    public List<string> RecentFiles { get; set; } = [];
 }
 
 /// <summary>Persisted state for a single tab, including dual-pane layout and tint.</summary>

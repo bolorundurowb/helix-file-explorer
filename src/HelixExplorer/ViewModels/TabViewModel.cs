@@ -29,6 +29,8 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     private readonly Func<IFileChangeWatcher> _watcherFactory;
     private readonly IFileOperationReporter _operationReporter;
     private readonly IQuickAccessProvider _quickAccess;
+    private readonly HomePageViewModel _home;
+    private readonly SettingsPageViewModel? _settings;
     private bool _showHiddenFiles;
     private bool _showFileExtensions = true;
     private bool _disposed;
@@ -47,7 +49,10 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         FileVisualService visuals,
         Func<IFileChangeWatcher> watcherFactory,
         IFileOperationReporter operationReporter,
-        IQuickAccessProvider quickAccess)
+        IQuickAccessProvider quickAccess,
+        HomePageViewModel home,
+        TabKind kind = TabKind.Browser,
+        SettingsPageViewModel? settings = null)
     {
         _fileSystem = fileSystem;
         _fileOps = fileOps;
@@ -63,18 +68,56 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         _watcherFactory = watcherFactory;
         _operationReporter = operationReporter;
         _quickAccess = quickAccess;
+        _home = home;
+        _settings = settings;
+        Kind = kind;
         _clipboard.Changed += OnClipboardChanged;
-        LeftPane = CreatePane();
-        _activePane = LeftPane;
-        LeftPane.IsActive = true;
+        if (kind == TabKind.Browser)
+        {
+            LeftPane = CreatePane();
+            _activePane = LeftPane;
+            LeftPane.IsActive = true;
+        }
+        else
+        {
+            LeftPane = CreatePane();
+            _activePane = LeftPane;
+        }
+
         UpdateTitle();
     }
+
+    public TabKind Kind { get; }
+
+    public HomePageViewModel Home => _home;
+
+    public SettingsPageViewModel? Settings => _settings;
+
+    public bool IsBrowserTab => Kind == TabKind.Browser;
+
+    public bool IsSettingsTab => Kind == TabKind.Settings;
 
     public event EventHandler? CloseRequested;
     public event EventHandler? SelectionChanged;
 
     private void OnPaneSelectionChanged(object? sender, EventArgs e)
         => SelectionChanged?.Invoke(this, EventArgs.Empty);
+
+    private void OnPaneDisplayPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is not (nameof(PaneViewModel.IsHome) or nameof(PaneViewModel.IsFileSystem)))
+            return;
+
+        NotifyPaneDisplayProperties();
+    }
+
+    private void NotifyPaneDisplayProperties()
+    {
+        OnPropertyChanged(nameof(LeftShowsHome));
+        OnPropertyChanged(nameof(LeftShowsFiles));
+        OnPropertyChanged(nameof(RightShowsHome));
+        OnPropertyChanged(nameof(RightShowsFiles));
+    }
 
     private void OnClipboardChanged(object? sender, EventArgs e)
     {
@@ -112,6 +155,11 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     public bool HasTint => Tint.HasValue;
     public IBrush? TintBrush => Tint is { } c ? new SolidColorBrush(c) : null;
 
+    public bool LeftShowsHome => LeftPane.IsHome;
+    public bool LeftShowsFiles => !LeftPane.IsHome;
+    public bool RightShowsHome => RightPane?.IsHome == true;
+    public bool RightShowsFiles => RightPane is { IsHome: false };
+
     private PaneViewModel CreatePane()
     {
         var pane = new PaneViewModel(
@@ -135,6 +183,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         pane.OpenInOtherPaneRequested += OnOpenInOtherPaneRequested;
         pane.PinPathRequested += OnPanePinPathRequested;
         pane.SelectionChanged += OnPaneSelectionChanged;
+        pane.PropertyChanged += OnPaneDisplayPropertyChanged;
         pane.ApplyViewSettings(_showHiddenFiles, _showFileExtensions);
         return pane;
     }
@@ -206,6 +255,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
             Navigated?.Invoke(this, EventArgs.Empty);
         }
 
+        NotifyPaneDisplayProperties();
         StateChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -219,6 +269,15 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     }
 
     partial void OnOrientationChanged(PaneSplitOrientation value) => StateChanged?.Invoke(this, EventArgs.Empty);
+
+    partial void OnRightPaneChanged(PaneViewModel? oldValue, PaneViewModel? newValue)
+    {
+        if (oldValue is not null)
+            oldValue.PropertyChanged -= OnPaneDisplayPropertyChanged;
+        if (newValue is not null)
+            newValue.PropertyChanged += OnPaneDisplayPropertyChanged;
+        NotifyPaneDisplayProperties();
+    }
 
     partial void OnIsDualPaneChanged(bool value) => StateChanged?.Invoke(this, EventArgs.Empty);
 
@@ -291,10 +350,28 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void Close() => CloseRequested?.Invoke(this, EventArgs.Empty);
 
-    private void UpdateTitle() => Title = DescribePath(ActivePane.CurrentPath);
+    private void UpdateTitle()
+    {
+        if (IsSettingsTab)
+        {
+            Title = "Settings";
+            return;
+        }
+
+        if (ActivePane.IsHome)
+        {
+            Title = "Home";
+            return;
+        }
+
+        Title = DescribePath(ActivePane.CurrentPath);
+    }
 
     private static string DescribePath(string path)
     {
+        if (string.Equals(path, PaneViewModel.HomeRoute, StringComparison.Ordinal))
+            return "Home";
+
         if (string.IsNullOrEmpty(path))
             return "New Tab";
 
@@ -363,6 +440,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         pane.OpenInOtherPaneRequested -= OnOpenInOtherPaneRequested;
         pane.PinPathRequested -= OnPanePinPathRequested;
         pane.SelectionChanged -= OnPaneSelectionChanged;
+        pane.PropertyChanged -= OnPaneDisplayPropertyChanged;
     }
 
     public void RefreshFolderColorBindings()

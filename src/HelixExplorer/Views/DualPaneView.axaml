@@ -2,36 +2,43 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:HelixExplorer.ViewModels"
              xmlns:views="using:HelixExplorer.Views"
+             xmlns:controls="using:HelixExplorer.Controls"
              x:Class="HelixExplorer.Views.DualPaneView"
-             x:DataType="vm:TabViewModel">
+             x:DataType="vm:TabViewModel"
+             x:CompileBindings="False">
     <Panel>
-        <!-- Single pane — wrapper keeps TabViewModel as the compiled-binding source -->
-        <Panel IsVisible="{Binding IsSinglePane}">
-            <views:PaneView DataContext="{Binding LeftPane}" />
+        <views:SettingsPage IsVisible="{Binding IsSettingsTab}"
+                            DataContext="{Binding Settings}" />
+
+        <Panel IsVisible="{Binding IsBrowserTab}">
+            <controls:PaneContentHost IsVisible="{Binding IsSinglePane}"
+                                      Pane="{Binding LeftPane}"
+                                      Home="{Binding Home}" />
+
+            <Grid x:Name="DualGrid" IsVisible="{Binding IsDualPane}">
+                <Grid x:Name="LeftHost" PointerPressed="OnLeftActivate">
+                    <controls:PaneContentHost Pane="{Binding LeftPane}"
+                                                Home="{Binding Home}" />
+                    <Border IsVisible="{Binding LeftPane.IsActive}"
+                            BorderBrush="{DynamicResource HelixFocusBorderBrush}"
+                            BorderThickness="2"
+                            CornerRadius="4"
+                            IsHitTestVisible="False" />
+                </Grid>
+
+                <GridSplitter x:Name="Splitter"
+                              Background="{DynamicResource HelixBorderColor}" />
+
+                <Grid x:Name="RightHost" PointerPressed="OnRightActivate">
+                    <controls:PaneContentHost Pane="{Binding RightPane}"
+                                                Home="{Binding Home}" />
+                    <Border IsVisible="{Binding RightPane.IsActive, FallbackValue=False}"
+                            BorderBrush="{DynamicResource HelixFocusBorderBrush}"
+                            BorderThickness="2"
+                            CornerRadius="4"
+                            IsHitTestVisible="False" />
+                </Grid>
+            </Grid>
         </Panel>
-
-        <!-- Dual pane -->
-        <Grid x:Name="DualGrid" IsVisible="{Binding IsDualPane}">
-            <Grid x:Name="LeftHost" PointerPressed="OnLeftActivate">
-                <views:PaneView DataContext="{Binding LeftPane}" />
-                <Border IsVisible="{Binding LeftPane.IsActive}"
-                        BorderBrush="{DynamicResource HelixFocusBorderBrush}"
-                        BorderThickness="2"
-                        CornerRadius="4"
-                        IsHitTestVisible="False" />
-            </Grid>
-
-            <GridSplitter x:Name="Splitter"
-                          Background="{DynamicResource HelixBorderColor}" />
-
-            <Grid x:Name="RightHost" PointerPressed="OnRightActivate">
-                <views:PaneView DataContext="{Binding RightPane}" />
-                <Border IsVisible="{Binding RightPane.IsActive, FallbackValue=False}"
-                        BorderBrush="{DynamicResource HelixFocusBorderBrush}"
-                        BorderThickness="2"
-                        CornerRadius="4"
-                        IsHitTestVisible="False" />
-            </Grid>
-        </Grid>
     </Panel>
 </UserControl>

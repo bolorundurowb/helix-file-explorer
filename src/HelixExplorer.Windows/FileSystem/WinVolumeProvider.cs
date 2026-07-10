@@ -15,6 +15,8 @@ public sealed class WinVolumeProvider : IVolumeProvider
             string label;
             string display;
             var ready = false;
+            long total = 0;
+            long free = 0;
             try
             {
                 ready = drive.IsReady;
@@ -22,6 +24,11 @@ public sealed class WinVolumeProvider : IVolumeProvider
                 display = ready && !string.IsNullOrWhiteSpace(label)
                     ? $"{label} ({drive.Name.TrimEnd('\\')})"
                     : drive.Name.TrimEnd('\\');
+                if (ready)
+                {
+                    total = drive.TotalSize;
+                    free = drive.AvailableFreeSpace;
+                }
             }
             catch
             {
@@ -34,7 +41,9 @@ public sealed class WinVolumeProvider : IVolumeProvider
                 Label: label,
                 DisplayName: display,
                 DriveType: drive.DriveType,
-                IsReady: ready));
+                IsReady: ready,
+                TotalBytes: total,
+                FreeBytes: free));
         }
 
         return result;

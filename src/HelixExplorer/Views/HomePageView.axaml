@@ -1,0 +1,192 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HelixExplorer.ViewModels"
+             x:Class="HelixExplorer.Views.HomePageView"
+             x:DataType="vm:HomePageViewModel"
+             x:CompileBindings="False">
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  Background="{DynamicResource HelixFileAreaBrush}">
+        <StackPanel Margin="24,20" Spacing="16">
+
+            <Expander IsExpanded="True" HorizontalAlignment="Stretch">
+                <Expander.Header>
+                    <TextBlock Text="Quick access" FontSize="14" FontWeight="SemiBold" />
+                </Expander.Header>
+                <ItemsControl ItemsSource="{Binding QuickAccess}" Margin="0,8,0,0">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:HomeQuickAccessItem">
+                            <Button Classes="homeCard"
+                                    Width="128" Height="92"
+                                    Margin="0,0,10,10"
+                                    Padding="8"
+                                    ToolTip.Tip="{Binding Path}"
+                                    Command="{Binding DataContext.OpenItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    CommandParameter="{Binding Path}">
+                                <Panel>
+                                    <PathIcon Data="{DynamicResource HelixFolderIconGeometry}"
+                                              Width="40" Height="40"
+                                              VerticalAlignment="Center"
+                                              HorizontalAlignment="Center"
+                                              Foreground="{Binding Path, Converter={StaticResource FolderIconBrushConverter}}" />
+                                    <PathIcon Data="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z"
+                                              Width="11" Height="11"
+                                              Opacity="0.55"
+                                              HorizontalAlignment="Right"
+                                              VerticalAlignment="Top"
+                                              IsVisible="{Binding IsPinned}" />
+                                    <TextBlock Text="{Binding Title}"
+                                               FontSize="12"
+                                               TextAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               VerticalAlignment="Bottom"
+                                               HorizontalAlignment="Center" />
+                                </Panel>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Expander>
+
+            <Expander IsExpanded="True" HorizontalAlignment="Stretch">
+                <Expander.Header>
+                    <TextBlock Text="Drives" FontSize="14" FontWeight="SemiBold" />
+                </Expander.Header>
+                <ItemsControl ItemsSource="{Binding Drives}" Margin="0,8,0,0">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:HomeDriveItem">
+                            <Button Classes="homeCard"
+                                    Width="280"
+                                    Margin="0,0,10,10"
+                                    Padding="14,12"
+                                    ToolTip.Tip="{Binding RootPath}"
+                                    IsEnabled="{Binding IsReady}"
+                                    Command="{Binding DataContext.OpenItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    CommandParameter="{Binding RootPath}">
+                                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto">
+                                    <PathIcon Grid.Row="0" Grid.Column="0"
+                                              Data="M6,2H18A2,2 0 0,1 20,4V20A2,2 0 0,1 18,22H6A2,2 0 0,1 4,20V4A2,2 0 0,1 6,2M12,4A6,6 0 0,0 6,10A6,6 0 0,0 12,16A6,6 0 0,0 18,10A6,6 0 0,0 12,4M12,18A1,1 0 0,0 11,19A1,1 0 0,0 12,20A1,1 0 0,0 13,19A1,1 0 0,0 12,18M12,6A4,4 0 0,1 16,10A4,4 0 0,1 12,14A4,4 0 0,1 8,10A4,4 0 0,1 12,6Z"
+                                              Width="24" Height="24"
+                                              Margin="0,0,10,0"
+                                              VerticalAlignment="Center"
+                                              Foreground="{DynamicResource HelixSecondaryTextBrush}" />
+                                    <TextBlock Grid.Row="0" Grid.Column="1"
+                                               Text="{Binding Label}"
+                                               FontSize="13"
+                                               FontWeight="SemiBold"
+                                               TextTrimming="CharacterEllipsis"
+                                               VerticalAlignment="Center" />
+                                    <ProgressBar Grid.Row="1" Grid.Column="1"
+                                                 Margin="0,8,0,0"
+                                                 Minimum="0" Maximum="1"
+                                                 Height="6"
+                                                 Value="{Binding UsedFraction}"
+                                                 Foreground="{DynamicResource HelixProgressBrush}"
+                                                 IsVisible="{Binding HasUsage}"
+                                                 IsHitTestVisible="False" />
+                                    <TextBlock Grid.Row="2" Grid.Column="1"
+                                               Margin="0,6,0,0"
+                                               Text="{Binding UsageText}"
+                                               FontSize="12"
+                                               Opacity="0.7" />
+                                </Grid>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Expander>
+
+            <Expander IsExpanded="True" HorizontalAlignment="Stretch">
+                <Expander.Header>
+                    <TextBlock Text="Network locations" FontSize="14" FontWeight="SemiBold" />
+                </Expander.Header>
+                <StackPanel Margin="0,8,0,0">
+                    <TextBlock Text="No network locations found."
+                               FontSize="13"
+                               Opacity="0.6"
+                               Margin="2,4"
+                               IsVisible="{Binding !HasNetworkLocations}" />
+                    <ItemsControl ItemsSource="{Binding NetworkLocations}"
+                                  IsVisible="{Binding HasNetworkLocations}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:HomeNetworkItem">
+                                <Button Classes="recentRow"
+                                        Padding="8,6"
+                                        HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Stretch"
+                                        ToolTip.Tip="{Binding Path}"
+                                        Command="{Binding DataContext.OpenItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        CommandParameter="{Binding Path}">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <PathIcon Data="M17,3A2,2 0 0,1 19,5V15A2,2 0 0,1 17,17H13V19H14A1,1 0 0,1 15,20H9A1,1 0 0,1 10,19H11V17H7A2,2 0 0,1 5,15V5A2,2 0 0,1 7,3H17M17,5H7V15H17V5Z"
+                                                  Width="16" Height="16"
+                                                  Foreground="{DynamicResource HelixAccentBrush}" />
+                                        <TextBlock Text="{Binding Title}" FontSize="13" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Expander>
+
+            <Expander IsExpanded="True" HorizontalAlignment="Stretch">
+                <Expander.Header>
+                    <TextBlock Text="Recent files" FontSize="14" FontWeight="SemiBold" />
+                </Expander.Header>
+                <StackPanel Margin="0,8,0,0">
+                    <TextBlock Text="No recent files yet."
+                               FontSize="13"
+                               Opacity="0.6"
+                               Margin="2,4"
+                               IsVisible="{Binding !HasRecentFiles}" />
+                    <ItemsControl ItemsSource="{Binding RecentFiles}"
+                                  IsVisible="{Binding HasRecentFiles}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:HomeRecentItem">
+                                <Button Classes="recentRow"
+                                        Padding="8,6"
+                                        HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Stretch"
+                                        ToolTip.Tip="{Binding FullPath}"
+                                        Command="{Binding DataContext.OpenItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        CommandParameter="{Binding FullPath}">
+                                    <Grid ColumnDefinitions="Auto,Auto,*">
+                                        <PathIcon Grid.Column="0"
+                                                  Data="M13,9V3.5L18.5,9M6,2C4.89,2 4,2.89 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2H6Z"
+                                                  Width="16" Height="16"
+                                                  Margin="0,0,8,0"
+                                                  VerticalAlignment="Center"
+                                                  Foreground="{DynamicResource HelixSecondaryTextBrush}" />
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding Name}"
+                                                   FontSize="13"
+                                                   VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="2"
+                                                   Text="{Binding DirectoryPath}"
+                                                   FontSize="12"
+                                                   Opacity="0.55"
+                                                   Margin="12,0,0,0"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   VerticalAlignment="Center"
+                                                   HorizontalAlignment="Right" />
+                                    </Grid>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Expander>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

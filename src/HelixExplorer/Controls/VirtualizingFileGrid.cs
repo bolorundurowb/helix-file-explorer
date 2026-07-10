@@ -10,9 +10,6 @@ using HelixExplorer.ViewModels;
 
 namespace HelixExplorer.Controls;
 
-/// <summary>
-/// Grid view that virtualizes by row so large folders stay responsive.
-/// </summary>
 public sealed class VirtualizingFileGrid : TemplatedControl
 {
     public static readonly StyledProperty<IEnumerable?> ItemsSourceProperty =

@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Diagnostics;
+using Avalonia.Input;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -15,6 +16,7 @@ using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Session;
 using HelixExplorer.Core.Sorting;
 using HelixExplorer.Services;
+using HelixExplorer.ViewModels.Pane;
 
 namespace HelixExplorer.ViewModels;
 
@@ -39,11 +41,14 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     private readonly ISettingsStore _settingsStore;
     private readonly IFileOperationReporter _operationReporter;
     private readonly IQuickAccessProvider _quickAccess;
-    private readonly Dictionary<string, EntryItemViewModel> _entryPool = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Stack<string> _backStack = new();
-    private readonly Stack<string> _forwardStack = new();
-    private readonly List<FileSystemEntry> _viewBuffer = new();
-    private readonly List<FileSystemEntry> _visibleBuffer = new();
+    private readonly IUserDialogService _dialogs;
+    private readonly IWindowHostService _windowHost;
+    private readonly IShellFolderEnumerator _shellEnumerator;
+    private readonly ITerminalLauncher _terminalLauncher;
+    private readonly PaneSelectionModel _selection = new();
+    private readonly PaneNavigationController _navigation;
+    private readonly PaneListingCoordinator _listing = new();
+    private readonly PaneFileOperationCoordinator _fileOperations;
     private IReadOnlyList<FileSystemEntry> _allEntries = Array.Empty<FileSystemEntry>();
     private GitStatusSnapshot _gitSnapshot = GitStatusSnapshot.Empty;
     private CancellationTokenSource? _refreshCts;
@@ -68,7 +73,11 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         FileVisualService visuals,
         ISettingsStore settingsStore,
         IFileOperationReporter operationReporter,
-        IQuickAccessProvider quickAccess)
+        IQuickAccessProvider quickAccess,
+        IUserDialogService dialogs,
+        IWindowHostService windowHost,
+        IShellFolderEnumerator shell,
+        ITerminalLauncher terminalLauncher)
     {
         _fileSystem = fileSystem;
         _archive = archive;
@@ -84,9 +93,24 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         _settingsStore = settingsStore;
         _operationReporter = operationReporter;
         _quickAccess = quickAccess;
+        _dialogs = dialogs;
+        _windowHost = windowHost;
+        _shellEnumerator = shell;
+        _terminalLauncher = terminalLauncher;
+        _navigation = new PaneNavigationController(fileSystem, archive);
+        _fileOperations = new PaneFileOperationCoordinator(fileOps, clipboard, osClipboard, dialogs, operationReporter);
         _watcher.Changed += OnWatcherChanged;
         _clipboard.Changed += OnClipboardChanged;
-        SelectedEntries.CollectionChanged += OnSelectedEntriesChanged;
+        _selection.SelectionChanged += OnSelectionModelChanged;
+        _selection.SelectedEntries.CollectionChanged += (_, e) => OnSelectedEntriesChanged(_, e);
+    }
+
+    private void OnSelectionModelChanged(object? sender, EventArgs e)
+    {
+        SelectedEntry = _selection.SelectedEntry;
+        SelectedCount = _selection.SelectedCount;
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
+        NotifyCommandsCanExecuteChanged();
     }
 
     private void OnSelectedEntriesChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -96,6 +120,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     }
 
     public event EventHandler? Navigated;
+    public event EventHandler? SortChanged;
     public event EventHandler<FileSystemEntry>? EntryActivated;
     public event EventHandler<string>? OpenInNewTabRequested;
     public event EventHandler<string>? OpenInOtherPaneRequested;
@@ -172,6 +197,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     public bool IsArchive => ArchivePath.IsVirtual(CurrentPath);
     public bool IsHome => LocationKind == PaneLocationKind.Home;
     public bool IsFileSystem => LocationKind == PaneLocationKind.FileSystem;
+    public bool IsShellNamespace => LocationKind == PaneLocationKind.ShellNamespace;
+    public bool IsRecycleBin => ShellPath.IsRecycleBin(CurrentPath);
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GoBackCommand))]
@@ -183,7 +210,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<EntryItemViewModel> Entries { get; } = new();
 
-    public ObservableCollection<EntryItemViewModel> SelectedEntries { get; } = new();
+    public ObservableCollection<EntryItemViewModel> SelectedEntries => _selection.SelectedEntries;
 
     public ObservableCollection<string> Branches { get; } = new();
 
@@ -192,20 +219,27 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     partial void OnCurrentPathChanged(string value)
     {
         var isHomeRoute = string.Equals(value, HomeRoute, StringComparison.Ordinal);
-        LocationKind = isHomeRoute ? PaneLocationKind.Home : PaneLocationKind.FileSystem;
+        LocationKind = isHomeRoute
+            ? PaneLocationKind.Home
+            : ShellPath.IsShellPath(value)
+                ? PaneLocationKind.ShellNamespace
+                : PaneLocationKind.FileSystem;
 
-        _entryPool.Clear();
+        _listing.ClearEntryPool();
         RebuildBreadcrumbs(isHomeRoute ? string.Empty : value);
         EditablePath = isHomeRoute ? string.Empty : value;
         ClearFilter();
         RepositoryStatus = GitStatus.Empty;
         _gitSnapshot = GitStatusSnapshot.Empty;
         CancelGitRefresh();
-        _watcher.Watch(isHomeRoute || IsArchive ? string.Empty : value);
+        _watcher.Watch(isHomeRoute || IsArchive || ShellPath.IsShellPath(value) ? string.Empty : value);
         PasteCommand.NotifyCanExecuteChanged();
         CutCommand.NotifyCanExecuteChanged();
         CopyCommand.NotifyCanExecuteChanged();
         DeleteCommand.NotifyCanExecuteChanged();
+        DeletePermanentlyCommand.NotifyCanExecuteChanged();
+        RestoreFromRecycleBinCommand.NotifyCanExecuteChanged();
+        EmptyRecycleBinCommand.NotifyCanExecuteChanged();
         BeginRenameCommand.NotifyCanExecuteChanged();
         ShowMoreOptionsCommand.NotifyCanExecuteChanged();
         CompressToZipCommand.NotifyCanExecuteChanged();
@@ -250,9 +284,45 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         RecordNavigation(HomeRoute);
     }
 
-    partial void OnSortColumnChanged(SortColumn value) => ApplySortAndPublish();
+    partial void OnSortColumnChanged(SortColumn value)
+    {
+        ApplySortAndPublish();
+        NotifySortOptionProperties();
+        SortChanged?.Invoke(this, EventArgs.Empty);
+    }
 
-    partial void OnSortDescendingChanged(bool value) => ApplySortAndPublish();
+    partial void OnSortDescendingChanged(bool value)
+    {
+        ApplySortAndPublish();
+        NotifySortOptionProperties();
+        SortChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public bool IsSortByName => SortColumn == SortColumn.Name;
+    public bool IsSortByDate => SortColumn == SortColumn.Modified;
+    public bool IsSortByType => SortColumn == SortColumn.Type;
+    public bool IsSortBySize => SortColumn == SortColumn.Size;
+    public bool IsSortAscending => !SortDescending;
+    public bool IsSortDescendingActive => SortDescending;
+
+    [RelayCommand]
+    private void SetSortColumn(SortColumn column) => SortColumn = column;
+
+    [RelayCommand]
+    private void SetSortAscending() => SortDescending = false;
+
+    [RelayCommand]
+    private void SetSortDescending() => SortDescending = true;
+
+    private void NotifySortOptionProperties()
+    {
+        OnPropertyChanged(nameof(IsSortByName));
+        OnPropertyChanged(nameof(IsSortByDate));
+        OnPropertyChanged(nameof(IsSortByType));
+        OnPropertyChanged(nameof(IsSortBySize));
+        OnPropertyChanged(nameof(IsSortAscending));
+        OnPropertyChanged(nameof(IsSortDescendingActive));
+    }
 
     partial void OnFilterTextChanged(string value) => ApplySortAndPublish();
 
@@ -303,18 +373,20 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     }
 
     public void UpdateSelection(IList<EntryItemViewModel> entries)
+        => _selection.UpdateSelection(entries, Entries);
+
+    public void SelectEntry(EntryItemViewModel entry, KeyModifiers modifiers)
     {
-        SelectedEntries.Clear();
-        foreach (var entry in entries)
-            SelectedEntries.Add(entry);
-
-        if (SelectedEntries.Count == 1)
-            SelectedEntry = SelectedEntries[0];
+        if (modifiers.HasFlag(KeyModifiers.Control))
+            _selection.Toggle(entry, Entries);
+        else if (modifiers.HasFlag(KeyModifiers.Shift) && SelectedEntry is not null)
+            _selection.SelectRange(entry, Entries);
         else
-            SelectedEntry = null;
-
-        SelectionChanged?.Invoke(this, EventArgs.Empty);
+            _selection.SelectSingle(entry, Entries);
     }
+
+    public void SelectByBounds(IReadOnlyList<EntryItemViewModel> hits, bool additive)
+        => _selection.SelectByBounds(hits, Entries, additive);
 
     private void SyncEntrySelectionFlags()
     {
@@ -343,18 +415,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     }
 
     public void SelectAll()
-    {
-        SelectedEntries.Clear();
-        foreach (var entry in Entries)
-            SelectedEntries.Add(entry);
-
-        if (SelectedEntries.Count == 1)
-            SelectedEntry = SelectedEntries[0];
-        else
-            SelectedEntry = null;
-
-        SelectionChanged?.Invoke(this, EventArgs.Empty);
-    }
+        => _selection.SelectAll(Entries);
 
     public bool HasSelectionForOps => CanModifySelection();
 
@@ -371,85 +432,43 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         if (string.IsNullOrWhiteSpace(path))
             return;
 
-        var resolved = ResolveDestination(path);
+        var resolved = _navigation.ResolveDestination(path, CurrentPath);
         if (string.Equals(resolved, CurrentPath, StringComparison.OrdinalIgnoreCase))
             return;
 
         RecordNavigation(resolved);
     }
 
-    private string ResolveDestination(string path)
-    {
-        if (ArchivePath.IsVirtual(path))
-            return ArchivePath.NormalizeDirectory(path);
-
-        if (path == "..")
-        {
-            if (string.IsNullOrEmpty(CurrentPath))
-                return CurrentPath;
-
-            if (ArchivePath.IsVirtual(CurrentPath))
-                return ArchivePath.GetParent(CurrentPath);
-
-            var parent = Directory.GetParent(CurrentPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-            return parent is null
-                ? CurrentPath
-                : EnsureTrailingSeparator(parent.FullName);
-        }
-
-        var resolved = _fileSystem.ResolvePath(path);
-        if (_archive.IsArchiveFile(resolved))
-            return ArchivePath.Mount(resolved);
-
-        return EnsureTrailingSeparator(resolved);
-    }
-
-    private static string EnsureTrailingSeparator(string path)
-    {
-        if (string.IsNullOrEmpty(path))
-            return path;
-        if (path.Length == 2 && path[1] == ':')
-            return path + Path.DirectorySeparatorChar;
-        if (!path.EndsWith(Path.DirectorySeparatorChar) && !path.EndsWith(Path.AltDirectorySeparatorChar))
-            return path + Path.DirectorySeparatorChar;
-        return path;
-    }
-
     private void RecordNavigation(string resolved)
     {
-        if (!string.IsNullOrEmpty(CurrentPath))
-        {
-            _backStack.Push(CurrentPath);
-            _forwardStack.Clear();
-        }
-
-        CurrentPath = resolved;
-        CanGoBack = _backStack.Count > 0;
-        CanGoForward = _forwardStack.Count > 0;
+        var transition = _navigation.RecordForward(CurrentPath, resolved);
+        CurrentPath = transition.Path;
+        CanGoBack = transition.CanGoBack;
+        CanGoForward = transition.CanGoForward;
     }
 
     [RelayCommand(CanExecute = nameof(CanGoBack))]
     private void GoBack()
     {
-        if (_backStack.Count == 0)
+        var transition = _navigation.GoBack(CurrentPath);
+        if (transition is null)
             return;
 
-        _forwardStack.Push(CurrentPath);
-        CurrentPath = _backStack.Pop();
-        CanGoBack = _backStack.Count > 0;
-        CanGoForward = _forwardStack.Count > 0;
+        CurrentPath = transition.Value.Path;
+        CanGoBack = transition.Value.CanGoBack;
+        CanGoForward = transition.Value.CanGoForward;
     }
 
     [RelayCommand(CanExecute = nameof(CanGoForward))]
     private void GoForward()
     {
-        if (_forwardStack.Count == 0)
+        var transition = _navigation.GoForward(CurrentPath);
+        if (transition is null)
             return;
 
-        _backStack.Push(CurrentPath);
-        CurrentPath = _forwardStack.Pop();
-        CanGoBack = _backStack.Count > 0;
-        CanGoForward = _forwardStack.Count > 0;
+        CurrentPath = transition.Value.Path;
+        CanGoBack = transition.Value.CanGoBack;
+        CanGoForward = transition.Value.CanGoForward;
     }
 
     [RelayCommand]
@@ -457,6 +476,12 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     {
         if (IsHome)
             return;
+
+        if (IsShellNamespace)
+        {
+            NavigateToHome();
+            return;
+        }
 
         NavigateTo("..");
     }
@@ -557,7 +582,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
                 _refreshCts = null;
                 _refreshInFlight = false;
 
-                if (!_disposed && !string.IsNullOrEmpty(CurrentPath) && !IsArchive)
+                if (!_disposed && !string.IsNullOrEmpty(CurrentPath) && !IsArchive && !IsShellNamespace)
                     _watcher.Watch(CurrentPath);
 
                 if (_watcherRefreshPending && !_disposed)
@@ -667,64 +692,28 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
     private void ApplySortAndPublish()
     {
-        _visibleBuffer.Clear();
-        foreach (var entry in _allEntries)
+        var result = _listing.ApplySortAndPublish(new ListingPublishRequest
         {
-            if (!ShowHiddenFiles && entry.IsHidden)
-                continue;
+            AllEntries = _allEntries,
+            GitSnapshot = _gitSnapshot,
+            ShowHiddenFiles = ShowHiddenFiles,
+            ShowFileExtensions = ShowFileExtensions,
+            IsFilterVisible = IsFilterVisible,
+            FilterText = FilterText,
+            SortColumn = SortColumn,
+            SortDescending = SortDescending
+        });
 
-            _visibleBuffer.Add(entry);
-        }
-
-        TotalCount = _visibleBuffer.Count;
-
-        FileNameFilter.Apply(_visibleBuffer, IsFilterVisible ? FilterText : null, _viewBuffer);
-        _viewBuffer.Sort(FileSystemEntryComparer.For(SortColumn, SortDescending));
-
-        ListingSizeBytes = 0;
-        foreach (var entry in _viewBuffer)
-        {
-            if (!entry.IsDirectory)
-                ListingSizeBytes += entry.SizeBytes;
-        }
-
-        var usedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var visualTargets = new List<EntryItemViewModel>();
-        var nextEntries = new List<EntryItemViewModel>(_viewBuffer.Count);
-
-        foreach (var entry in _viewBuffer)
-        {
-            var path = entry.FullPath;
-            usedPaths.Add(path);
-            var gitStatus = _gitSnapshot.GetStatusForPath(path);
-
-            if (!_entryPool.TryGetValue(path, out var item))
-            {
-                item = new EntryItemViewModel(entry, ShowFileExtensions, gitStatus);
-                _entryPool[path] = item;
-                visualTargets.Add(item);
-            }
-            else
-            {
-                item.UpdateEntry(entry, ShowFileExtensions, gitStatus);
-            }
-
-            nextEntries.Add(item);
-        }
-
-        SyncEntriesCollection(nextEntries);
-
+        TotalCount = result.TotalCount;
+        ListingSizeBytes = result.ListingSizeBytes;
+        SyncEntriesCollection(result.Entries);
         RefreshCutState();
-
-        foreach (var stale in _entryPool.Keys.Where(k => !usedPaths.Contains(k)).ToList())
-            _entryPool.Remove(stale);
-
-        ItemCount = _viewBuffer.Count;
+        ItemCount = result.ItemCount;
         SelectedEntry = null;
         SelectedEntries.Clear();
         SelectedCount = 0;
         UpdateStatusText();
-        RequestEntryVisuals(visualTargets);
+        RequestEntryVisuals(result.VisualTargets);
     }
 
     private void SyncEntriesCollection(IReadOnlyList<EntryItemViewModel> nextEntries)
@@ -943,7 +932,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
         var paths = SelectedEntries.Select(e => e.FullPath).ToList();
         _clipboard.SetCut(paths, CurrentPath);
-        _ = PublishToOsClipboardAsync(paths, ClipboardOperation.Cut);
+        _ = _fileOperations.PublishToOsClipboardAsync(paths, ClipboardOperation.Cut);
         RefreshCutState();
         NotifyCommandsCanExecuteChanged();
     }
@@ -956,81 +945,16 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
         var paths = SelectedEntries.Select(e => e.FullPath).ToList();
         _clipboard.SetCopy(paths, CurrentPath);
-        _ = PublishToOsClipboardAsync(paths, ClipboardOperation.Copy);
+        _ = _fileOperations.PublishToOsClipboardAsync(paths, ClipboardOperation.Copy);
         PasteCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand(CanExecute = nameof(CanPaste))]
-    private async Task Paste()
-    {
-        if (string.IsNullOrEmpty(CurrentPath))
-            return;
-
-        try
-        {
-            var payload = await ResolvePastePayloadAsync().ConfigureAwait(true);
-            if (payload is null || payload.Paths.Count == 0)
-            {
-                StatusText = "Clipboard has no files";
-                return;
-            }
-
-            var kind = payload.Operation == ClipboardOperation.Cut
-                ? FileOperationKind.Move
-                : FileOperationKind.Copy;
-            var title = kind == FileOperationKind.Move ? "Moving items…" : "Copying items…";
-            _operationReporter.Begin(kind, payload.Paths.Count, title);
-
-            var progress = new Progress<FileOperationProgress>(p => _operationReporter.Report(p));
-            if (payload.Operation == ClipboardOperation.Cut)
-            {
-                await _fileOps.MoveAsync(payload.Paths, CurrentPath, progress).ConfigureAwait(true);
-                _clipboard.Clear();
-            }
-            else
-            {
-                await _fileOps.CopyAsync(payload.Paths, CurrentPath, progress).ConfigureAwait(true);
-            }
-
-            await RefreshAsync(showLoading: false).ConfigureAwait(true);
-            _operationReporter.Complete(
-                kind,
-                payload.Paths.Count,
-                kind == FileOperationKind.Move
-                    ? $"Moved {payload.Paths.Count} item(s)"
-                    : $"Copied {payload.Paths.Count} item(s)");
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"Paste failed: {ex.Message}");
-            StatusText = "Paste failed";
-            _operationReporter.Fail("Paste failed");
-        }
-    }
-
-    private async Task<ClipboardPayload?> ResolvePastePayloadAsync()
-    {
-        if (_clipboard.Current is { } internalPayload)
-            return internalPayload;
-
-        var os = await _osClipboard.TryGetFilesAsync().ConfigureAwait(true);
-        if (os is null)
-            return null;
-
-        return new ClipboardPayload(os.Value.Operation, os.Value.Paths, CurrentPath);
-    }
-
-    private async Task PublishToOsClipboardAsync(IReadOnlyList<string> paths, ClipboardOperation operation)
-    {
-        try
-        {
-            await _osClipboard.SetFilesAsync(paths, operation).ConfigureAwait(true);
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"OS clipboard publish failed: {ex.Message}");
-        }
-    }
+    private Task Paste()
+        => _fileOperations.PasteAsync(
+            CurrentPath,
+            () => RefreshAsync(showLoading: false),
+            t => StatusText = t);
 
     [RelayCommand(CanExecute = nameof(CanModifySelection))]
     private async Task Delete()
@@ -1041,12 +965,41 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         var paths = SelectedEntries.Select(e => e.FullPath).ToList();
         try
         {
-            await _fileOps.DeleteAsync(paths, permanently: false);
+            var result = await _fileOps.DeleteAsync(paths, permanently: false);
             await RefreshAsync(showLoading: false);
+            await FileOperationUiHelper.ReportResultAsync(_dialogs, result, "Delete", t => StatusText = t);
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"Delete failed: {ex.Message}");
+            await _dialogs.ShowErrorAsync("Delete failed", ex.Message);
+            StatusText = "Delete failed";
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanModifySelection))]
+    private async Task DeletePermanently()
+    {
+        if (SelectedEntries.Count == 0)
+            return;
+
+        var confirmed = await _dialogs.ConfirmAsync(
+            "Permanently delete?",
+            "Selected items will be permanently deleted and cannot be restored.");
+        if (!confirmed)
+            return;
+
+        var paths = SelectedEntries.Select(e => e.FullPath).ToList();
+        try
+        {
+            var result = await _fileOps.DeleteAsync(paths, permanently: true);
+            await RefreshAsync(showLoading: false);
+            await FileOperationUiHelper.ReportResultAsync(_dialogs, result, "Permanent delete", t => StatusText = t);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Permanent delete failed: {ex.Message}");
+            await _dialogs.ShowErrorAsync("Delete failed", ex.Message);
             StatusText = "Delete failed";
         }
     }
@@ -1083,8 +1036,16 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         try
         {
             var oldPath = entry.FullPath;
-            await _fileOps.RenameAsync(oldPath, newName);
-            _entryPool.Remove(oldPath);
+            var result = await _fileOps.RenameAsync(oldPath, newName);
+            if (result.Failed > 0)
+            {
+                await _dialogs.ShowErrorAsync("Rename failed", result.Failures[0].Message);
+                StatusText = "Rename failed";
+                IsRenaming = false;
+                return;
+            }
+
+            _listing.RemoveFromPool(oldPath);
             IsRenaming = false;
             await RefreshAsync(showLoading: false);
         }
@@ -1127,14 +1088,14 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         if (sources.Count == 0 || string.IsNullOrEmpty(CurrentPath))
             return;
 
-        var hostDir = GetPhysicalHostDirectory();
+        var hostDir = PaneFileOperationCoordinator.GetPhysicalHostDirectory(CurrentPath, IsArchive);
         if (string.IsNullOrEmpty(hostDir))
             return;
 
         var zipName = sources.Count == 1
             ? Path.GetFileNameWithoutExtension(sources[0].TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)) + ".zip"
             : "Archive.zip";
-        var destination = GetUniquePath(Path.Combine(hostDir, zipName));
+        var destination = PaneFileOperationCoordinator.GetUniquePath(Path.Combine(hostDir, zipName));
 
         try
         {
@@ -1176,7 +1137,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
                 if (string.IsNullOrEmpty(hostDir))
                     continue;
 
-                var destination = GetUniqueDirectory(Path.Combine(
+                var destination = PaneFileOperationCoordinator.GetUniqueDirectory(Path.Combine(
                     hostDir,
                     Path.GetFileNameWithoutExtension(archivePath)));
                 await _archive.ExtractArchiveToDirectoryAsync(archivePath, destination).ConfigureAwait(true);
@@ -1184,7 +1145,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
             if (virtualPaths.Count > 0)
             {
-                var hostDir = GetPhysicalHostDirectory();
+                var hostDir = PaneFileOperationCoordinator.GetPhysicalHostDirectory(CurrentPath, IsArchive);
                 if (string.IsNullOrEmpty(hostDir))
                 {
                     StatusText = "Could not determine extract location";
@@ -1267,20 +1228,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
         var entry = SelectedEntries[0];
         var path = entry.IsDirectory ? entry.FullPath : Path.GetDirectoryName(entry.FullPath) ?? entry.FullPath;
-        try
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = "explorer.exe",
-                Arguments = $"\"{path}\"",
-                UseShellExecute = true
-            });
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"OpenInNewWindow failed: {ex.Message}");
-            StatusText = "Could not open new window";
-        }
+        _ = _windowHost.OpenWindowAsync(path, restoreSession: false);
     }
 
     [RelayCommand(CanExecute = nameof(HasSingleSelection))]
@@ -1300,30 +1248,9 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             ? SelectedEntries[0].FullPath
             : CurrentPath;
 
-        try
+        if (!_terminalLauncher.TryOpenInDirectory(dirPath))
         {
-            try
-            {
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = "wt.exe",
-                    Arguments = $"-d \"{dirPath}\"",
-                    UseShellExecute = true
-                });
-            }
-            catch
-            {
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = "cmd.exe",
-                    WorkingDirectory = dirPath,
-                    UseShellExecute = true
-                });
-            }
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"OpenInTerminal failed: {ex.Message}");
+            Debug.WriteLine("OpenInTerminal failed: no compatible terminal found");
             StatusText = "Could not open terminal";
         }
     }
@@ -1517,9 +1444,58 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
     private bool HasSingleSelection() => SelectedEntries.Count == 1;
 
-    private bool CanModifyHere() => !IsArchive && !IsHome;
+    private bool CanModifyHere() => !IsArchive && !IsHome && !IsShellNamespace;
 
-    private bool CanModifySelection() => CanModifyHere() && HasSelection();
+    private bool CanModifySelection() => (CanModifyHere() || IsRecycleBin) && HasSelection();
+
+    [RelayCommand(CanExecute = nameof(CanRestoreFromRecycleBin))]
+    private async Task RestoreFromRecycleBin()
+    {
+        if (!IsRecycleBin || SelectedEntries.Count == 0)
+            return;
+
+        try
+        {
+            foreach (var entry in SelectedEntries)
+                await _shellEnumerator.RestoreAsync(entry.FullPath).ConfigureAwait(true);
+
+            await RefreshAsync(showLoading: false);
+            StatusText = "Restored selected item(s)";
+        }
+        catch (Exception ex)
+        {
+            await _dialogs.ShowErrorAsync("Restore failed", ex.Message);
+            StatusText = "Restore failed";
+        }
+    }
+
+    private bool CanRestoreFromRecycleBin() => IsRecycleBin && HasSelection();
+
+    [RelayCommand(CanExecute = nameof(CanEmptyRecycleBin))]
+    private async Task EmptyRecycleBin()
+    {
+        if (!IsRecycleBin)
+            return;
+
+        var confirmed = await _dialogs.ConfirmAsync(
+            "Empty Recycle Bin?",
+            "All items in the Recycle Bin will be permanently deleted.");
+        if (!confirmed)
+            return;
+
+        try
+        {
+            await _shellEnumerator.EmptyRecycleBinAsync().ConfigureAwait(true);
+            await RefreshAsync(showLoading: false);
+            StatusText = "Recycle Bin emptied";
+        }
+        catch (Exception ex)
+        {
+            await _dialogs.ShowErrorAsync("Empty Recycle Bin failed", ex.Message);
+        }
+    }
+
+    private bool CanEmptyRecycleBin() => IsRecycleBin;
 
     private bool CanShowMoreOptions() => CanModifyHere() && (HasSelection() || !string.IsNullOrEmpty(CurrentPath));
 
@@ -1537,54 +1513,6 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         => HasSelection()
            && SelectedEntries.Any(e => _archive.IsArchiveFile(e.FullPath) || ArchivePath.IsVirtual(e.FullPath));
 
-    private string? GetPhysicalHostDirectory()
-    {
-        if (ArchivePath.IsVirtual(CurrentPath)
-            && ArchivePath.TryParse(CurrentPath, out var archiveFile, out _))
-        {
-            return Path.GetDirectoryName(archiveFile);
-        }
-
-        if (!IsArchive && !string.IsNullOrEmpty(CurrentPath))
-            return CurrentPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-
-        return null;
-    }
-
-    private static string GetUniquePath(string path)
-    {
-        if (!File.Exists(path) && !Directory.Exists(path))
-            return path;
-
-        var directory = Path.GetDirectoryName(path) ?? string.Empty;
-        var fileName = Path.GetFileNameWithoutExtension(path);
-        var extension = Path.GetExtension(path);
-
-        for (var i = 2; i < 100; i++)
-        {
-            var candidate = Path.Combine(directory, $"{fileName} ({i}){extension}");
-            if (!File.Exists(candidate) && !Directory.Exists(candidate))
-                return candidate;
-        }
-
-        return Path.Combine(directory, $"{fileName} ({Guid.NewGuid():N}){extension}");
-    }
-
-    private static string GetUniqueDirectory(string path)
-    {
-        if (!Directory.Exists(path))
-            return path;
-
-        for (var i = 2; i < 100; i++)
-        {
-            var candidate = $"{path} ({i})";
-            if (!Directory.Exists(candidate))
-                return candidate;
-        }
-
-        return $"{path} ({Guid.NewGuid():N})";
-    }
-
     partial void OnSelectedCountChanged(int value)
         => NotifyCommandsCanExecuteChanged();
 
@@ -1593,6 +1521,9 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         CutCommand.NotifyCanExecuteChanged();
         CopyCommand.NotifyCanExecuteChanged();
         DeleteCommand.NotifyCanExecuteChanged();
+        DeletePermanentlyCommand.NotifyCanExecuteChanged();
+        RestoreFromRecycleBinCommand.NotifyCanExecuteChanged();
+        EmptyRecycleBinCommand.NotifyCanExecuteChanged();
         BeginRenameCommand.NotifyCanExecuteChanged();
         ShowMoreOptionsCommand.NotifyCanExecuteChanged();
         CompressToZipCommand.NotifyCanExecuteChanged();
@@ -1612,54 +1543,17 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    public async Task HandleDropAsync(IReadOnlyList<string> paths, bool isCopy)
+    public Task HandleDropAsync(IReadOnlyList<string> paths, bool isCopy)
     {
-        if (IsArchive || string.IsNullOrEmpty(CurrentPath) || paths.Count == 0)
-            return;
+        if (IsArchive)
+            return Task.CompletedTask;
 
-        var filtered = paths
-            .Where(p => !IsSameOrChildPath(CurrentPath, p))
-            .ToList();
-        if (filtered.Count == 0)
-            return;
-
-        try
-        {
-            var kind = isCopy ? FileOperationKind.Copy : FileOperationKind.Move;
-            _operationReporter.Begin(
-                kind,
-                filtered.Count,
-                isCopy ? "Copying items…" : "Moving items…");
-
-            var progress = new Progress<FileOperationProgress>(p => _operationReporter.Report(p));
-            if (isCopy)
-                await _fileOps.CopyAsync(filtered, CurrentPath, progress).ConfigureAwait(true);
-            else
-                await _fileOps.MoveAsync(filtered, CurrentPath, progress).ConfigureAwait(true);
-
-            await RefreshAsync(showLoading: false).ConfigureAwait(true);
-            _operationReporter.Complete(
-                kind,
-                filtered.Count,
-                isCopy ? $"Copied {filtered.Count} item(s)" : $"Moved {filtered.Count} item(s)");
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"Drop failed: {ex.Message}");
-            StatusText = "Drop failed";
-            _operationReporter.Fail("Drop failed");
-        }
-    }
-
-    private static bool IsSameOrChildPath(string directory, string path)
-    {
-        var dir = directory.TrimEnd('\\', '/');
-        var candidate = path.TrimEnd('\\', '/');
-        if (string.Equals(dir, candidate, StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        var prefix = dir + Path.DirectorySeparatorChar;
-        return candidate.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+        return _fileOperations.HandleDropAsync(
+            CurrentPath,
+            paths,
+            isCopy,
+            () => RefreshAsync(showLoading: false),
+            t => StatusText = t);
     }
 
     public PaneSnapshot CreateSnapshot() => new()
@@ -1687,39 +1581,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     private void RebuildBreadcrumbs(string path)
     {
         Breadcrumbs.Clear();
-        if (string.IsNullOrEmpty(path))
-            return;
-
-        if (ArchivePath.IsVirtual(path))
-        {
-            foreach (var crumb in ArchivePath.GetBreadcrumbs(path))
-            {
-                Breadcrumbs.Add(new BreadcrumbSegment(
-                    DisplayName: crumb.DisplayName,
-                    Path: crumb.Path,
-                    IsLast: crumb.IsLast));
-            }
-
-            return;
-        }
-
-        var parts = path.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
-            StringSplitOptions.RemoveEmptyEntries);
-        var accumulator = string.Empty;
-
-        for (var i = 0; i < parts.Length; i++)
-        {
-            var part = parts[i];
-            var isDrive = part.Length == 2 && part[1] == ':';
-            accumulator = isDrive
-                ? part + Path.DirectorySeparatorChar
-                : Path.Combine(accumulator.TrimEnd(Path.DirectorySeparatorChar), part) + Path.DirectorySeparatorChar;
-
-            Breadcrumbs.Add(new BreadcrumbSegment(
-                DisplayName: isDrive ? part : part,
-                Path: accumulator,
-                IsLast: i == parts.Length - 1));
-        }
+        foreach (var crumb in PaneNavigationController.BuildBreadcrumbs(path))
+            Breadcrumbs.Add(crumb);
     }
 
     public void Dispose()

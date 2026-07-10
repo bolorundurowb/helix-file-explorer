@@ -22,10 +22,23 @@ public sealed class WinFileSystemProvider : IFileSystemProvider
         MatchType = MatchType.Simple
     };
 
+    private readonly IShellFolderEnumerator _shell;
+
+    public WinFileSystemProvider(IShellFolderEnumerator shell)
+    {
+        _shell = shell;
+    }
+
     public async ValueTask<DirectoryListing> GetDirectoryContentsAsync(string path, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(path) || !DirectoryExists(path))
             return DirectoryListing.Empty;
+
+        if (ShellPath.IsShellPath(path))
+        {
+            var shellEntries = await _shell.EnumerateAsync(path, cancellationToken).ConfigureAwait(false);
+            return new DirectoryListing(path, shellEntries);
+        }
 
         var resolved = ResolvePath(path);
         var entries = await Task.Run(() => Enumerate(resolved, cancellationToken), cancellationToken).ConfigureAwait(false);
@@ -35,6 +48,9 @@ public sealed class WinFileSystemProvider : IFileSystemProvider
     public string ResolvePath(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
+            return path;
+
+        if (ShellPath.IsShellPath(path))
             return path;
 
         try
@@ -51,7 +67,8 @@ public sealed class WinFileSystemProvider : IFileSystemProvider
         }
     }
 
-    public bool DirectoryExists(string path) => !string.IsNullOrEmpty(path) && Directory.Exists(path);
+    public bool DirectoryExists(string path)
+        => ShellPath.IsShellPath(path) || (!string.IsNullOrEmpty(path) && Directory.Exists(path));
 
     public bool FileExists(string path) => !string.IsNullOrEmpty(path) && File.Exists(path);
 

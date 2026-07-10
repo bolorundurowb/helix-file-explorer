@@ -87,10 +87,44 @@
             <Separator />
             <MenuItem Header="Open" Command="{Binding OpenCommand}" />
             <MenuItem Header="Open in new tab" Command="{Binding OpenInNewTabCommand}" />
-            <MenuItem Header="Open in new window" Command="{Binding OpenInNewWindowCommand}" />
+            <MenuItem Header="Open in new Helix window" Command="{Binding OpenInNewWindowCommand}" />
             <MenuItem Header="Open in other pane" Command="{Binding OpenInOtherPaneCommand}" />
             <Separator />
             <MenuItem Header="Open in Terminal" Command="{Binding OpenInTerminalCommand}" />
+            <Separator />
+            <MenuItem Header="Sort by">
+                <MenuItem Header="Name"
+                          ToggleType="Radio"
+                          IsChecked="{Binding IsSortByName}"
+                          Command="{Binding SetSortColumnCommand}"
+                          CommandParameter="{x:Static models:SortColumn.Name}" />
+                <MenuItem Header="Date"
+                          ToggleType="Radio"
+                          IsChecked="{Binding IsSortByDate}"
+                          Command="{Binding SetSortColumnCommand}"
+                          CommandParameter="{x:Static models:SortColumn.Modified}" />
+                <MenuItem Header="Type"
+                          ToggleType="Radio"
+                          IsChecked="{Binding IsSortByType}"
+                          Command="{Binding SetSortColumnCommand}"
+                          CommandParameter="{x:Static models:SortColumn.Type}" />
+                <MenuItem Header="Size"
+                          ToggleType="Radio"
+                          IsChecked="{Binding IsSortBySize}"
+                          Command="{Binding SetSortColumnCommand}"
+                          CommandParameter="{x:Static models:SortColumn.Size}" />
+                <Separator />
+                <MenuItem Header="Ascending"
+                          ToggleType="Radio"
+                          IsChecked="{Binding IsSortAscending}"
+                          Command="{Binding SetSortAscendingCommand}" />
+                <MenuItem Header="Descending"
+                          ToggleType="Radio"
+                          IsChecked="{Binding IsSortDescendingActive}"
+                          Command="{Binding SetSortDescendingCommand}" />
+            </MenuItem>
+            <Separator />
+            <MenuItem Header="Restore" Command="{Binding RestoreFromRecycleBinCommand}" />
             <Separator />
             <MenuItem Header="Copy path" Command="{Binding CopyPathCommand}" />
             <MenuItem Header="Pin to sidebar" Command="{Binding PinToSidebarCommand}" />
@@ -120,10 +154,45 @@
         <ContextMenu x:Key="EmptyAreaContextMenu"
                      x:CompileBindings="False"
                      Opening="OnEntryContextMenuOpening">
+            <MenuItem Header="Restore" Command="{Binding RestoreFromRecycleBinCommand}" />
+            <MenuItem Header="Empty Recycle Bin" Command="{Binding EmptyRecycleBinCommand}" />
+            <Separator />
             <MenuItem Header="Paste" Command="{Binding PasteCommand}" />
             <MenuItem Header="New folder" Command="{Binding NewFolderCommand}" />
             <MenuItem Header="Refresh" Command="{Binding RefreshCommand}" />
             <MenuItem Header="Open in Terminal" Command="{Binding OpenInTerminalCommand}" />
+            <Separator />
+            <MenuItem Header="Sort by">
+                <MenuItem Header="Name"
+                          ToggleType="Radio"
+                          IsChecked="{Binding IsSortByName}"
+                          Command="{Binding SetSortColumnCommand}"
+                          CommandParameter="{x:Static models:SortColumn.Name}" />
+                <MenuItem Header="Date"
+                          ToggleType="Radio"
+                          IsChecked="{Binding IsSortByDate}"
+                          Command="{Binding SetSortColumnCommand}"
+                          CommandParameter="{x:Static models:SortColumn.Modified}" />
+                <MenuItem Header="Type"
+                          ToggleType="Radio"
+                          IsChecked="{Binding IsSortByType}"
+                          Command="{Binding SetSortColumnCommand}"
+                          CommandParameter="{x:Static models:SortColumn.Type}" />
+                <MenuItem Header="Size"
+                          ToggleType="Radio"
+                          IsChecked="{Binding IsSortBySize}"
+                          Command="{Binding SetSortColumnCommand}"
+                          CommandParameter="{x:Static models:SortColumn.Size}" />
+                <Separator />
+                <MenuItem Header="Ascending"
+                          ToggleType="Radio"
+                          IsChecked="{Binding IsSortAscending}"
+                          Command="{Binding SetSortAscendingCommand}" />
+                <MenuItem Header="Descending"
+                          ToggleType="Radio"
+                          IsChecked="{Binding IsSortDescendingActive}"
+                          Command="{Binding SetSortDescendingCommand}" />
+            </MenuItem>
             <Separator />
             <MenuItem Header="Layout">
                 <MenuItem Header="Details" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.Details}" />
@@ -439,6 +508,10 @@
         </Border>
 
         <!-- Loading overlay -->
+        <controls:SelectionMarquee x:Name="SelectionMarquee"
+                                   IsHitTestVisible="False"
+                                   ZIndex="50" />
+
         <Border IsVisible="{Binding IsLoading}"
                 Background="#20000000"
                 IsHitTestVisible="False">

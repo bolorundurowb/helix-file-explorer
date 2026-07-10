@@ -8,6 +8,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using HelixExplorer.Controls;
 using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.Models;
@@ -21,10 +22,18 @@ public sealed partial class PaneView : UserControl
     private const double WheelThumbnailStep = 16;
     private const double DragThreshold = 4;
 
+    private enum PointerInteractionMode
+    {
+        None,
+        MarqueePending,
+        DragOutPending
+    }
+
     private PaneViewModel? _pane;
     private Point? _pressPoint;
     private PointerPressedEventArgs? _pressArgs;
     private bool _dragStarted;
+    private PointerInteractionMode _interactionMode;
     private readonly List<Control> _millerColumns = new();
     private readonly FuncDataTemplate<EntryItemViewModel> _millerItemTemplate = new(
         (item, _) => new TextBlock { Text = item?.DisplayName ?? string.Empty });
@@ -327,26 +336,7 @@ public sealed partial class PaneView : UserControl
 
     private void SelectGridEntry(EntryItemViewModel entry, KeyModifiers modifiers)
     {
-        if (Pane is null)
-            return;
-
-        if (modifiers.HasFlag(KeyModifiers.Control))
-        {
-            if (Pane.SelectedEntries.Contains(entry))
-                Pane.SelectedEntries.Remove(entry);
-            else
-                Pane.SelectedEntries.Add(entry);
-        }
-        else if (modifiers.HasFlag(KeyModifiers.Shift) && Pane.SelectedEntry is not null)
-        {
-            Pane.UpdateSelection([entry]);
-        }
-        else
-        {
-            Pane.UpdateSelection([entry]);
-        }
-
-        Pane.SelectedEntry = entry;
+        Pane?.SelectEntry(entry, modifiers);
     }
 
     private static EntryItemViewModel? TryGetEntryFromSource(object? source)
@@ -461,12 +451,33 @@ public sealed partial class PaneView : UserControl
             return;
         }
 
-        if (Pane?.IsGridView == true
+        if (Pane is null || Pane.IsHome)
+            return;
+
+        var pane = Pane;
+
+        if (pane.IsGridView
             && ReferenceEquals(sender, GridView)
-            && !e.GetCurrentPoint(this).Properties.IsRightButtonPressed
             && TryGetEntryFromSource(e.Source) is { } gridEntry)
         {
             SelectGridEntry(gridEntry, e.KeyModifiers);
+            _interactionMode = pane.SelectedEntries.Contains(gridEntry)
+                ? PointerInteractionMode.DragOutPending
+                : PointerInteractionMode.None;
+        }
+        else if (TryGetEntryFromSource(e.Source) is { } entry)
+        {
+            SelectGridEntry(entry, e.KeyModifiers);
+            _interactionMode = pane.SelectedEntries.Contains(entry)
+                ? PointerInteractionMode.DragOutPending
+                : PointerInteractionMode.None;
+        }
+        else
+        {
+            if (!e.KeyModifiers.HasFlag(KeyModifiers.Control))
+                pane.UpdateSelection(Array.Empty<EntryItemViewModel>());
+
+            _interactionMode = PointerInteractionMode.MarqueePending;
         }
 
         _pressPoint = e.GetPosition(this);
@@ -474,27 +485,95 @@ public sealed partial class PaneView : UserControl
         _dragStarted = false;
     }
 
-    private async void OnListPointerMoved(object? sender, PointerEventArgs e)
+    private void OnListPointerMoved(object? sender, PointerEventArgs e)
     {
-        if (_dragStarted || _pressPoint is null || _pressArgs is null
-            || Pane is null || Pane.SelectedEntries.Count == 0)
+        if (_pressPoint is null || Pane is null)
             return;
 
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
-            _pressPoint = null;
-            _pressArgs = null;
+            ResetPointerInteraction();
             return;
         }
 
-        var delta = e.GetPosition(this) - _pressPoint.Value;
+        var current = e.GetPosition(this);
+        var delta = current - _pressPoint.Value;
         if (Math.Abs(delta.X) < DragThreshold && Math.Abs(delta.Y) < DragThreshold)
+            return;
+
+        if (_interactionMode == PointerInteractionMode.MarqueePending)
+        {
+            UpdateMarquee(_pressPoint.Value, current, e.KeyModifiers);
+            return;
+        }
+
+        if (_dragStarted || _interactionMode != PointerInteractionMode.DragOutPending
+            || Pane.SelectedEntries.Count == 0 || _pressArgs is null)
             return;
 
         _dragStarted = true;
         var pressArgs = _pressArgs;
-        _pressPoint = null;
-        _pressArgs = null;
+        ResetPointerInteraction();
+
+        _ = StartDragOutAsync(pressArgs);
+    }
+
+    private void UpdateMarquee(Point start, Point current, KeyModifiers modifiers)
+    {
+        if (Pane is null)
+            return;
+
+        var rect = new Rect(
+            Math.Min(start.X, current.X),
+            Math.Min(start.Y, current.Y),
+            Math.Abs(current.X - start.X),
+            Math.Abs(current.Y - start.Y));
+
+        SelectionMarquee.IsActive = true;
+        SelectionMarquee.SelectionRect = rect;
+
+        var hits = CollectEntriesInRect(rect);
+        Pane.SelectByBounds(hits, modifiers.HasFlag(KeyModifiers.Control));
+        SyncSelectionToView();
+    }
+
+    private List<EntryItemViewModel> CollectEntriesInRect(Rect rect)
+    {
+        var hits = new List<EntryItemViewModel>();
+        if (Pane is null)
+            return hits;
+
+        if (DetailsGrid.IsVisible)
+            CollectFromItemsControl(DetailsGrid, rect, hits);
+        else if (ListView.IsVisible)
+            CollectFromItemsControl(ListView, rect, hits);
+        else if (Pane.IsGridView)
+            CollectFromItemsControl(GridView, rect, hits);
+
+        return hits;
+    }
+
+    private void CollectFromItemsControl(Control host, Rect rect, List<EntryItemViewModel> hits)
+    {
+        foreach (var child in host.GetVisualDescendants())
+        {
+            if (child is not Control { DataContext: EntryItemViewModel entry })
+                continue;
+
+            var topLeft = child.TranslatePoint(new Point(0, 0), this);
+            if (topLeft is null)
+                continue;
+
+            var bounds = new Rect(topLeft.Value, child.Bounds.Size);
+            if (rect.Intersects(bounds) && !hits.Contains(entry))
+                hits.Add(entry);
+        }
+    }
+
+    private async Task StartDragOutAsync(PointerPressedEventArgs pressArgs)
+    {
+        if (Pane is null)
+            return;
 
         var virtualPaths = Pane.SelectedEntries.Select(x => x.FullPath).ToList();
         var physicalPaths = await Pane.ResolvePhysicalPathsAsync(virtualPaths).ConfigureAwait(true);
@@ -506,12 +585,17 @@ public sealed partial class PaneView : UserControl
         await DragDrop.DoDragDropAsync(pressArgs, transfer, effects).ConfigureAwait(true);
     }
 
-    private void OnListPointerReleased(object? sender, PointerReleasedEventArgs e)
+    private void ResetPointerInteraction()
     {
         _pressPoint = null;
         _pressArgs = null;
         _dragStarted = false;
+        _interactionMode = PointerInteractionMode.None;
+        SelectionMarquee.IsActive = false;
     }
+
+    private void OnListPointerReleased(object? sender, PointerReleasedEventArgs e)
+        => ResetPointerInteraction();
 
     private async Task<DataTransfer?> BuildFileTransferAsync(IReadOnlyList<string> paths)
     {

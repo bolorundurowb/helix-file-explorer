@@ -22,7 +22,7 @@ public class AppSettingsTests
         var settings = new AppSettings();
 
         Assert.Equal(ThemeMode.System, settings.Theme);
-        Assert.Equal(240, settings.SidebarWidth);
+        Assert.Equal(200, settings.SidebarWidth);
         Assert.Equal(SizeDisplayMode.Binary, settings.SizeDisplay);
         Assert.True(settings.ShowFileExtensions);
         Assert.Equal(LayoutMode.Details, settings.DefaultViewMode);

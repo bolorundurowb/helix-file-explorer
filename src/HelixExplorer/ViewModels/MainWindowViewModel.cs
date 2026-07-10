@@ -36,6 +36,10 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly FileVisualService _visuals;
     private readonly Func<IFileChangeWatcher> _watcherFactory;
     private readonly FileOperationReporter _operationReporter;
+    private readonly IUserDialogService _dialogs;
+    private readonly IWindowHostService _windowHost;
+    private readonly IShellFolderEnumerator _shellEnumerator;
+    private readonly ITerminalLauncher _terminalLauncher;
     private readonly HomePageViewModel _homePage;
     private readonly SettingsPageViewModel _settingsPage;
     private readonly string _homePath;
@@ -45,6 +49,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private CancellationTokenSource? _networkCts;
     private bool _commandsBuilt;
     private bool _disposed;
+    private TabViewModel? _lastBrowserTab;
 
     private const int MaxPaletteResults = 24;
 
@@ -68,6 +73,10 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         FileVisualService visuals,
         Func<IFileChangeWatcher> watcherFactory,
         FileOperationReporter operationReporter,
+        IUserDialogService dialogs,
+        IWindowHostService windowHost,
+        IShellFolderEnumerator shellEnumerator,
+        ITerminalLauncher terminalLauncher,
         HomePageViewModel homePage)
     {
         _settingsStore = settingsStore;
@@ -89,6 +98,10 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _visuals = visuals;
         _watcherFactory = watcherFactory;
         _operationReporter = operationReporter;
+        _dialogs = dialogs;
+        _windowHost = windowHost;
+        _shellEnumerator = shellEnumerator;
+        _terminalLauncher = terminalLauncher;
         OperationReporter = operationReporter;
         _homePage = homePage;
         _settingsPage = new SettingsPageViewModel(this);
@@ -98,7 +111,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
                     ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
         var settings = _settingsStore.Load();
-        SidebarWidth = Math.Clamp(settings.SidebarWidth, 180, 480);
+        SidebarWidth = Math.Clamp(settings.SidebarWidth, 160, 480);
         ShowHiddenFiles = settings.ShowHiddenFiles;
         ShowFileExtensions = settings.ShowFileExtensions;
         Theme = settings.Theme;
@@ -118,11 +131,30 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             settings.PinnedPaths,
             settings.UnpinnedPaths);
         _ = LoadSidebarIconsAsync();
-
-        RestoreSession();
         _ = RefreshNetworkLocationsAsync();
 
         _folderColors.ColorsChanged += OnFolderColorsChanged;
+    }
+
+    public void InitializeWindow(bool restoreSession, string? initialPath = null)
+    {
+        if (restoreSession)
+        {
+            RestoreSession();
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(initialPath))
+        {
+            var tab = CreateDefaultTab();
+            tab.LeftPane.NavigateTo(initialPath);
+            AddTab(tab);
+            SelectedTab = tab;
+            return;
+        }
+
+        AddTab(CreateDefaultTab());
+        SelectedTab = Tabs[0];
     }
 
     public ObservableCollection<TabViewModel> Tabs { get; } = new();
@@ -235,7 +267,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public bool IsSettingsTab => SelectedTab?.IsSettingsTab ?? false;
 
-    public bool ShowFileToolbar => IsBrowserTab && ActivePane?.IsFileSystem == true;
+    public bool ShowFileToolbar => IsBrowserTab && ActivePane?.IsHome != true;
 
     public bool ShowBrowserChrome => IsBrowserTab;
 
@@ -243,7 +275,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private string _title = "Helix Explorer";
 
     [ObservableProperty]
-    private double _sidebarWidth = 240;
+    private double _sidebarWidth = 200;
 
     [ObservableProperty]
     private LayoutMode _defaultViewMode = LayoutMode.Details;
@@ -305,7 +337,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     partial void OnSidebarWidthChanged(double value)
     {
-        var clamped = Math.Clamp(value, 180, 480);
+        var clamped = Math.Clamp(value, 160, 480);
         if (Math.Abs(clamped - value) > double.Epsilon)
         {
             SidebarWidth = clamped;
@@ -449,10 +481,15 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             _watcherFactory,
             _operationReporter,
             _quickAccess,
+            _dialogs,
+            _windowHost,
+            _shellEnumerator,
+            _terminalLauncher,
             _homePage,
             kind,
             kind == TabKind.Settings ? _settingsPage : null);
         tab.CloseRequested += OnTabCloseRequested;
+        tab.SortChanged += OnTabSortChanged;
         tab.Navigated += OnTabNavigated;
         tab.OpenInNewTabRequested += OnOpenInNewTabRequested;
         tab.PinPathRequested += OnPinPathRequested;
@@ -524,6 +561,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
         Tabs.Remove(tab);
         tab.CloseRequested -= OnTabCloseRequested;
+        tab.SortChanged -= OnTabSortChanged;
         tab.Navigated -= OnTabNavigated;
         tab.OpenInNewTabRequested -= OnOpenInNewTabRequested;
         tab.PinPathRequested -= OnPinPathRequested;
@@ -569,6 +607,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             CloseTab(tab);
     }
 
+    private void OnTabSortChanged(object? sender, EventArgs e) => NotifySortChrome();
+
     private void OnTabNavigated(object? sender, EventArgs e)
     {
         if (!ReferenceEquals(sender, SelectedTab))
@@ -588,6 +628,9 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     partial void OnSelectedTabChanged(TabViewModel? value)
     {
+        if (value?.IsBrowserTab == true)
+            _lastBrowserTab = value;
+
         SyncChromeToActivePane();
         NotifyGlobalFileCommandsCanExecuteChanged();
         OnPropertyChanged(nameof(IsDualPaneActive));
@@ -624,6 +667,9 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _allCommands.Add(new CommandItem("Copy", "File", vm => vm.CopyCommand.Execute(null), "Ctrl+C"));
         _allCommands.Add(new CommandItem("Paste", "File", vm => vm.PasteCommand.Execute(null), "Ctrl+V"));
         _allCommands.Add(new CommandItem("Delete", "File", vm => vm.DeleteCommand.Execute(null), "Delete"));
+        _allCommands.Add(new CommandItem("Delete Permanently", "File", vm => vm.DeletePermanentlyCommand.Execute(null), "Shift+Delete"));
+        _allCommands.Add(new CommandItem("Next Tab", "View", vm => vm.SelectNextTabCommand.Execute(null), "Ctrl+Tab"));
+        _allCommands.Add(new CommandItem("Previous Tab", "View", vm => vm.SelectPreviousTabCommand.Execute(null), "Ctrl+Shift+Tab"));
         _allCommands.Add(new CommandItem("Rename", "File", vm => vm.RenameCommand.Execute(null), "F2"));
         _allCommands.Add(new CommandItem("Git: Switch Branch", "Git", vm => _ = vm.ActivePane?.OpenBranchFlyoutCommand.ExecuteAsync(null)));
     }
@@ -674,7 +720,36 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             _recentPaths.RemoveAt(_recentPaths.Count - 1);
     }
 
-    private void NavigateActive(string path) => SelectedTab?.ActivePane.NavigateTo(path);
+    private TabViewModel GetOrCreateBrowserTab()
+    {
+        if (SelectedTab?.IsBrowserTab == true)
+            return SelectedTab;
+
+        if (_lastBrowserTab is not null && Tabs.Contains(_lastBrowserTab))
+        {
+            SelectedTab = _lastBrowserTab;
+            return _lastBrowserTab;
+        }
+
+        var existing = Tabs.FirstOrDefault(t => t.IsBrowserTab);
+        if (existing is not null)
+        {
+            SelectedTab = existing;
+            return existing;
+        }
+
+        var tab = CreateDefaultTab();
+        AddTab(tab);
+        SelectedTab = tab;
+        return tab;
+    }
+
+    private void NavigateActivePane(Action<PaneViewModel> navigate)
+    {
+        navigate(GetOrCreateBrowserTab().ActivePane);
+    }
+
+    private void NavigateActive(string path) => NavigateActivePane(pane => pane.NavigateTo(path));
 
     [RelayCommand]
     private void ToggleCommandPalette()
@@ -780,7 +855,37 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ShowFileToolbar));
         OnPropertyChanged(nameof(ShowBrowserChrome));
         NotifyGlobalFileCommandsCanExecuteChanged();
+        NotifySortChrome();
     }
+
+    public bool IsSortByName => ActivePane?.IsSortByName == true;
+    public bool IsSortByDate => ActivePane?.IsSortByDate == true;
+    public bool IsSortByType => ActivePane?.IsSortByType == true;
+    public bool IsSortBySize => ActivePane?.IsSortBySize == true;
+    public bool IsSortAscending => ActivePane?.IsSortAscending == true;
+    public bool IsSortDescending => ActivePane?.IsSortDescendingActive == true;
+
+    private void NotifySortChrome()
+    {
+        OnPropertyChanged(nameof(IsSortByName));
+        OnPropertyChanged(nameof(IsSortByDate));
+        OnPropertyChanged(nameof(IsSortByType));
+        OnPropertyChanged(nameof(IsSortBySize));
+        OnPropertyChanged(nameof(IsSortAscending));
+        OnPropertyChanged(nameof(IsSortDescending));
+    }
+
+    [RelayCommand]
+    private void SetSortColumn(SortColumn column)
+        => ActivePane?.SetSortColumnCommand.Execute(column);
+
+    [RelayCommand]
+    private void SetSortAscending()
+        => ActivePane?.SetSortAscendingCommand.Execute(null);
+
+    [RelayCommand]
+    private void SetSortDescending()
+        => ActivePane?.SetSortDescendingCommand.Execute(null);
 
     private void RefreshHomeDashboard()
     {
@@ -797,11 +902,11 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
         if (string.Equals(path.TrimEnd('\\', '/'), _homePath.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase))
         {
-            SelectedTab?.ActivePane.NavigateToHome();
+            NavigateActivePane(pane => pane.NavigateToHome());
             return;
         }
 
-        SelectedTab?.ActivePane.NavigateTo(path);
+        NavigateActivePane(pane => pane.NavigateTo(path));
     }
 
     private void NotifyGlobalFileCommandsCanExecuteChanged()
@@ -810,6 +915,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         CopyCommand.NotifyCanExecuteChanged();
         PasteCommand.NotifyCanExecuteChanged();
         DeleteCommand.NotifyCanExecuteChanged();
+        DeletePermanentlyCommand.NotifyCanExecuteChanged();
         RenameCommand.NotifyCanExecuteChanged();
         NewFolderCommand.NotifyCanExecuteChanged();
         SelectAllCommand.NotifyCanExecuteChanged();
@@ -873,6 +979,9 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     [RelayCommand(CanExecute = nameof(CanDeleteSelection))]
     private void Delete() => SelectedTab?.ActivePane.DeleteCommand.Execute(null);
 
+    [RelayCommand(CanExecute = nameof(CanDeleteSelection))]
+    private void DeletePermanently() => SelectedTab?.ActivePane.DeletePermanentlyCommand.Execute(null);
+
     [RelayCommand(CanExecute = nameof(CanRenameSelection))]
     private void Rename() => SelectedTab?.ActivePane.BeginRenameCommand.Execute(null);
 
@@ -928,31 +1037,17 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
         if (item.Path.StartsWith("shell:", StringComparison.OrdinalIgnoreCase))
         {
-            try
-            {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = "explorer.exe",
-                    Arguments = item.Path,
-                    UseShellExecute = true
-                });
-                SelectedTab!.ActivePane.StatusText = "Opened in File Explorer";
-            }
-            catch
-            {
-                SelectedTab!.ActivePane.StatusText = "Could not open in File Explorer";
-            }
-
+            NavigateActivePane(pane => pane.NavigateTo(item.Path));
             return;
         }
 
         if (item.Kind == SidebarItemKind.Home)
         {
-            SelectedTab?.ActivePane.NavigateToHome();
+            NavigateActivePane(pane => pane.NavigateToHome());
             return;
         }
 
-        SelectedTab?.ActivePane.NavigateTo(item.Path);
+        NavigateActivePane(pane => pane.NavigateTo(item.Path));
     }
 
     [RelayCommand]
@@ -1084,6 +1179,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         foreach (var tab in Tabs)
         {
             tab.CloseRequested -= OnTabCloseRequested;
+            tab.SortChanged -= OnTabSortChanged;
             tab.Navigated -= OnTabNavigated;
             tab.OpenInNewTabRequested -= OnOpenInNewTabRequested;
             tab.PinPathRequested -= OnPinPathRequested;

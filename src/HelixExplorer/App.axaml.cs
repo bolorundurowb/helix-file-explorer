@@ -46,11 +46,14 @@ public partial class App : Application
         {
             desktop.ShutdownRequested += OnShutdownRequested;
 
-            var mainWindow = _host.Services.GetRequiredService<MainWindow>();
-            var mainWindowViewModel = _host.Services.GetRequiredService<MainWindowViewModel>();
-            mainWindow.DataContext = mainWindowViewModel;
+            var windowHost = _host.Services.GetRequiredService<IWindowHostService>();
+            var initialPath = ParseInitialPath(Program.StartupArgs);
+            var mainWindow = windowHost.OpenWindowAsync(
+                initialPath: initialPath,
+                restoreSession: initialPath is null).GetAwaiter().GetResult();
             desktop.MainWindow = mainWindow;
 
+            var mainWindowViewModel = (MainWindowViewModel)mainWindow.DataContext!;
             var themeService = _host.Services.GetRequiredService<IThemeService>();
             var settingsStore = _host.Services.GetRequiredService<ISettingsStore>();
             var settings = settingsStore.Load();
@@ -100,26 +103,36 @@ public partial class App : Application
         services.AddSingleton<IAccentBrushService, AvaloniaAccentBrushService>();
         services.AddSingleton<IClipboardService, InternalClipboardService>();
         services.AddSingleton<IOsFileClipboard, AvaloniaOsFileClipboard>();
-        services.AddSingleton<IUiHost, AvaloniaUiHost>();
+        services.AddScoped<IWindowOwnerContext, WindowOwnerContext>();
+        services.AddScoped<IUiHost, AvaloniaUiHost>();
+        services.AddScoped<IUserDialogService, AvaloniaUserDialogService>();
+        services.AddSingleton<IWindowHostService, WindowHostService>();
         services.AddSingleton<IGitProvider, CliGitProvider>();
         services.AddSingleton<IArchiveProvider, SharpCompressArchiveProvider>();
         services.AddSingleton<IFolderColorService, FolderColorService>();
         services.AddSingleton<FileVisualService>();
-        services.AddSingleton<FileOperationReporter>();
-        services.AddSingleton<IFileOperationReporter>(sp => sp.GetRequiredService<FileOperationReporter>());
         services.AddSingleton<HomePageViewModel>();
-        services.AddSingleton<MainWindowViewModel>();
+        services.AddTransient<FileOperationReporter>();
+        services.AddTransient<IFileOperationReporter>(sp => sp.GetRequiredService<FileOperationReporter>());
+        services.AddTransient<MainWindowViewModel>();
         services.AddTransient<MainWindow>();
+    }
+
+    private static string? ParseInitialPath(string[] args)
+    {
+        for (var i = 0; i < args.Length; i++)
+        {
+            if (args[i] is "--path" or "-p" && i + 1 < args.Length)
+                return args[++i];
+        }
+
+        return null;
     }
 
     private void OnShutdownRequested(object? sender, ShutdownRequestedEventArgs e)
     {
         _themeWatcher?.Dispose();
         _themeWatcher = null;
-
-        if (_host?.Services.GetService(typeof(MainWindowViewModel)) is MainWindowViewModel vm)
-            vm.Dispose();
-
         _host?.Dispose();
         _host = null;
     }

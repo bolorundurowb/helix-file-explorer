@@ -101,7 +101,7 @@ public static class SidebarFactory
             {
                 title = known.DisplayName;
                 if (known.Kind == KnownFolderKind.RecycleBin)
-                    toolTip = "Opens Recycle Bin in File Explorer";
+                    toolTip = "Opens Recycle Bin in Helix Explorer";
             }
 
             items.Add(new SidebarItemViewModel(

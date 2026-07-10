@@ -29,6 +29,10 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     private readonly Func<IFileChangeWatcher> _watcherFactory;
     private readonly IFileOperationReporter _operationReporter;
     private readonly IQuickAccessProvider _quickAccess;
+    private readonly IUserDialogService _dialogs;
+    private readonly IWindowHostService _windowHost;
+    private readonly IShellFolderEnumerator _shellEnumerator;
+    private readonly ITerminalLauncher _terminalLauncher;
     private readonly HomePageViewModel _home;
     private readonly SettingsPageViewModel? _settings;
     private bool _showHiddenFiles;
@@ -50,6 +54,10 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         Func<IFileChangeWatcher> watcherFactory,
         IFileOperationReporter operationReporter,
         IQuickAccessProvider quickAccess,
+        IUserDialogService dialogs,
+        IWindowHostService windowHost,
+        IShellFolderEnumerator shellEnumerator,
+        ITerminalLauncher terminalLauncher,
         HomePageViewModel home,
         TabKind kind = TabKind.Browser,
         SettingsPageViewModel? settings = null)
@@ -68,6 +76,10 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         _watcherFactory = watcherFactory;
         _operationReporter = operationReporter;
         _quickAccess = quickAccess;
+        _dialogs = dialogs;
+        _windowHost = windowHost;
+        _shellEnumerator = shellEnumerator;
+        _terminalLauncher = terminalLauncher;
         _home = home;
         _settings = settings;
         Kind = kind;
@@ -109,6 +121,10 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         RightPane?.RefreshCutState();
     }
     public event EventHandler? Navigated;
+    public event EventHandler? SortChanged;
+
+    private void OnPaneSortChanged(object? sender, EventArgs e)
+        => SortChanged?.Invoke(this, EventArgs.Empty);
 
     public PaneViewModel LeftPane { get; }
 
@@ -156,7 +172,12 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
             _visuals,
             _settingsStore,
             _operationReporter,
-            _quickAccess);
+            _quickAccess,
+            _dialogs,
+            _windowHost,
+            _shellEnumerator,
+            _terminalLauncher);
+        pane.SortChanged += OnPaneSortChanged;
         pane.Navigated += OnPaneNavigated;
         pane.EntryActivated += OnEntryActivated;
         pane.OpenInNewTabRequested += OnOpenInNewTabRequested;
@@ -404,6 +425,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
 
     private void DetachPane(PaneViewModel pane)
     {
+        pane.SortChanged -= OnPaneSortChanged;
         pane.Navigated -= OnPaneNavigated;
         pane.EntryActivated -= OnEntryActivated;
         pane.OpenInNewTabRequested -= OnOpenInNewTabRequested;

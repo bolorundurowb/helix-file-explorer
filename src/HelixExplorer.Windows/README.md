@@ -1,7 +1,20 @@
 # HelixExplorer.Windows
 
-Windows-specific implementations of Core interfaces (file system, shell context menus,
-volume / known-folder enumeration, network discovery, Windows Search, OS theme watchers).
+Windows-specific implementations of Core interfaces.
 
-Phase 0 leaves this project as a scaffold so the `net10.0-windows` reference graph is ready.
-Concrete providers land from Phase 1 onward.
+## Providers
+
+| Type | Implementation |
+|------|----------------|
+| File system | `WinFileSystemProvider` — directory enumeration with shell namespace support |
+| File operations | `WinFileOperationService` — copy/move/delete with conflict resolution |
+| Shell folders | `WinShellFolderEnumerator` — Recycle Bin and other `shell:` paths via COM |
+| Shell context menu | `WinShellContextMenuService` — native "Show more options" |
+| File icons | `WinFileVisualProvider` — `SHGetFileInfo` icons and thumbnails |
+| Quick access | `WinQuickAccessProvider` — known folders and pinned defaults |
+| Volumes | `WinVolumeProvider` — drive enumeration |
+| Network | `WinNetworkLocationProvider` — network share discovery |
+| File watcher | `FileChangeWatcherService` — directory change notifications |
+| Theme | `WinThemeWatcher` — OS light/dark theme sync |
+
+Register all services via `WindowsServiceExtensions.AddHelixWindowsServices()`.

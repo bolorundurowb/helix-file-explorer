@@ -8,9 +8,16 @@ namespace HelixExplorer.Services;
 
 public sealed class AvaloniaUiHost : IUiHost
 {
+    private readonly IWindowOwnerContext _ownerContext;
+
+    public AvaloniaUiHost(IWindowOwnerContext ownerContext)
+    {
+        _ownerContext = ownerContext;
+    }
+
     public nint GetMainWindowHandle()
     {
-        var window = GetMainWindow();
+        var window = GetOwnerWindow();
         if (window?.TryGetPlatformHandle() is { } handle)
             return handle.Handle;
 
@@ -19,10 +26,9 @@ public sealed class AvaloniaUiHost : IUiHost
 
     public (int X, int Y) GetPointerScreenPosition()
     {
-        // Prefer Avalonia window center; shell service falls back to Win32 GetCursorPos when 0,0.
         try
         {
-            if (GetMainWindow() is { } window)
+            if (GetOwnerWindow() is { } window)
             {
                 var point = window.PointToScreen(new Point(window.Bounds.Width / 2, window.Bounds.Height / 2));
                 return (point.X, point.Y);
@@ -37,14 +43,17 @@ public sealed class AvaloniaUiHost : IUiHost
 
     public async Task SetClipboardTextAsync(string text)
     {
-        var clipboard = GetMainWindow()?.Clipboard;
+        var clipboard = GetOwnerWindow()?.Clipboard;
         if (clipboard is null)
             return;
 
         await clipboard.SetTextAsync(text).ConfigureAwait(true);
     }
 
-    private static Window? GetMainWindow()
+    private Window? GetOwnerWindow()
+        => _ownerContext.OwnerWindow ?? GetFallbackMainWindow();
+
+    private static Window? GetFallbackMainWindow()
     {
         if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             return desktop.MainWindow;

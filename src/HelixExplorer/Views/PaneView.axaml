@@ -62,6 +62,8 @@
             <MenuItem Header="Open in new window" Command="{Binding OpenInNewWindowCommand}" />
             <MenuItem Header="Open in other pane" Command="{Binding OpenInOtherPaneCommand}" />
             <Separator />
+            <MenuItem Header="Open in Terminal" Command="{Binding OpenInTerminalCommand}" />
+            <Separator />
             <MenuItem Header="Copy path" Command="{Binding CopyPathCommand}" />
             <MenuItem Header="Pin to sidebar" Command="{Binding PinToSidebarCommand}" />
             <MenuItem Header="Unpin from sidebar" Command="{Binding UnpinFromSidebarCommand}" />
@@ -93,6 +95,7 @@
             <MenuItem Header="Paste" Command="{Binding PasteCommand}" />
             <MenuItem Header="New folder" Command="{Binding NewFolderCommand}" />
             <MenuItem Header="Refresh" Command="{Binding RefreshCommand}" />
+            <MenuItem Header="Open in Terminal" Command="{Binding OpenInTerminalCommand}" />
             <Separator />
             <MenuItem Header="Layout">
                 <MenuItem Header="Details" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.Details}" />

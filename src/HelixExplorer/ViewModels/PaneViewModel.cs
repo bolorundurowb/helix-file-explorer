@@ -204,6 +204,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         CompressToZipCommand.NotifyCanExecuteChanged();
         ExtractHereCommand.NotifyCanExecuteChanged();
         NewFolderCommand.NotifyCanExecuteChanged();
+        OpenInTerminalCommand.NotifyCanExecuteChanged();
 
         if (isHomeRoute)
         {
@@ -1291,6 +1292,55 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         OpenInOtherPaneRequested?.Invoke(this, entry.IsDirectory ? entry.FullPath : Path.GetDirectoryName(entry.FullPath) ?? CurrentPath);
     }
 
+    [RelayCommand(CanExecute = nameof(CanOpenInTerminal))]
+    private void OpenInTerminal()
+    {
+        var dirPath = SelectedEntries.Count == 1 && SelectedEntries[0].IsDirectory
+            ? SelectedEntries[0].FullPath
+            : CurrentPath;
+
+        try
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "wt.exe",
+                    Arguments = $"-d \"{dirPath}\"",
+                    UseShellExecute = true
+                });
+            }
+            catch
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    WorkingDirectory = dirPath,
+                    UseShellExecute = true
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"OpenInTerminal failed: {ex.Message}");
+            StatusText = "Could not open terminal";
+        }
+    }
+
+    private bool CanOpenInTerminal()
+    {
+        if (IsArchive || IsHome || string.IsNullOrEmpty(CurrentPath))
+            return false;
+
+        if (SelectedEntries.Count == 0)
+            return true;
+
+        if (SelectedEntries.Count == 1 && SelectedEntries[0].IsDirectory)
+            return true;
+
+        return false;
+    }
+
     [RelayCommand(CanExecute = nameof(CanPinSelection))]
     private void PinToSidebar()
     {
@@ -1557,6 +1607,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         CopyPathCommand.NotifyCanExecuteChanged();
         ShowPropertiesCommand.NotifyCanExecuteChanged();
         PasteCommand.NotifyCanExecuteChanged();
+        OpenInTerminalCommand.NotifyCanExecuteChanged();
         SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 

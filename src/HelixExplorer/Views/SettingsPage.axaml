@@ -204,10 +204,23 @@
                     </Border>
                 </StackPanel>
 
-                <!-- Placeholder sections -->
-                <TextBlock IsVisible="{Binding IsPlaceholder}"
-                           Text="There are no configurable options here yet."
-                           FontSize="13" Opacity="0.6" Margin="2,4" />
+                <!-- About -->
+                <StackPanel Spacing="4" IsVisible="{Binding IsAbout}">
+                    <Border Classes="settingsRow">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="Helix Explorer"
+                                       FontSize="16"
+                                       FontWeight="SemiBold" />
+                            <TextBlock FontSize="13" Opacity="0.85">
+                                <Run Text="Version " />
+                                <Run Text="{Binding AppVersion}" />
+                            </TextBlock>
+                            <TextBlock Text="{Binding CopyrightNotice}"
+                                       FontSize="13"
+                                       Opacity="0.7" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
 
             </StackPanel>
         </ScrollViewer>

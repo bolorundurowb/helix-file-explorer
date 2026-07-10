@@ -28,16 +28,22 @@ public sealed class VirtualizingFileGrid : TemplatedControl
     private int _lastColumnCount = -1;
     private int _lastItemCount;
     private string _lastItemsPathsKey = string.Empty;
+    private readonly Queue<Control> _itemContainerPool = new();
 
     static VirtualizingFileGrid()
     {
         ItemsSourceProperty.Changed.AddClassHandler<VirtualizingFileGrid>((g, e) =>
         {
             g.UpdateItemsSubscription(e.OldValue as IEnumerable, e.NewValue as IEnumerable);
+            g._itemContainerPool.Clear();
             g.ScheduleRebuildRows();
         });
         ItemSizeProperty.Changed.AddClassHandler<VirtualizingFileGrid>((g, _) => g.ScheduleRebuildRows());
-        ItemTemplateProperty.Changed.AddClassHandler<VirtualizingFileGrid>((g, _) => g.ApplyRowTemplate());
+        ItemTemplateProperty.Changed.AddClassHandler<VirtualizingFileGrid>((g, _) =>
+        {
+            g._itemContainerPool.Clear();
+            g.ApplyRowTemplate();
+        });
     }
 
     public IEnumerable? ItemsSource
@@ -71,6 +77,7 @@ public sealed class VirtualizingFileGrid : TemplatedControl
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         UnsubscribeFromItems();
+        _itemContainerPool.Clear();
         base.OnDetachedFromVisualTree(e);
     }
 
@@ -128,18 +135,94 @@ public sealed class VirtualizingFileGrid : TemplatedControl
         _rows.ItemTemplate = new FuncDataTemplate<GridRow>((row, _) =>
         {
             var stack = new StackPanel { Orientation = Orientation.Horizontal };
-            if (row?.Items is null || ItemTemplate is null)
-                return stack;
 
-            foreach (var item in row.Items)
+            void UpdateStackChildren(StackPanel s, GridRow? gridRow)
             {
-                var content = ItemTemplate.Build(item);
-                if (content is null)
-                    continue;
+                if (gridRow?.Items is null || ItemTemplate is null)
+                {
+                    foreach (var child in s.Children)
+                    {
+                        if (child is Control c)
+                        {
+                            c.DataContext = null;
+                            _itemContainerPool.Enqueue(c);
+                        }
+                    }
+                    s.Children.Clear();
+                    return;
+                }
 
-                content.DataContext = item;
-                stack.Children.Add(content);
+                var items = gridRow.Items;
+                var currentChildCount = s.Children.Count;
+
+                if (currentChildCount < items.Count)
+                {
+                    for (int i = currentChildCount; i < items.Count; i++)
+                    {
+                        Control? content = null;
+                        if (_itemContainerPool.Count > 0)
+                        {
+                            content = _itemContainerPool.Dequeue();
+                        }
+                        else
+                        {
+                            content = ItemTemplate.Build(items[i]);
+                        }
+
+                        if (content is not null)
+                        {
+                            s.Children.Add(content);
+                        }
+                    }
+                }
+                else if (currentChildCount > items.Count)
+                {
+                    for (int i = currentChildCount - 1; i >= items.Count; i--)
+                    {
+                        var child = s.Children[i];
+                        s.Children.RemoveAt(i);
+                        if (child is Control c)
+                        {
+                            c.DataContext = null;
+                            _itemContainerPool.Enqueue(c);
+                        }
+                    }
+                }
+
+                for (int i = 0; i < items.Count; i++)
+                {
+                    if (i < s.Children.Count)
+                    {
+                        s.Children[i].DataContext = items[i];
+                    }
+                }
             }
+
+            stack.DataContextChanged += (sender, e) =>
+            {
+                if (sender is StackPanel s)
+                {
+                    UpdateStackChildren(s, s.DataContext as GridRow);
+                }
+            };
+
+            stack.DetachedFromVisualTree += (sender, e) =>
+            {
+                if (sender is StackPanel s)
+                {
+                    foreach (var child in s.Children)
+                    {
+                        if (child is Control c)
+                        {
+                            c.DataContext = null;
+                            _itemContainerPool.Enqueue(c);
+                        }
+                    }
+                    s.Children.Clear();
+                }
+            };
+
+            UpdateStackChildren(stack, row);
 
             return stack;
         });

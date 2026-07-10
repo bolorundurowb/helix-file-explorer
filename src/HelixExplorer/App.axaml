@@ -121,9 +121,15 @@
             <conv:FolderColorConverter x:Key="FolderColorConverter" />
             <conv:FolderIconBrushConverter x:Key="FolderIconBrushConverter" />
             <conv:CutOpacityConverter x:Key="CutOpacityConverter" />
+            <conv:SortColumnIsActiveConverter x:Key="SortColumnIsActiveConverter" />
+            <conv:SortColumnHeaderWeightConverter x:Key="SortColumnHeaderWeightConverter" />
+            <conv:SortColumnHeaderForegroundConverter x:Key="SortColumnHeaderForegroundConverter" />
+            <conv:SortColumnIndicatorGeometryConverter x:Key="SortColumnIndicatorGeometryConverter" />
 
             <Geometry x:Key="HelixFolderIconGeometry">M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z</Geometry>
             <Geometry x:Key="HelixHomeIconGeometry">M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z</Geometry>
+            <Geometry x:Key="HelixSortAscendingGeometry">M7,14L12,9L17,14H7Z</Geometry>
+            <Geometry x:Key="HelixSortDescendingGeometry">M7,10L12,15L17,10H7Z</Geometry>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

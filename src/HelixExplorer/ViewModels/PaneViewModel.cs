@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Diagnostics;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -85,7 +86,13 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         _quickAccess = quickAccess;
         _watcher.Changed += OnWatcherChanged;
         _clipboard.Changed += OnClipboardChanged;
-        SelectedEntries.CollectionChanged += (_, _) => SyncEntrySelectionFlags();
+        SelectedEntries.CollectionChanged += OnSelectedEntriesChanged;
+    }
+
+    private void OnSelectedEntriesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        SyncEntrySelectionFlags();
+        SelectedCount = SelectedEntries.Count;
     }
 
     public event EventHandler? Navigated;
@@ -263,10 +270,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     partial void OnSelectedEntryChanged(EntryItemViewModel? value)
     {
         if (value is null)
-        {
-            SelectedCount = 0;
             return;
-        }
 
         if (SelectedEntries.Count <= 1)
         {
@@ -275,7 +279,6 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
                 SelectedEntries.Clear();
                 SelectedEntries.Add(value);
             }
-            SelectedCount = 1;
         }
     }
 
@@ -305,7 +308,6 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         foreach (var entry in entries)
             SelectedEntries.Add(entry);
 
-        SelectedCount = SelectedEntries.Count;
         if (SelectedEntries.Count == 1)
             SelectedEntry = SelectedEntries[0];
         else
@@ -346,7 +348,6 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         foreach (var entry in Entries)
             SelectedEntries.Add(entry);
 
-        SelectedCount = SelectedEntries.Count;
         if (SelectedEntries.Count == 1)
             SelectedEntry = SelectedEntries[0];
         else

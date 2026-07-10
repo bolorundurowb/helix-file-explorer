@@ -124,4 +124,35 @@
         <Setter Property="Opacity" Value="0.35" />
     </Style>
 
+    <!-- ══ Window chrome (Win11-style caption buttons) ═══════════════════════ -->
+    <x:Double x:Key="CaptionButtonWidth">46</x:Double>
+    <x:Double x:Key="CaptionButtonHeight">32</x:Double>
+    <x:Double x:Key="HelixTitleBarHeight">32</x:Double>
+    <!-- 3 caption buttons at 46px, no inter-button gap -->
+    <x:Double x:Key="HelixCaptionButtonAreaWidth">138</x:Double>
+    <Thickness x:Key="HelixTabStripPadding">8,0,138,0</Thickness>
+
+    <Style Selector="WindowDrawnDecorations">
+        <Setter Property="ShadowThickness" Value="0" />
+    </Style>
+    <Style Selector="WindowDrawnDecorations:has-shadow /template/ Panel#PART_OverlayWrapper">
+        <Setter Property="Margin" Value="0" />
+    </Style>
+    <Style Selector="WindowDrawnDecorations:has-shadow /template/ Panel#PART_UnderlayWrapper">
+        <Setter Property="Margin" Value="0" />
+    </Style>
+    <Style Selector="WindowDrawnDecorations:has-border /template/ StackPanel#PART_OverlayPanel">
+        <Setter Property="Margin" Value="0" />
+    </Style>
+    <Style Selector="WindowDrawnDecorations:has-border /template/ Panel#PART_TitleTextPanel">
+        <Setter Property="Margin" Value="0" />
+    </Style>
+    <Style Selector="WindowDrawnDecorations:has-border /template/ Panel#PART_TitleBar">
+        <Setter Property="Margin" Value="0" />
+    </Style>
+    <Style Selector="WindowDrawnDecorations /template/ StackPanel#PART_OverlayPanel">
+        <Setter Property="Spacing" Value="0" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+    </Style>
+
 </Styles>

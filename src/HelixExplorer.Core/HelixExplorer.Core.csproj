@@ -4,6 +4,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="moment.net" Version="2.1.0" />
     <PackageReference Include="SharpCompress" Version="0.48.1" />
   </ItemGroup>
 </Project>

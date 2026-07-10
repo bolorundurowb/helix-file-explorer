@@ -30,7 +30,7 @@ public class RelativeTimeFormatterTests
     public void Format_JustNow()
     {
         var now = DateTime.UtcNow;
-        Assert.Equal("Just now", RelativeTimeFormatter.Format(now.AddSeconds(-10), now));
+        Assert.Equal("few seconds ago", RelativeTimeFormatter.Format(now.AddSeconds(-10), now));
     }
 
     [Fact]

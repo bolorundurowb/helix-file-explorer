@@ -45,7 +45,12 @@ public class AppSettingsTests
             DefaultThumbnailSize = 96,
             DefaultDualPane = true,
             AccentColorArgb = 0xFF107C10,
-            PinnedPaths = ["C:\\Pinned", "D:\\Work"]
+            PinnedPaths = ["C:\\Pinned", "D:\\Work"],
+            WindowWidth = 1440,
+            WindowHeight = 900,
+            WindowX = 120,
+            WindowY = 80,
+            WindowMaximized = true
         };
 
         var json = JsonSerializer.Serialize(original, Options);
@@ -61,5 +66,10 @@ public class AppSettingsTests
         Assert.True(loaded.DefaultDualPane);
         Assert.Equal(0xFF107C10u, loaded.AccentColorArgb);
         Assert.Equal(2, loaded.PinnedPaths.Count);
+        Assert.Equal(1440, loaded.WindowWidth);
+        Assert.Equal(900, loaded.WindowHeight);
+        Assert.Equal(120, loaded.WindowX);
+        Assert.Equal(80, loaded.WindowY);
+        Assert.True(loaded.WindowMaximized);
     }
 }

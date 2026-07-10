@@ -60,3 +60,4 @@ secrets.json
 .env
 
 .idea/
+.build-out/

@@ -57,6 +57,16 @@
         <Style Selector="UserControl:not(.inactive) Border.selectionInactive">
             <Setter Property="Opacity" Value="0" />
         </Style>
+        <Style Selector="DataGrid#DetailsGrid DataGridColumnHeader">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="DataGrid#DetailsGrid DataGridColumnHeader /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+        </Style>
     </UserControl.Styles>
 
     <UserControl.Resources>
@@ -85,14 +95,37 @@
                 </Button>
             </StackPanel>
             <Separator />
-            <MenuItem Header="Open" Command="{Binding OpenCommand}" />
-            <MenuItem Header="Open in new tab" Command="{Binding OpenInNewTabCommand}" />
-            <MenuItem Header="Open in new Helix window" Command="{Binding OpenInNewWindowCommand}" />
-            <MenuItem Header="Open in other pane" Command="{Binding OpenInOtherPaneCommand}" />
+            <MenuItem Header="Open" Command="{Binding OpenCommand}">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconOpenGeometry}" />
+                </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Open in new tab" Command="{Binding OpenInNewTabCommand}">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconTabAddGeometry}" />
+                </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Open in new Helix window" Command="{Binding OpenInNewWindowCommand}">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconWindowNewGeometry}" />
+                </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Open in other pane" Command="{Binding OpenInOtherPaneCommand}">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconPanelLeftGeometry}" />
+                </MenuItem.Icon>
+            </MenuItem>
             <Separator />
-            <MenuItem Header="Open in Terminal" Command="{Binding OpenInTerminalCommand}" />
+            <MenuItem Header="Open in Terminal" Command="{Binding OpenInTerminalCommand}">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconWindowConsoleGeometry}" />
+                </MenuItem.Icon>
+            </MenuItem>
             <Separator />
             <MenuItem Header="Sort by">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconArrowSortGeometry}" />
+                </MenuItem.Icon>
                 <MenuItem Header="Name"
                           ToggleType="Radio"
                           IsChecked="{Binding IsSortByName}"
@@ -117,30 +150,88 @@
                 <MenuItem Header="Ascending"
                           ToggleType="Radio"
                           IsChecked="{Binding IsSortAscending}"
-                          Command="{Binding SetSortAscendingCommand}" />
+                          Command="{Binding SetSortAscendingCommand}">
+                    <MenuItem.Icon>
+                        <PathIcon Data="{DynamicResource HelixSortAscendingGeometry}" />
+                    </MenuItem.Icon>
+                </MenuItem>
                 <MenuItem Header="Descending"
                           ToggleType="Radio"
                           IsChecked="{Binding IsSortDescendingActive}"
-                          Command="{Binding SetSortDescendingCommand}" />
+                          Command="{Binding SetSortDescendingCommand}">
+                    <MenuItem.Icon>
+                        <PathIcon Data="{DynamicResource HelixSortDescendingGeometry}" />
+                    </MenuItem.Icon>
+                </MenuItem>
             </MenuItem>
             <Separator />
-            <MenuItem Header="Restore" Command="{Binding RestoreFromRecycleBinCommand}" />
+            <MenuItem Header="Restore" Command="{Binding RestoreFromRecycleBinCommand}">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconArrowClockwiseGeometry}" />
+                </MenuItem.Icon>
+            </MenuItem>
             <Separator />
-            <MenuItem Header="Copy path" Command="{Binding CopyPathCommand}" />
-            <MenuItem Header="Pin to sidebar" Command="{Binding PinToSidebarCommand}" />
-            <MenuItem Header="Unpin from sidebar" Command="{Binding UnpinFromSidebarCommand}" />
-            <MenuItem Header="Paste" Command="{Binding PasteCommand}" />
+            <MenuItem Header="Copy path" Command="{Binding CopyPathCommand}">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconLinkGeometry}" />
+                </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Pin to sidebar" Command="{Binding PinToSidebarCommand}">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconPinGeometry}" />
+                </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Unpin from sidebar" Command="{Binding UnpinFromSidebarCommand}">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconPinOffGeometry}" />
+                </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Paste" Command="{Binding PasteCommand}">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconPasteGeometry}" Foreground="{DynamicResource HelixIconPasteBrush}" />
+                </MenuItem.Icon>
+            </MenuItem>
             <Separator />
-            <MenuItem Header="Compress to ZIP" Command="{Binding CompressToZipCommand}" />
-            <MenuItem Header="Extract here" Command="{Binding ExtractHereCommand}" />
+            <MenuItem Header="Compress to ZIP" Command="{Binding CompressToZipCommand}">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconFolderZipGeometry}" />
+                </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Extract here" Command="{Binding ExtractHereCommand}">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconArchiveGeometry}" />
+                </MenuItem.Icon>
+            </MenuItem>
             <Separator />
             <MenuItem Header="Layout">
-                <MenuItem Header="Details" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.Details}" />
-                <MenuItem Header="List" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.List}" />
-                <MenuItem Header="Grid" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.Grid}" />
-                <MenuItem Header="Columns" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.Miller}" />
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconGridGeometry}" />
+                </MenuItem.Icon>
+                <MenuItem Header="Details" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.Details}">
+                    <MenuItem.Icon>
+                        <PathIcon Data="{DynamicResource HelixIconTableGeometry}" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="List" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.List}">
+                    <MenuItem.Icon>
+                        <PathIcon Data="{DynamicResource HelixIconListGeometry}" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Grid" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.Grid}">
+                    <MenuItem.Icon>
+                        <PathIcon Data="{DynamicResource HelixIconGridGeometry}" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Columns" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.Miller}">
+                    <MenuItem.Icon>
+                        <PathIcon Data="{DynamicResource HelixIconLayoutColumnThreeGeometry}" />
+                    </MenuItem.Icon>
+                </MenuItem>
             </MenuItem>
             <MenuItem Header="Folder color">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconColorGeometry}" />
+                </MenuItem.Icon>
                 <MenuItem Header="Red" Command="{Binding SetFolderColorCommand}" CommandParameter="#E81123" />
                 <MenuItem Header="Orange" Command="{Binding SetFolderColorCommand}" CommandParameter="#F7630C" />
                 <MenuItem Header="Green" Command="{Binding SetFolderColorCommand}" CommandParameter="#107C10" />
@@ -149,20 +240,51 @@
                 <MenuItem Header="Clear color" Command="{Binding ClearFolderColorCommand}" />
             </MenuItem>
             <Separator />
-            <MenuItem Header="Show more options" Command="{Binding ShowMoreOptionsCommand}" />
+            <MenuItem Header="Show more options" Command="{Binding ShowMoreOptionsCommand}">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconOptionsGeometry}" />
+                </MenuItem.Icon>
+            </MenuItem>
         </ContextMenu>
         <ContextMenu x:Key="EmptyAreaContextMenu"
                      x:CompileBindings="False"
                      Opening="OnEntryContextMenuOpening">
-            <MenuItem Header="Restore" Command="{Binding RestoreFromRecycleBinCommand}" />
-            <MenuItem Header="Empty Recycle Bin" Command="{Binding EmptyRecycleBinCommand}" />
+            <MenuItem Header="Restore" Command="{Binding RestoreFromRecycleBinCommand}">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconArrowClockwiseGeometry}" />
+                </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Empty Recycle Bin" Command="{Binding EmptyRecycleBinCommand}">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconDeleteGeometry}" Foreground="{DynamicResource HelixIconDeleteBrush}" />
+                </MenuItem.Icon>
+            </MenuItem>
             <Separator />
-            <MenuItem Header="Paste" Command="{Binding PasteCommand}" />
-            <MenuItem Header="New folder" Command="{Binding NewFolderCommand}" />
-            <MenuItem Header="Refresh" Command="{Binding RefreshCommand}" />
-            <MenuItem Header="Open in Terminal" Command="{Binding OpenInTerminalCommand}" />
+            <MenuItem Header="Paste" Command="{Binding PasteCommand}">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconPasteGeometry}" Foreground="{DynamicResource HelixIconPasteBrush}" />
+                </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="New folder" Command="{Binding NewFolderCommand}">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconAddCircleGeometry}" />
+                </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Refresh" Command="{Binding RefreshCommand}">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconArrowClockwiseGeometry}" />
+                </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Open in Terminal" Command="{Binding OpenInTerminalCommand}">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconWindowConsoleGeometry}" />
+                </MenuItem.Icon>
+            </MenuItem>
             <Separator />
             <MenuItem Header="Sort by">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconArrowSortGeometry}" />
+                </MenuItem.Icon>
                 <MenuItem Header="Name"
                           ToggleType="Radio"
                           IsChecked="{Binding IsSortByName}"
@@ -187,18 +309,45 @@
                 <MenuItem Header="Ascending"
                           ToggleType="Radio"
                           IsChecked="{Binding IsSortAscending}"
-                          Command="{Binding SetSortAscendingCommand}" />
+                          Command="{Binding SetSortAscendingCommand}">
+                    <MenuItem.Icon>
+                        <PathIcon Data="{DynamicResource HelixSortAscendingGeometry}" />
+                    </MenuItem.Icon>
+                </MenuItem>
                 <MenuItem Header="Descending"
                           ToggleType="Radio"
                           IsChecked="{Binding IsSortDescendingActive}"
-                          Command="{Binding SetSortDescendingCommand}" />
+                          Command="{Binding SetSortDescendingCommand}">
+                    <MenuItem.Icon>
+                        <PathIcon Data="{DynamicResource HelixSortDescendingGeometry}" />
+                    </MenuItem.Icon>
+                </MenuItem>
             </MenuItem>
             <Separator />
             <MenuItem Header="Layout">
-                <MenuItem Header="Details" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.Details}" />
-                <MenuItem Header="List" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.List}" />
-                <MenuItem Header="Grid" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.Grid}" />
-                <MenuItem Header="Columns" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.Miller}" />
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconGridGeometry}" />
+                </MenuItem.Icon>
+                <MenuItem Header="Details" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.Details}">
+                    <MenuItem.Icon>
+                        <PathIcon Data="{DynamicResource HelixIconTableGeometry}" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="List" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.List}">
+                    <MenuItem.Icon>
+                        <PathIcon Data="{DynamicResource HelixIconListGeometry}" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Grid" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.Grid}">
+                    <MenuItem.Icon>
+                        <PathIcon Data="{DynamicResource HelixIconGridGeometry}" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Columns" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.Miller}">
+                    <MenuItem.Icon>
+                        <PathIcon Data="{DynamicResource HelixIconLayoutColumnThreeGeometry}" />
+                    </MenuItem.Icon>
+                </MenuItem>
             </MenuItem>
         </ContextMenu>
     </UserControl.Resources>
@@ -211,7 +360,7 @@
                   ItemsSource="{Binding Entries}"
                   AutoGenerateColumns="False"
                   IsReadOnly="True"
-                  CanUserSortColumns="True"
+                  CanUserSortColumns="False"
                   CanUserResizeColumns="True"
                   SelectionMode="Extended"
                   GridLinesVisibility="Horizontal"
@@ -232,9 +381,12 @@
                 <DataGridTemplateColumn Width="2*" Tag="Name" SortMemberPath="Name">
                     <DataGridTemplateColumn.HeaderTemplate>
                         <DataTemplate>
-                            <controls:SortColumnHeader Title="Name"
-                                                       Column="{x:Static models:SortColumn.Name}"
-                                                       DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=DataGrid}}" />
+                            <Grid HorizontalAlignment="Stretch">
+                                <controls:SortColumnHeader Title="Name"
+                                                           Column="{x:Static models:SortColumn.Name}"
+                                                           HorizontalAlignment="Stretch"
+                                                           DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=DataGrid}}" />
+                            </Grid>
                         </DataTemplate>
                     </DataGridTemplateColumn.HeaderTemplate>
                     <DataGridTemplateColumn.CellTemplate>
@@ -263,9 +415,12 @@
                                     FontSize="{DynamicResource HelixEntryFontSize}">
                     <DataGridTextColumn.HeaderTemplate>
                         <DataTemplate>
-                            <controls:SortColumnHeader Title="Date modified"
-                                                       Column="{x:Static models:SortColumn.Modified}"
-                                                       DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=DataGrid}}" />
+                            <Grid HorizontalAlignment="Stretch">
+                                <controls:SortColumnHeader Title="Date modified"
+                                                           Column="{x:Static models:SortColumn.Modified}"
+                                                           HorizontalAlignment="Stretch"
+                                                           DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=DataGrid}}" />
+                            </Grid>
                         </DataTemplate>
                     </DataGridTextColumn.HeaderTemplate>
                 </DataGridTextColumn>
@@ -276,18 +431,24 @@
                                     FontSize="{DynamicResource HelixEntryFontSize}">
                     <DataGridTextColumn.HeaderTemplate>
                         <DataTemplate>
-                            <controls:SortColumnHeader Title="Type"
-                                                       Column="{x:Static models:SortColumn.Type}"
-                                                       DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=DataGrid}}" />
+                            <Grid HorizontalAlignment="Stretch">
+                                <controls:SortColumnHeader Title="Type"
+                                                           Column="{x:Static models:SortColumn.Type}"
+                                                           HorizontalAlignment="Stretch"
+                                                           DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=DataGrid}}" />
+                            </Grid>
                         </DataTemplate>
                     </DataGridTextColumn.HeaderTemplate>
                 </DataGridTextColumn>
                 <DataGridTemplateColumn Width="90" Tag="Size" SortMemberPath="SizeBytes">
                     <DataGridTemplateColumn.HeaderTemplate>
                         <DataTemplate>
-                            <controls:SortColumnHeader Title="Size"
-                                                       Column="{x:Static models:SortColumn.Size}"
-                                                       DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=DataGrid}}" />
+                            <Grid HorizontalAlignment="Stretch">
+                                <controls:SortColumnHeader Title="Size"
+                                                           Column="{x:Static models:SortColumn.Size}"
+                                                           HorizontalAlignment="Stretch"
+                                                           DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=DataGrid}}" />
+                            </Grid>
                         </DataTemplate>
                     </DataGridTemplateColumn.HeaderTemplate>
                     <DataGridTemplateColumn.CellTemplate>

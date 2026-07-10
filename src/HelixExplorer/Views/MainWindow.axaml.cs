@@ -1,19 +1,91 @@
 using System.ComponentModel;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using HelixExplorer.ViewModels;
 
 namespace HelixExplorer.Views;
 
 public partial class MainWindow : Window
 {
+    private DispatcherTimer? _layoutSaveTimer;
+
     public MainWindow()
     {
         InitializeComponent();
         Activated += (_, _) => SetWindowActive(true);
         Deactivated += (_, _) => SetWindowActive(false);
+        Opened += OnOpened;
+        Closing += OnClosing;
+        PositionChanged += OnLayoutChanged;
+        SizeChanged += OnLayoutChanged;
+        PropertyChanged += OnWindowPropertyChanged;
+        SidebarSplitter.DragCompleted += OnSidebarDragCompleted;
+    }
+
+    private void OnOpened(object? sender, EventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm)
+            vm.ApplyWindowLayout(this);
+    }
+
+    private void OnClosing(object? sender, CancelEventArgs e)
+    {
+        _layoutSaveTimer?.Stop();
+        if (DataContext is MainWindowViewModel vm)
+            vm.CaptureWindowLayout(this);
+    }
+
+    private void OnLayoutChanged(object? sender, EventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm || !vm.ShouldRestoreWindowLayout)
+            return;
+
+        if (WindowState != WindowState.Normal)
+            return;
+
+        ScheduleLayoutSave(vm);
+    }
+
+    private void OnWindowPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property != WindowStateProperty || DataContext is not MainWindowViewModel vm || !vm.ShouldRestoreWindowLayout)
+            return;
+
+        ScheduleLayoutSave(vm);
+    }
+
+    private void ScheduleLayoutSave(MainWindowViewModel vm)
+    {
+        _layoutSaveTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
+        _layoutSaveTimer.Stop();
+        _layoutSaveTimer.Tick -= OnLayoutSaveTimerTick;
+        _layoutSaveTimer.Tick += OnLayoutSaveTimerTick;
+        _layoutSaveTimer.Tag = vm;
+        _layoutSaveTimer.Start();
+    }
+
+    private void OnLayoutSaveTimerTick(object? sender, EventArgs e)
+    {
+        if (_layoutSaveTimer is null)
+            return;
+
+        _layoutSaveTimer.Stop();
+        _layoutSaveTimer.Tick -= OnLayoutSaveTimerTick;
+
+        if (_layoutSaveTimer.Tag is MainWindowViewModel vm)
+            vm.CaptureWindowLayout(this);
+    }
+
+    private void OnSidebarDragCompleted(object? sender, VectorEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+            return;
+
+        vm.SyncSidebarWidth(SidebarBorder.Bounds.Width);
     }
 
     private void SetWindowActive(bool isActive)

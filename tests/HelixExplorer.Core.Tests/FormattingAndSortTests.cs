@@ -63,4 +63,15 @@ public class FileSystemEntryComparerTests
         Array.Sort(items, FileSystemEntryComparer.For(SortColumn.Size, descending: true));
         Assert.Equal(100, items[0].SizeBytes);
     }
+
+    [Fact]
+    public void ModifiedDescending_KeepsDirectoriesBeforeFiles()
+    {
+        var oldDir = new FileSystemEntry(@"C:\old", "old", true, 0, DateTime.UtcNow.AddDays(-30), "");
+        var newFile = new FileSystemEntry(@"C:\new.txt", "new.txt", false, 10, DateTime.UtcNow, ".txt");
+        var items = new[] { newFile, oldDir };
+        Array.Sort(items, FileSystemEntryComparer.For(SortColumn.Modified, descending: true));
+        Assert.True(items[0].IsDirectory);
+        Assert.False(items[1].IsDirectory);
+    }
 }

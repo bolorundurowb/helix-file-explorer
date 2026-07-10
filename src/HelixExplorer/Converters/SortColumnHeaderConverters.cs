@@ -12,10 +12,22 @@ public sealed class SortColumnIsActiveConverter : IMultiValueConverter
 
     public object? Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture)
     {
-        if (values.Count < 1 || values[0] is not SortColumn active || parameter is not SortColumn column)
+        if (values.Count < 1 || values[0] is not SortColumn active)
             return false;
 
-        return active == column;
+        var column = ResolveColumn(values, parameter);
+        return column.HasValue && active == column.Value;
+    }
+
+    internal static SortColumn? ResolveColumn(IList<object?> values, object? parameter)
+    {
+        if (values.Count > 2 && values[2] is SortColumn boundColumn)
+            return boundColumn;
+
+        if (parameter is SortColumn paramColumn)
+            return paramColumn;
+
+        return null;
     }
 }
 

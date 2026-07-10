@@ -12,26 +12,36 @@ public sealed class WinTerminalLauncher : ITerminalLauncher
             return false;
 
         var fullPath = Path.GetFullPath(directoryPath);
+        var defaultProfile = WindowsTerminalSettingsReader.TryGetDefaultProfile();
+        var wtPath = ResolveWindowsTerminalPath();
 
-        if (TryOpenWindowsTerminal(fullPath))
+        if (wtPath is not null)
+        {
+            if (TryOpenWindowsTerminal(fullPath, wtPath, defaultProfile?.Name))
+                return true;
+
+            if (TryOpenWindowsTerminal(fullPath, wtPath, profileName: null))
+                return true;
+
+            return TryOpenFallbackShell(fullPath, includeGitBash: false);
+        }
+
+        if (defaultProfile is not null && TryLaunchProfile(defaultProfile, fullPath))
             return true;
 
-        if (TryOpenDefaultProfile(fullPath))
-            return true;
-
-        return TryOpenFallbackShell(fullPath);
+        return TryOpenFallbackShell(fullPath, includeGitBash: true);
     }
 
-    private static bool TryOpenWindowsTerminal(string directoryPath)
+    private static bool TryOpenWindowsTerminal(string directoryPath, string wtPath, string? profileName)
     {
-        var wtPath = ResolveWindowsTerminalPath();
-        if (wtPath is null)
-            return false;
+        var args = string.IsNullOrWhiteSpace(profileName)
+            ? $"-d \"{directoryPath}\""
+            : $"-d \"{directoryPath}\" -p \"{profileName}\"";
 
         return TryStart(new ProcessStartInfo
         {
             FileName = wtPath,
-            Arguments = $"-d \"{directoryPath}\"",
+            Arguments = args,
             UseShellExecute = true
         });
     }
@@ -51,13 +61,7 @@ public sealed class WinTerminalLauncher : ITerminalLauncher
                 return candidate;
         }
 
-        return "wt.exe";
-    }
-
-    private static bool TryOpenDefaultProfile(string directoryPath)
-    {
-        var profile = WindowsTerminalSettingsReader.TryGetDefaultProfile();
-        return profile is not null && TryLaunchProfile(profile, directoryPath);
+        return ResolveExecutableOnPath("wt.exe");
     }
 
     private static bool TryLaunchProfile(TerminalProfile profile, string directoryPath)
@@ -107,9 +111,9 @@ public sealed class WinTerminalLauncher : ITerminalLauncher
         });
     }
 
-    private static bool TryOpenFallbackShell(string directoryPath)
+    private static bool TryOpenFallbackShell(string directoryPath, bool includeGitBash = true)
     {
-        if (TryOpenGitBash(directoryPath))
+        if (includeGitBash && TryOpenGitBash(directoryPath))
             return true;
 
         var pwsh = ResolveExecutableOnPath("pwsh.exe");

@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using HelixExplorer.Core.Models;
+using HelixExplorer.ViewModels;
 
 namespace HelixExplorer.Controls;
 
@@ -27,5 +29,23 @@ public sealed partial class SortColumnHeader : UserControl
     public SortColumnHeader()
     {
         InitializeComponent();
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+
+        if (e.InitialPressMouseButton != MouseButton.Left || DataContext is not PaneViewModel pane)
+            return;
+
+        if (pane.SortColumn == Column)
+            pane.SortDescending = !pane.SortDescending;
+        else
+        {
+            pane.SortColumn = Column;
+            pane.SortDescending = false;
+        }
+
+        e.Handled = true;
     }
 }

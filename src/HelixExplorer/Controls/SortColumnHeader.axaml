@@ -1,47 +1,59 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:conv="using:HelixExplorer.Converters"
              xmlns:vm="using:HelixExplorer.ViewModels"
              x:Class="HelixExplorer.Controls.SortColumnHeader"
              x:DataType="vm:PaneViewModel"
-             x:Name="Root">
-    <StackPanel Orientation="Horizontal" Spacing="4">
-        <TextBlock Text="{Binding Title, ElementName=Root}"
-                   VerticalAlignment="Center"
-                   FontSize="{DynamicResource HelixEntryFontSize}">
-            <TextBlock.FontWeight>
-                <MultiBinding Converter="{StaticResource SortColumnHeaderWeightConverter}"
-                              ConverterParameter="{Binding Column, ElementName=Root}">
-                    <Binding Path="SortColumn" />
-                    <Binding Path="SortDescending" />
-                </MultiBinding>
-            </TextBlock.FontWeight>
-            <TextBlock.Foreground>
-                <MultiBinding Converter="{StaticResource SortColumnHeaderForegroundConverter}"
-                              ConverterParameter="{Binding Column, ElementName=Root}">
-                    <Binding Path="SortColumn" />
-                    <Binding Path="SortDescending" />
-                </MultiBinding>
-            </TextBlock.Foreground>
-        </TextBlock>
-        <PathIcon Width="10"
-                  Height="10"
-                  VerticalAlignment="Center"
-                  Foreground="{DynamicResource HelixAccentBrush}">
-            <PathIcon.IsVisible>
-                <MultiBinding Converter="{StaticResource SortColumnIsActiveConverter}"
-                              ConverterParameter="{Binding Column, ElementName=Root}">
-                    <Binding Path="SortColumn" />
-                    <Binding Path="SortDescending" />
-                </MultiBinding>
-            </PathIcon.IsVisible>
-            <PathIcon.Data>
-                <MultiBinding Converter="{StaticResource SortColumnIndicatorGeometryConverter}"
-                              ConverterParameter="{Binding Column, ElementName=Root}">
-                    <Binding Path="SortColumn" />
-                    <Binding Path="SortDescending" />
-                </MultiBinding>
-            </PathIcon.Data>
-        </PathIcon>
-    </StackPanel>
+             x:CompileBindings="False"
+             x:Name="Root"
+             HorizontalAlignment="Stretch"
+             VerticalAlignment="Stretch"
+             Cursor="Hand"
+             Background="Transparent">
+    <Border Background="Transparent"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch"
+            Padding="12,0,8,0">
+        <StackPanel Orientation="Horizontal"
+                    Spacing="4"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Left">
+            <TextBlock Text="{Binding Title, ElementName=Root}"
+                       VerticalAlignment="Center"
+                       FontSize="{DynamicResource HelixEntryFontSize}">
+                <TextBlock.FontWeight>
+                    <MultiBinding Converter="{StaticResource SortColumnHeaderWeightConverter}">
+                        <Binding Path="SortColumn" />
+                        <Binding Path="SortDescending" />
+                        <Binding Path="Column" ElementName="Root" />
+                    </MultiBinding>
+                </TextBlock.FontWeight>
+                <TextBlock.Foreground>
+                    <MultiBinding Converter="{StaticResource SortColumnHeaderForegroundConverter}">
+                        <Binding Path="SortColumn" />
+                        <Binding Path="SortDescending" />
+                        <Binding Path="Column" ElementName="Root" />
+                    </MultiBinding>
+                </TextBlock.Foreground>
+            </TextBlock>
+            <PathIcon Width="10"
+                      Height="10"
+                      VerticalAlignment="Center"
+                      Foreground="{DynamicResource HelixAccentBrush}">
+                <PathIcon.IsVisible>
+                    <MultiBinding Converter="{StaticResource SortColumnIsActiveConverter}">
+                        <Binding Path="SortColumn" />
+                        <Binding Path="SortDescending" />
+                        <Binding Path="Column" ElementName="Root" />
+                    </MultiBinding>
+                </PathIcon.IsVisible>
+                <PathIcon.Data>
+                    <MultiBinding Converter="{StaticResource SortColumnIndicatorGeometryConverter}">
+                        <Binding Path="SortColumn" />
+                        <Binding Path="SortDescending" />
+                        <Binding Path="Column" ElementName="Root" />
+                    </MultiBinding>
+                </PathIcon.Data>
+            </PathIcon>
+        </StackPanel>
+    </Border>
 </UserControl>

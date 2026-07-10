@@ -720,13 +720,18 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     {
         if (Entries.Count == nextEntries.Count)
         {
+            var sameOrder = true;
             for (var i = 0; i < nextEntries.Count; i++)
             {
-                if (!ReferenceEquals(Entries[i], nextEntries[i]))
-                    Entries[i] = nextEntries[i];
+                if (ReferenceEquals(Entries[i], nextEntries[i]))
+                    continue;
+
+                sameOrder = false;
+                break;
             }
 
-            return;
+            if (sameOrder)
+                return;
         }
 
         Entries.Clear();

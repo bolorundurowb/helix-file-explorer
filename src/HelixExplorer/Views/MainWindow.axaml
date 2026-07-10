@@ -145,7 +145,8 @@
                 </DockPanel>
             </Border>
 
-            <GridSplitter Grid.Column="1"
+            <GridSplitter x:Name="SidebarSplitter"
+                          Grid.Column="1"
                           Width="4"
                           ResizeDirection="Columns"
                           Background="Transparent" />

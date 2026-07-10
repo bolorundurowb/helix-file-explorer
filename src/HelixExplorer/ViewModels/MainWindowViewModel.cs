@@ -50,8 +50,11 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private bool _commandsBuilt;
     private bool _disposed;
     private TabViewModel? _lastBrowserTab;
+    private bool _restoreWindowLayout;
 
     private const int MaxPaletteResults = 24;
+    private const double MinWindowWidth = 800;
+    private const double MinWindowHeight = 500;
 
     public MainWindowViewModel(
         ISettingsStore settingsStore,
@@ -138,6 +141,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public void InitializeWindow(bool restoreSession, string? initialPath = null)
     {
+        _restoreWindowLayout = restoreSession;
+
         if (restoreSession)
         {
             RestoreSession();
@@ -155,6 +160,57 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
         AddTab(CreateDefaultTab());
         SelectedTab = Tabs[0];
+    }
+
+    public bool ShouldRestoreWindowLayout => _restoreWindowLayout;
+
+    public void ApplyWindowLayout(Avalonia.Controls.Window window)
+    {
+        if (!_restoreWindowLayout)
+            return;
+
+        var settings = _settingsStore.Load();
+        if (settings.WindowWidth is not > 0 || settings.WindowHeight is not > 0)
+            return;
+
+        window.WindowStartupLocation = Avalonia.Controls.WindowStartupLocation.Manual;
+        window.Width = Math.Max(MinWindowWidth, settings.WindowWidth.Value);
+        window.Height = Math.Max(MinWindowHeight, settings.WindowHeight.Value);
+
+        if (settings.WindowX.HasValue && settings.WindowY.HasValue)
+            window.Position = new Avalonia.PixelPoint(settings.WindowX.Value, settings.WindowY.Value);
+
+        if (settings.WindowMaximized)
+            window.WindowState = Avalonia.Controls.WindowState.Maximized;
+    }
+
+    public void CaptureWindowLayout(Avalonia.Controls.Window window)
+    {
+        if (!_restoreWindowLayout)
+            return;
+
+        var settings = _settingsStore.Load();
+        settings.WindowMaximized = window.WindowState == Avalonia.Controls.WindowState.Maximized;
+
+        if (window.WindowState == Avalonia.Controls.WindowState.Normal)
+        {
+            settings.WindowWidth = Math.Max(MinWindowWidth, window.Width);
+            settings.WindowHeight = Math.Max(MinWindowHeight, window.Height);
+            settings.WindowX = window.Position.X;
+            settings.WindowY = window.Position.Y;
+        }
+
+        settings.SidebarWidth = SidebarWidth;
+        _settingsStore.Save(settings);
+    }
+
+    public void SyncSidebarWidth(double width)
+    {
+        var clamped = Math.Clamp(width, 160, 480);
+        if (Math.Abs(clamped - SidebarWidth) <= double.Epsilon)
+            return;
+
+        SidebarWidth = clamped;
     }
 
     public ObservableCollection<TabViewModel> Tabs { get; } = new();
@@ -1175,6 +1231,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _operationReporter.Dispose();
 
         SaveSession();
+        PersistChromeSettings();
 
         foreach (var tab in Tabs)
         {

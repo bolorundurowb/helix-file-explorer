@@ -18,6 +18,21 @@ public sealed class AppSettings
     public List<string> PinnedPaths { get; set; } = [];
     public List<string> UnpinnedPaths { get; set; } = [];
     public Dictionary<string, uint> FolderColors { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Last normal (non-maximized) window width in device-independent pixels.</summary>
+    public double? WindowWidth { get; set; }
+
+    /// <summary>Last normal (non-maximized) window height in device-independent pixels.</summary>
+    public double? WindowHeight { get; set; }
+
+    /// <summary>Last normal window X position in screen coordinates.</summary>
+    public int? WindowX { get; set; }
+
+    /// <summary>Last normal window Y position in screen coordinates.</summary>
+    public int? WindowY { get; set; }
+
+    /// <summary>Whether the main window was maximized when last closed.</summary>
+    public bool WindowMaximized { get; set; }
 }
 
 public enum SizeDisplayMode

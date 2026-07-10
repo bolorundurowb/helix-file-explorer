@@ -33,6 +33,7 @@ public sealed partial class PaneView : UserControl
     private Point? _pressPoint;
     private PointerPressedEventArgs? _pressArgs;
     private bool _dragStarted;
+    private bool _syncingSelectionToView;
     private PointerInteractionMode _interactionMode;
     private readonly List<Control> _millerColumns = new();
     private readonly FuncDataTemplate<EntryItemViewModel> _millerItemTemplate = new(
@@ -158,7 +159,7 @@ public sealed partial class PaneView : UserControl
 
     private void OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (Pane is null || sender is not Control { IsVisible: true })
+        if (_syncingSelectionToView || Pane is null || sender is not Control { IsVisible: true })
             return;
 
         var items = ExtractSelectedItems(sender);
@@ -295,18 +296,28 @@ public sealed partial class PaneView : UserControl
         if (visibleControl is null)
             return;
 
-        switch (visibleControl)
+        var selected = Pane.SelectedEntries.ToList();
+
+        _syncingSelectionToView = true;
+        try
         {
-            case DataGrid grid:
-                grid.SelectedItems?.Clear();
-                foreach (var entry in Pane.SelectedEntries)
-                    grid.SelectedItems?.Add(entry);
-                break;
-            case ListBox list:
-                list.SelectedItems?.Clear();
-                foreach (var entry in Pane.SelectedEntries)
-                    list.SelectedItems?.Add(entry);
-                break;
+            switch (visibleControl)
+            {
+                case DataGrid grid:
+                    grid.SelectedItems?.Clear();
+                    foreach (var entry in selected)
+                        grid.SelectedItems?.Add(entry);
+                    break;
+                case ListBox list:
+                    list.SelectedItems?.Clear();
+                    foreach (var entry in selected)
+                        list.SelectedItems?.Add(entry);
+                    break;
+            }
+        }
+        finally
+        {
+            _syncingSelectionToView = false;
         }
     }
 

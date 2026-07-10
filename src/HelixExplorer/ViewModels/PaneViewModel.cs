@@ -121,6 +121,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
     public event EventHandler? Navigated;
     public event EventHandler? SortChanged;
+    public event EventHandler? LayoutChanged;
     public event EventHandler<FileSystemEntry>? EntryActivated;
     public event EventHandler<string>? OpenInNewTabRequested;
     public event EventHandler<string>? OpenInOtherPaneRequested;
@@ -333,9 +334,15 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             ThumbnailSize = clamped;
         else if (IsGridView)
             RequestEntryVisuals();
+
+        LayoutChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    partial void OnViewModeChanged(LayoutMode value) => RequestEntryVisuals();
+    partial void OnViewModeChanged(LayoutMode value)
+    {
+        RequestEntryVisuals();
+        LayoutChanged?.Invoke(this, EventArgs.Empty);
+    }
 
     partial void OnSelectedEntryChanged(EntryItemViewModel? value)
     {

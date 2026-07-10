@@ -408,11 +408,8 @@
                     </Button>
                     <Border Width="1" Background="{DynamicResource HelixBorderColor}" Margin="4,4" />
                     <Button ToolTip.Tip="Sort"
-                            Padding="6,4" Background="Transparent" BorderThickness="0" Cursor="Hand">
-                        <StackPanel Orientation="Horizontal" Spacing="4">
-                            <PathIcon Data="{DynamicResource HelixIconArrowSortGeometry}" Width="14" Height="14" />
-                            <TextBlock Text="Sort" VerticalAlignment="Center" FontSize="12" />
-                        </StackPanel>
+                            Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
+                        <PathIcon Data="{DynamicResource HelixIconArrowSortGeometry}" Width="14" Height="14" />
                         <Button.Flyout>
                             <MenuFlyout>
                                 <MenuItem Header="Name"
@@ -455,45 +452,129 @@
                     </Button>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
-                    <Button ToolTip.Tip="View options"
+                    <Button ToolTip.Tip="Layout"
                             Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
-                        <PathIcon Data="{DynamicResource HelixIconTextBulletListGeometry}"
-                                  Width="14" Height="14" />
+                        <PathIcon Data="{DynamicResource HelixIconTableGeometry}" Width="14" Height="14" />
                         <Button.Flyout>
-                            <MenuFlyout>
-                                <MenuItem Header="Hidden items"
-                                          ToggleType="CheckBox"
-                                          IsChecked="{Binding ShowHiddenFiles, Mode=TwoWay}" />
-                                <MenuItem Header="File name extensions"
-                                          ToggleType="CheckBox"
-                                          IsChecked="{Binding ShowFileExtensions, Mode=TwoWay}" />
-                            </MenuFlyout>
+                            <Flyout Placement="BottomEdgeAlignedRight">
+                                <Border Classes="layoutFlyout" MinWidth="320" Padding="12">
+                                    <StackPanel Spacing="12">
+                                        <TextBlock Text="Layout"
+                                                   FontSize="12"
+                                                   FontWeight="SemiBold"
+                                                   Opacity="0.9" />
+                                        <UniformGrid Columns="4" Rows="1">
+                                            <Button Classes="layoutOption"
+                                                    Classes.selected="{Binding IsDetailsViewActive}"
+                                                    Command="{Binding SetViewModeCommand}"
+                                                    CommandParameter="{x:Static models:LayoutMode.Details}"
+                                                    ToolTip.Tip="Details">
+                                                <StackPanel Spacing="6" HorizontalAlignment="Center">
+                                                    <PathIcon Data="{DynamicResource HelixIconTableGeometry}"
+                                                              Width="20" Height="20"
+                                                              HorizontalAlignment="Center" />
+                                                    <TextBlock Text="Details"
+                                                               FontSize="11"
+                                                               HorizontalAlignment="Center" />
+                                                </StackPanel>
+                                            </Button>
+                                            <Button Classes="layoutOption"
+                                                    Classes.selected="{Binding IsListViewActive}"
+                                                    Command="{Binding SetViewModeCommand}"
+                                                    CommandParameter="{x:Static models:LayoutMode.List}"
+                                                    ToolTip.Tip="List">
+                                                <StackPanel Spacing="6" HorizontalAlignment="Center">
+                                                    <PathIcon Data="{DynamicResource HelixIconListGeometry}"
+                                                              Width="20" Height="20"
+                                                              HorizontalAlignment="Center" />
+                                                    <TextBlock Text="List"
+                                                               FontSize="11"
+                                                               HorizontalAlignment="Center" />
+                                                </StackPanel>
+                                            </Button>
+                                            <Button Classes="layoutOption"
+                                                    Classes.selected="{Binding IsGridViewActive}"
+                                                    Command="{Binding SetViewModeCommand}"
+                                                    CommandParameter="{x:Static models:LayoutMode.Grid}"
+                                                    ToolTip.Tip="Grid">
+                                                <StackPanel Spacing="6" HorizontalAlignment="Center">
+                                                    <PathIcon Data="{DynamicResource HelixIconGridGeometry}"
+                                                              Width="20" Height="20"
+                                                              HorizontalAlignment="Center" />
+                                                    <TextBlock Text="Grid"
+                                                               FontSize="11"
+                                                               HorizontalAlignment="Center" />
+                                                </StackPanel>
+                                            </Button>
+                                            <Button Classes="layoutOption"
+                                                    Classes.selected="{Binding IsMillerViewActive}"
+                                                    Command="{Binding SetViewModeCommand}"
+                                                    CommandParameter="{x:Static models:LayoutMode.Miller}"
+                                                    ToolTip.Tip="Columns">
+                                                <StackPanel Spacing="6" HorizontalAlignment="Center">
+                                                    <PathIcon Data="{DynamicResource HelixIconLayoutColumnThreeGeometry}"
+                                                              Width="20" Height="20"
+                                                              HorizontalAlignment="Center" />
+                                                    <TextBlock Text="Columns"
+                                                               FontSize="11"
+                                                               HorizontalAlignment="Center" />
+                                                </StackPanel>
+                                            </Button>
+                                        </UniformGrid>
+
+                                        <TextBlock Text="Size"
+                                                   FontSize="12"
+                                                   FontWeight="SemiBold"
+                                                   Opacity="0.9" />
+                                        <Slider Minimum="32"
+                                                Maximum="256"
+                                                Value="{Binding ActiveThumbnailSize, Mode=TwoWay}"
+                                                ToolTip.Tip="Thumbnail size (Ctrl+Scroll in grid view)" />
+                                        <Grid ColumnDefinitions="*,*,*,*">
+                                            <PathIcon Grid.Column="0"
+                                                      Data="{DynamicResource HelixIconListGeometry}"
+                                                      Width="14" Height="14"
+                                                      HorizontalAlignment="Left"
+                                                      Opacity="0.5" />
+                                            <PathIcon Grid.Column="1"
+                                                      Data="{DynamicResource HelixIconGridGeometry}"
+                                                      Width="12" Height="12"
+                                                      HorizontalAlignment="Center"
+                                                      Opacity="0.5" />
+                                            <PathIcon Grid.Column="2"
+                                                      Data="{DynamicResource HelixIconGridGeometry}"
+                                                      Width="16" Height="16"
+                                                      HorizontalAlignment="Center"
+                                                      Opacity="0.5" />
+                                            <PathIcon Grid.Column="3"
+                                                      Data="{DynamicResource HelixIconGridGeometry}"
+                                                      Width="20" Height="20"
+                                                      HorizontalAlignment="Right"
+                                                      Opacity="0.5" />
+                                        </Grid>
+
+                                        <Separator Margin="0,4" />
+
+                                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                                            <TextBlock Grid.Row="0" Grid.Column="0"
+                                                       Text="Hidden items"
+                                                       VerticalAlignment="Center"
+                                                       FontSize="12" />
+                                            <ToggleSwitch Grid.Row="0" Grid.Column="1"
+                                                          IsChecked="{Binding ShowHiddenFiles, Mode=TwoWay}" />
+                                            <TextBlock Grid.Row="1" Grid.Column="0"
+                                                       Text="File extensions"
+                                                       VerticalAlignment="Center"
+                                                       FontSize="12"
+                                                       Margin="0,8,0,0" />
+                                            <ToggleSwitch Grid.Row="1" Grid.Column="1"
+                                                          Margin="0,8,0,0"
+                                                          IsChecked="{Binding ShowFileExtensions, Mode=TwoWay}" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                            </Flyout>
                         </Button.Flyout>
-                    </Button>
-                    <Border Width="1" Background="{DynamicResource HelixBorderColor}" Margin="4,4" />
-                    <Button ToolTip.Tip="Details view"
-                            Command="{Binding SetViewModeCommand}"
-                            CommandParameter="{x:Static models:LayoutMode.Details}"
-                            Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
-                        <PathIcon Data="{DynamicResource HelixIconTextBulletListGeometry}" Width="14" Height="14" />
-                    </Button>
-                    <Button ToolTip.Tip="List view"
-                            Command="{Binding SetViewModeCommand}"
-                            CommandParameter="{x:Static models:LayoutMode.List}"
-                            Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
-                        <PathIcon Data="{DynamicResource HelixIconListGeometry}" Width="14" Height="14" />
-                    </Button>
-                    <Button ToolTip.Tip="Grid view"
-                            Command="{Binding SetViewModeCommand}"
-                            CommandParameter="{x:Static models:LayoutMode.Grid}"
-                            Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
-                        <PathIcon Data="{DynamicResource HelixIconGridGeometry}" Width="14" Height="14" />
-                    </Button>
-                    <Button ToolTip.Tip="Miller columns"
-                            Command="{Binding SetViewModeCommand}"
-                            CommandParameter="{x:Static models:LayoutMode.Miller}"
-                            Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
-                        <PathIcon Data="{DynamicResource HelixIconLayoutColumnThreeGeometry}" Width="14" Height="14" />
                     </Button>
                     <Border Width="1" Background="{DynamicResource HelixBorderColor}" Margin="4,4" />
                     <Button ToolTip.Tip="Dual pane (Ctrl+D)"

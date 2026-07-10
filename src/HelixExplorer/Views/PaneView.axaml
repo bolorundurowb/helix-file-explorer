@@ -505,18 +505,17 @@
         </ListBox>
 
         <!-- Grid view -->
-        <Grid IsVisible="{Binding IsGridView}" RowDefinitions="*,Auto">
-            <controls:VirtualizingFileGrid x:Name="GridView"
-                     Grid.Row="0"
-                     ItemsSource="{Binding Entries}"
-                     ItemSize="{Binding ThumbnailSize}"
-                     Background="Transparent"
-                     BorderThickness="0"
-                     PointerWheelChanged="OnGridPointerWheel"
-                     PointerPressed="OnListPointerPressed"
-                     PointerMoved="OnListPointerMoved"
-                     PointerReleased="OnListPointerReleased"
-                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+        <controls:VirtualizingFileGrid x:Name="GridView"
+                 IsVisible="{Binding IsGridView}"
+                 ItemsSource="{Binding Entries}"
+                 ItemSize="{Binding ThumbnailSize}"
+                 Background="Transparent"
+                 BorderThickness="0"
+                 PointerWheelChanged="OnGridPointerWheel"
+                 PointerPressed="OnListPointerPressed"
+                 PointerMoved="OnListPointerMoved"
+                 PointerReleased="OnListPointerReleased"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <controls:VirtualizingFileGrid.ContextMenu>
                     <StaticResource ResourceKey="EntryContextMenu" />
                 </controls:VirtualizingFileGrid.ContextMenu>
@@ -570,23 +569,6 @@
                     </DataTemplate>
                 </controls:VirtualizingFileGrid.ItemTemplate>
             </controls:VirtualizingFileGrid>
-
-            <Border Grid.Row="1"
-                    Background="{DynamicResource HelixToolbarBrush}"
-                    BorderBrush="{DynamicResource HelixBorderColor}"
-                    BorderThickness="0,1,0,0"
-                    Padding="12,4">
-                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-                    <PathIcon Data="{DynamicResource HelixIconDocumentGeometry}"
-                              Width="12" Height="12" Opacity="0.6" />
-                    <Slider Width="140"
-                            Minimum="32" Maximum="256"
-                            Value="{Binding ThumbnailSize, Mode=TwoWay}"
-                            VerticalAlignment="Center"
-                            ToolTip.Tip="Thumbnail size (Ctrl+Scroll)" />
-                </StackPanel>
-            </Border>
-        </Grid>
 
         <!-- Miller columns -->
         <ScrollViewer x:Name="MillerScroll"

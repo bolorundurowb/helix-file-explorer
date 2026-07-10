@@ -226,4 +226,33 @@
         <Setter Property="Foreground" Value="White" />
     </Style>
 
+    <!-- ══ Layout flyout ═════════════════════════════════════════════════════ -->
+    <Style Selector="Border.layoutFlyout">
+        <Setter Property="Background" Value="{DynamicResource HelixMenuBackgroundBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource HelixBorderColor}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+    </Style>
+    <Style Selector="Button.layoutOption">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="8,10" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.layoutOption:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource HelixHoverBrush}" />
+    </Style>
+    <Style Selector="Button.layoutOption.selected /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource HelixAccentBrush}" />
+    </Style>
+    <Style Selector="Button.layoutOption.selected PathIcon">
+        <Setter Property="Foreground" Value="#000000" />
+    </Style>
+    <Style Selector="Button.layoutOption.selected TextBlock">
+        <Setter Property="Foreground" Value="#000000" />
+    </Style>
+
 </Styles>

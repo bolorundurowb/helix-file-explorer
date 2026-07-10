@@ -122,9 +122,13 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     }
     public event EventHandler? Navigated;
     public event EventHandler? SortChanged;
+    public event EventHandler? LayoutChanged;
 
     private void OnPaneSortChanged(object? sender, EventArgs e)
         => SortChanged?.Invoke(this, EventArgs.Empty);
+
+    private void OnPaneLayoutChanged(object? sender, EventArgs e)
+        => LayoutChanged?.Invoke(this, EventArgs.Empty);
 
     public PaneViewModel LeftPane { get; }
 
@@ -178,6 +182,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
             _shellEnumerator,
             _terminalLauncher);
         pane.SortChanged += OnPaneSortChanged;
+        pane.LayoutChanged += OnPaneLayoutChanged;
         pane.Navigated += OnPaneNavigated;
         pane.EntryActivated += OnEntryActivated;
         pane.OpenInNewTabRequested += OnOpenInNewTabRequested;
@@ -426,6 +431,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     private void DetachPane(PaneViewModel pane)
     {
         pane.SortChanged -= OnPaneSortChanged;
+        pane.LayoutChanged -= OnPaneLayoutChanged;
         pane.Navigated -= OnPaneNavigated;
         pane.EntryActivated -= OnEntryActivated;
         pane.OpenInNewTabRequested -= OnOpenInNewTabRequested;

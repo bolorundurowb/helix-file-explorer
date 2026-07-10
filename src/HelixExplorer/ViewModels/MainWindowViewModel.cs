@@ -546,6 +546,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             kind == TabKind.Settings ? _settingsPage : null);
         tab.CloseRequested += OnTabCloseRequested;
         tab.SortChanged += OnTabSortChanged;
+        tab.LayoutChanged += OnTabLayoutChanged;
         tab.Navigated += OnTabNavigated;
         tab.OpenInNewTabRequested += OnOpenInNewTabRequested;
         tab.PinPathRequested += OnPinPathRequested;
@@ -618,6 +619,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         Tabs.Remove(tab);
         tab.CloseRequested -= OnTabCloseRequested;
         tab.SortChanged -= OnTabSortChanged;
+        tab.LayoutChanged -= OnTabLayoutChanged;
         tab.Navigated -= OnTabNavigated;
         tab.OpenInNewTabRequested -= OnOpenInNewTabRequested;
         tab.PinPathRequested -= OnPinPathRequested;
@@ -664,6 +666,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     private void OnTabSortChanged(object? sender, EventArgs e) => NotifySortChrome();
+
+    private void OnTabLayoutChanged(object? sender, EventArgs e) => NotifyLayoutChrome();
 
     private void OnTabNavigated(object? sender, EventArgs e)
     {
@@ -912,6 +916,25 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ShowBrowserChrome));
         NotifyGlobalFileCommandsCanExecuteChanged();
         NotifySortChrome();
+        NotifyLayoutChrome();
+    }
+
+    public bool IsDetailsViewActive => ActivePane?.IsDetailsView == true;
+    public bool IsListViewActive => ActivePane?.IsListView == true;
+    public bool IsGridViewActive => ActivePane?.IsGridView == true;
+    public bool IsMillerViewActive => ActivePane?.IsMillerView == true;
+
+    public double ActiveThumbnailSize
+    {
+        get => ActivePane?.ThumbnailSize ?? DefaultThumbnailSize;
+        set
+        {
+            if (ActivePane is null)
+                return;
+
+            ActivePane.ThumbnailSize = value;
+            OnPropertyChanged();
+        }
     }
 
     public bool IsSortByName => ActivePane?.IsSortByName == true;
@@ -929,6 +952,15 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(IsSortBySize));
         OnPropertyChanged(nameof(IsSortAscending));
         OnPropertyChanged(nameof(IsSortDescending));
+    }
+
+    private void NotifyLayoutChrome()
+    {
+        OnPropertyChanged(nameof(IsDetailsViewActive));
+        OnPropertyChanged(nameof(IsListViewActive));
+        OnPropertyChanged(nameof(IsGridViewActive));
+        OnPropertyChanged(nameof(IsMillerViewActive));
+        OnPropertyChanged(nameof(ActiveThumbnailSize));
     }
 
     [RelayCommand]
@@ -1237,6 +1269,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             tab.CloseRequested -= OnTabCloseRequested;
             tab.SortChanged -= OnTabSortChanged;
+            tab.LayoutChanged -= OnTabLayoutChanged;
             tab.Navigated -= OnTabNavigated;
             tab.OpenInNewTabRequested -= OnOpenInNewTabRequested;
             tab.PinPathRequested -= OnPinPathRequested;

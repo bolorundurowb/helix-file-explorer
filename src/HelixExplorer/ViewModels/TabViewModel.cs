@@ -103,29 +103,12 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     private void OnPaneSelectionChanged(object? sender, EventArgs e)
         => SelectionChanged?.Invoke(this, EventArgs.Empty);
 
-    private void OnPaneDisplayPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName is not (nameof(PaneViewModel.IsHome) or nameof(PaneViewModel.IsFileSystem)))
-            return;
-
-        NotifyPaneDisplayProperties();
-    }
-
-    private void NotifyPaneDisplayProperties()
-    {
-        OnPropertyChanged(nameof(LeftShowsHome));
-        OnPropertyChanged(nameof(LeftShowsFiles));
-        OnPropertyChanged(nameof(RightShowsHome));
-        OnPropertyChanged(nameof(RightShowsFiles));
-    }
-
     private void OnClipboardChanged(object? sender, EventArgs e)
     {
         LeftPane.RefreshCutState();
         RightPane?.RefreshCutState();
     }
     public event EventHandler? Navigated;
-    public event EventHandler? StateChanged;
 
     public PaneViewModel LeftPane { get; }
 
@@ -156,9 +139,6 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     public IBrush? TintBrush => Tint is { } c ? new SolidColorBrush(c) : null;
 
     public bool LeftShowsHome => LeftPane.IsHome;
-    public bool LeftShowsFiles => !LeftPane.IsHome;
-    public bool RightShowsHome => RightPane?.IsHome == true;
-    public bool RightShowsFiles => RightPane is { IsHome: false };
 
     private PaneViewModel CreatePane()
     {
@@ -183,7 +163,6 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         pane.OpenInOtherPaneRequested += OnOpenInOtherPaneRequested;
         pane.PinPathRequested += OnPanePinPathRequested;
         pane.SelectionChanged += OnPaneSelectionChanged;
-        pane.PropertyChanged += OnPaneDisplayPropertyChanged;
         pane.ApplyViewSettings(_showHiddenFiles, _showFileExtensions);
         return pane;
     }
@@ -254,9 +233,6 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
             UpdateTitle();
             Navigated?.Invoke(this, EventArgs.Empty);
         }
-
-        NotifyPaneDisplayProperties();
-        StateChanged?.Invoke(this, EventArgs.Empty);
     }
 
     partial void OnActivePaneChanged(PaneViewModel? oldValue, PaneViewModel newValue)
@@ -268,20 +244,15 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         Navigated?.Invoke(this, EventArgs.Empty);
     }
 
-    partial void OnOrientationChanged(PaneSplitOrientation value) => StateChanged?.Invoke(this, EventArgs.Empty);
+    partial void OnOrientationChanged(PaneSplitOrientation value) { }
 
     partial void OnRightPaneChanged(PaneViewModel? oldValue, PaneViewModel? newValue)
     {
-        if (oldValue is not null)
-            oldValue.PropertyChanged -= OnPaneDisplayPropertyChanged;
-        if (newValue is not null)
-            newValue.PropertyChanged += OnPaneDisplayPropertyChanged;
-        NotifyPaneDisplayProperties();
     }
 
-    partial void OnIsDualPaneChanged(bool value) => StateChanged?.Invoke(this, EventArgs.Empty);
+    partial void OnIsDualPaneChanged(bool value) { }
 
-    partial void OnTintChanged(Color? value) => StateChanged?.Invoke(this, EventArgs.Empty);
+    partial void OnTintChanged(Color? value) { }
 
     public void SetActivePane(PaneViewModel pane)
     {
@@ -331,7 +302,6 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         var rightPath = RightPane.CurrentPath;
         LeftPane.NavigateTo(rightPath);
         RightPane.NavigateTo(leftPath);
-        StateChanged?.Invoke(this, EventArgs.Empty);
     }
 
     [RelayCommand(CanExecute = nameof(IsDualPane))]
@@ -440,7 +410,6 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         pane.OpenInOtherPaneRequested -= OnOpenInOtherPaneRequested;
         pane.PinPathRequested -= OnPanePinPathRequested;
         pane.SelectionChanged -= OnPaneSelectionChanged;
-        pane.PropertyChanged -= OnPaneDisplayPropertyChanged;
     }
 
     public void RefreshFolderColorBindings()

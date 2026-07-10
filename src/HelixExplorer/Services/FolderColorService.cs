@@ -48,8 +48,6 @@ public sealed class FolderColorService : IFolderColorService
         ColorsChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    public IReadOnlyDictionary<string, uint> GetAll() => _colors;
-
     private void Persist()
     {
         var settings = _settingsStore.Load();

@@ -1,10 +1,8 @@
 namespace HelixExplorer.Core.FileSystem;
 
-public sealed class FileVisualData(byte[] png, int width, int height)
+public sealed class FileVisualData(byte[] png)
 {
     public byte[] Png { get; } = png;
-    public int Width { get; } = width;
-    public int Height { get; } = height;
 }
 
 public sealed class FileVisualRequest(string path, bool isDirectory, int size, bool preferThumbnail)

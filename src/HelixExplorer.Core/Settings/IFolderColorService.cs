@@ -9,6 +9,4 @@ public interface IFolderColorService
     void SetColor(string path, uint argb);
 
     void RemoveColor(string path);
-
-    IReadOnlyDictionary<string, uint> GetAll();
 }

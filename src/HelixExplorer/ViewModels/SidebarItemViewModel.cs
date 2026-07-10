@@ -15,7 +15,6 @@ public sealed partial class SidebarItemViewModel : ObservableObject
         SidebarItemKind kind,
         bool isSectionHeader = false,
         bool isSelected = false,
-        KnownFolderKind? knownFolder = null,
         string? toolTip = null)
     {
         Title = title;
@@ -23,7 +22,6 @@ public sealed partial class SidebarItemViewModel : ObservableObject
         Kind = kind;
         IsSectionHeader = isSectionHeader;
         IsSelected = isSelected;
-        KnownFolder = knownFolder;
         ToolTip = toolTip;
     }
 
@@ -34,13 +32,9 @@ public sealed partial class SidebarItemViewModel : ObservableObject
     internal void NotifyFolderColorChanged()
     {
         OnPropertyChanged(nameof(Path));
-        OnPropertyChanged(nameof(ShowsFolderIcon));
     }
 
-    public bool ShowsFolderIcon => Kind is SidebarItemKind.Home or SidebarItemKind.Pinned;
-
     public SidebarItemKind Kind { get; }
-    public KnownFolderKind? KnownFolder { get; }
     public bool IsSectionHeader { get; }
     public bool IsNavigable => !IsSectionHeader && !string.IsNullOrEmpty(Path);
 
@@ -60,8 +54,7 @@ public enum SidebarItemKind
     Home,
     Pinned,
     Drive,
-    Network,
-    Stub
+    Network
 }
 
 public static class SidebarFactory
@@ -101,13 +94,11 @@ public static class SidebarFactory
 
         foreach (var (path, displayName) in mergedPins)
         {
-            KnownFolderKind? knownFolder = null;
             var title = displayName;
             string? toolTip = null;
 
             if (knownByPath.TryGetValue(NormalizePath(path), out var known))
             {
-                knownFolder = known.Kind;
                 title = known.DisplayName;
                 if (known.Kind == KnownFolderKind.RecycleBin)
                     toolTip = "Opens Recycle Bin in File Explorer";
@@ -117,7 +108,6 @@ public static class SidebarFactory
                 title,
                 path,
                 SidebarItemKind.Pinned,
-                knownFolder: knownFolder,
                 isSelected: PathsEqual(path, selectedPath),
                 toolTip: toolTip));
         }
@@ -148,9 +138,6 @@ public static class SidebarFactory
         {
             items.Add(new SidebarItemViewModel("Network", @"\\", SidebarItemKind.Network));
         }
-
-        items.Add(new SidebarItemViewModel("Cloud", null, SidebarItemKind.Section, isSectionHeader: true));
-        items.Add(new SidebarItemViewModel("Tags", null, SidebarItemKind.Section, isSectionHeader: true));
 
         return items;
     }

@@ -30,8 +30,6 @@ public sealed partial class FileOperationReporter : ObservableObject, IFileOpera
 
     public bool HasCompleted => Completed.Count > 0;
 
-    public event Action? ActivityBegan;
-
     public void Begin(FileOperationKind kind, int totalItems, string title)
     {
         HasActive = true;
@@ -39,7 +37,6 @@ public sealed partial class FileOperationReporter : ObservableObject, IFileOpera
         ActiveDetail = string.Empty;
         IsIndeterminate = totalItems <= 0;
         Progress = 0;
-        ActivityBegan?.Invoke();
     }
 
     public void Report(FileOperationProgress progress)

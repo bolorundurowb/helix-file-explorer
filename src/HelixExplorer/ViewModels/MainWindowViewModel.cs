@@ -98,7 +98,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
                     ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
         var settings = _settingsStore.Load();
-        IsSidebarOpen = settings.SidebarOpen;
         SidebarWidth = Math.Clamp(settings.SidebarWidth, 180, 480);
         ShowHiddenFiles = settings.ShowHiddenFiles;
         ShowFileExtensions = settings.ShowFileExtensions;
@@ -133,18 +132,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     public FileOperationReporter OperationReporter { get; }
 
     public bool IsDualPaneActive => SelectedTab?.IsDualPane == true;
-
-    public double SidebarColumnWidth
-    {
-        get => IsSidebarOpen ? SidebarWidth : 0;
-        set
-        {
-            if (!IsSidebarOpen || value <= 0)
-                return;
-
-            SidebarWidth = Math.Clamp(value, 180, 480);
-        }
-    }
 
     public ObservableCollection<CommandItem> FilteredCommands { get; } = new();
 
@@ -256,9 +243,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private string _title = "Helix Explorer";
 
     [ObservableProperty]
-    private bool _isSidebarOpen = true;
-
-    [ObservableProperty]
     private double _sidebarWidth = 240;
 
     [ObservableProperty]
@@ -328,13 +312,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
-        OnPropertyChanged(nameof(SidebarColumnWidth));
-        PersistChromeSettings();
-    }
-
-    partial void OnIsSidebarOpenChanged(bool value)
-    {
-        OnPropertyChanged(nameof(SidebarColumnWidth));
         PersistChromeSettings();
     }
 
@@ -376,7 +353,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private void PersistChromeSettings()
     {
         var settings = _settingsStore.Load();
-        settings.SidebarOpen = IsSidebarOpen;
         settings.SidebarWidth = SidebarWidth;
         settings.Theme = Theme;
         settings.SizeDisplay = SizeDisplay;
@@ -628,7 +604,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _allCommands.Add(new CommandItem("New Tab", "File", vm => vm.NewTabCommand.Execute(null), "Ctrl+T"));
         _allCommands.Add(new CommandItem("Close Tab", "File", vm => vm.CloseSelectedTabCommand.Execute(null), "Ctrl+W"));
         _allCommands.Add(new CommandItem("Toggle Theme", "Appearance", vm => vm.ToggleThemeCommand.Execute(null), "Ctrl+Shift+T"));
-        _allCommands.Add(new CommandItem("Toggle Sidebar", "View", vm => vm.ToggleSidebarCommand.Execute(null), "Ctrl+B"));
         _allCommands.Add(new CommandItem("Toggle Dual Pane", "View", vm => vm.ToggleDualPaneCommand.Execute(null), "Ctrl+D"));
         _allCommands.Add(new CommandItem("Search", "View", vm => vm.FocusSearchCommand.Execute(null), "Ctrl+F"));
         _allCommands.Add(new CommandItem("Settings", "View", vm => vm.OpenSettingsCommand.Execute(null)));
@@ -978,13 +953,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         }
 
         SelectedTab?.ActivePane.NavigateTo(item.Path);
-    }
-
-    [RelayCommand]
-    private void ToggleSidebar()
-    {
-        IsSidebarOpen = !IsSidebarOpen;
-        PersistChromeSettings();
     }
 
     [RelayCommand]

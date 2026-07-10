@@ -125,6 +125,6 @@ public sealed class WinFileVisualProvider : IFileVisualProvider
     {
         using var stream = new MemoryStream();
         bitmap.Save(stream, ImageFormat.Png);
-        return new FileVisualData(stream.ToArray(), bitmap.Width, bitmap.Height);
+        return new FileVisualData(stream.ToArray());
     }
 }

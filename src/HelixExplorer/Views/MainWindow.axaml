@@ -10,7 +10,7 @@
         MinWidth="800" MinHeight="500"
         WindowStartupLocation="CenterScreen"
         ExtendClientAreaToDecorationsHint="True"
-        ExtendClientAreaTitleBarHeightHint="40"
+        ExtendClientAreaTitleBarHeightHint="36"
         WindowDecorations="Full"
         Background="{DynamicResource HelixChromeBrush}">
 
@@ -25,7 +25,6 @@
 
     <Window.KeyBindings>
         <KeyBinding Gesture="Ctrl+Shift+P" Command="{Binding ToggleCommandPaletteCommand}" />
-        <KeyBinding Gesture="Ctrl+B" Command="{Binding ToggleSidebarCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+T" Command="{Binding ToggleThemeCommand}" />
         <KeyBinding Gesture="Ctrl+T" Command="{Binding NewTabCommand}" />
         <KeyBinding Gesture="Ctrl+W" Command="{Binding CloseSelectedTabCommand}" />
@@ -44,14 +43,13 @@
     <Grid>
         <Grid>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="{Binding SidebarColumnWidth, Mode=TwoWay}" MinWidth="0" MaxWidth="480" />
+                <ColumnDefinition Width="{Binding SidebarWidth, Mode=TwoWay}" MinWidth="180" MaxWidth="480" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
             <Border x:Name="SidebarBorder"
                     Grid.Column="0"
                     Background="{DynamicResource HelixSidebarBrush}"
-                    IsVisible="{Binding IsSidebarOpen}"
                     BorderBrush="{DynamicResource HelixBorderColor}"
                     BorderThickness="0,0,1,0">
                 <DockPanel>
@@ -144,16 +142,15 @@
             <GridSplitter Grid.Column="1"
                           Width="4"
                           ResizeDirection="Columns"
-                          Background="Transparent"
-                          IsVisible="{Binding IsSidebarOpen}" />
+                          Background="Transparent" />
 
             <DockPanel Grid.Column="2" LastChildFill="True">
 
         <!-- Tab Strip: right padding reserves the full caption-button cluster (3×46px + gap). -->
         <Border DockPanel.Dock="Top"
                 Background="{DynamicResource HelixTabStripBrush}"
-                Padding="8,4,192,0"
-                Height="40"
+                Padding="8,0,192,0"
+                Height="36"
                 WindowDecorationProperties.ElementRole="TitleBar">
             <Grid ColumnDefinitions="*,Auto">
                 <ListBox x:Name="TabStrip"
@@ -346,11 +343,6 @@
                             Command="{Binding ToggleThemeCommand}"
                             Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
                         <PathIcon Data="M12,18C11.11,18 10.26,17.8 9.5,17.45C11.56,16.5 13,14.42 13,12C13,9.58 11.56,7.5 9.5,6.55C10.26,6.2 11.11,6 12,6A6,6 0 0,1 18,12A6,6 0 0,1 12,18M20,8.69V4H15.31L12,0.69L8.69,4H4V8.69L0.69,12L4,15.31V20H8.69L12,23.31L15.31,20H20V15.31L23.31,12L20,8.69Z" Width="16" Height="16" />
-                    </Button>
-                    <Button ToolTip.Tip="Toggle sidebar (Ctrl+B)"
-                            Command="{Binding ToggleSidebarCommand}"
-                            Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
-                        <PathIcon Data="M3,3H21V21H3V3M5,5V19H9V5H5Z" Width="16" Height="16" />
                     </Button>
                 </StackPanel>
             </Grid>

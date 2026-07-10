@@ -12,11 +12,3 @@ public sealed record FileOperationProgress(
     int TotalItems,
     string? CurrentPath,
     FileOperationKind Kind);
-
-public enum FileOperationPhase
-{
-    None,
-    InProgress,
-    Completed,
-    Failed
-}

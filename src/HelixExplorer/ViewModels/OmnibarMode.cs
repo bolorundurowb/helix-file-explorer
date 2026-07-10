@@ -4,6 +4,5 @@ public enum OmnibarMode
 {
     Path,
     Search,
-    Home,
-    Settings
+    Home
 }

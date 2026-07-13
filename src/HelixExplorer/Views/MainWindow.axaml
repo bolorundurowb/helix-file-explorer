@@ -50,7 +50,7 @@
     <Grid>
         <Grid>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="{Binding SidebarWidth, Mode=TwoWay}" MinWidth="160" MaxWidth="480" />
+                <ColumnDefinition  Width="{Binding SidebarWidth, Mode=TwoWay}" MinWidth="200" MaxWidth="450" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>

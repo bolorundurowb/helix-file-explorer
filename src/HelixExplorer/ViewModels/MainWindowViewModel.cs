@@ -122,7 +122,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
                     ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
         var settings = _settingsStore.Load();
-        SidebarWidth = Math.Clamp(settings.SidebarWidth, 160, 480);
+        SidebarWidth = Math.Clamp(settings.SidebarWidth, 200, 450);
         ShowHiddenFiles = settings.ShowHiddenFiles;
         ShowFileExtensions = settings.ShowFileExtensions;
         Theme = settings.Theme;
@@ -215,7 +215,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public void SyncSidebarWidth(double width)
     {
-        var clamped = Math.Clamp(width, 160, 480);
+        var clamped = Math.Clamp(width, 200, 450);
         if (Math.Abs(clamped - SidebarWidth) <= double.Epsilon)
             return;
 
@@ -340,7 +340,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private string _title = "Helix Explorer";
 
     [ObservableProperty]
-    private double _sidebarWidth = 200;
+    private double _sidebarWidth = 300;
 
     [ObservableProperty]
     private LayoutMode _defaultViewMode = LayoutMode.Details;
@@ -425,7 +425,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     partial void OnSidebarWidthChanged(double value)
     {
-        var clamped = Math.Clamp(value, 160, 480);
+        var clamped = Math.Clamp(value, 200, 450);
         if (Math.Abs(clamped - value) > double.Epsilon)
         {
             SidebarWidth = clamped;

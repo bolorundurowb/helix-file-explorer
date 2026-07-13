@@ -1,5 +1,3 @@
-using System.Text;
-
 namespace HelixExplorer.Core.Git;
 
 /// <summary>Parses <c>git status --porcelain=v2 --branch</c> output into an aggregate + file map.</summary>

@@ -7,7 +7,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
-using HelixExplorer.Core.Filtering;
 using HelixExplorer.Core.Formatting;
 using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Infrastructure;

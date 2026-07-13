@@ -1,6 +1,5 @@
 using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
-using HelixExplorer.ViewModels;
 
 namespace HelixExplorer.ViewModels.Pane;
 

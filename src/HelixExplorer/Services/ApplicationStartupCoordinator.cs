@@ -1,5 +1,4 @@
 using Avalonia;
-using Avalonia.Controls;
 using HelixExplorer.Core.Settings;
 using HelixExplorer.Core.Theming;
 using HelixExplorer.ViewModels;
@@ -15,6 +14,7 @@ namespace HelixExplorer.Services;
 public sealed class ApplicationStartupCoordinator(
     ISettingsStore settingsStore,
     IThemeService themeService,
+    IUiFontService uiFontService,
     IAccentBrushService accentBrushes,
     IFolderColorService folderColors)
     : IDisposable
@@ -26,6 +26,7 @@ public sealed class ApplicationStartupCoordinator(
         var settings = settingsStore.Load();
 
         themeService.ApplyTheme(settings.Theme);
+        uiFontService.ApplyFont(settings.UiFont);
         accentBrushes.ApplyCustomAccent(settings.AccentColorArgb);
         themeService.ThemeChanged += _ => accentBrushes.ApplyCustomAccent(accentBrushes.CustomAccentArgb);
 

@@ -1,6 +1,3 @@
-using Avalonia.Controls;
-using Avalonia.Controls.ApplicationLifetimes;
-using HelixExplorer.Core.Session;
 using HelixExplorer.ViewModels;
 using HelixExplorer.Views;
 using Microsoft.Extensions.DependencyInjection;

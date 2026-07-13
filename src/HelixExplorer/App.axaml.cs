@@ -66,6 +66,7 @@ public partial class App : Application
         services.AddSingleton<ISettingsStore, JsonSettingsStore>();
         services.AddSingleton<ISessionStore, JsonSessionStore>();
         services.AddSingleton<IThemeService, AvaloniaThemeService>();
+        services.AddSingleton<IUiFontService, AvaloniaUiFontService>();
         services.AddSingleton<IAccentBrushService, AvaloniaAccentBrushService>();
         services.AddSingleton<IClipboardService, InternalClipboardService>();
         services.AddSingleton<IOsFileClipboard, AvaloniaOsFileClipboard>();

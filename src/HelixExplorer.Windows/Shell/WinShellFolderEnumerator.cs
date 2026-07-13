@@ -1,8 +1,6 @@
-using System.Collections.ObjectModel;
 using System.Runtime.InteropServices;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Models;
-using HelixExplorer.Windows.Shell;
 using Microsoft.Extensions.Logging;
 
 namespace HelixExplorer.Windows.Shell;

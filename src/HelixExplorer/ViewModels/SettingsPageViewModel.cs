@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Reflection;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using HelixExplorer.Core.Theming;
 
 namespace HelixExplorer.ViewModels;
 
@@ -37,6 +38,8 @@ public sealed partial class SettingsPageViewModel : ObservableObject
     public string CopyrightNotice { get; }
 
     public ObservableCollection<SettingsSection> Sections { get; }
+
+    public IReadOnlyList<UiFontOption> UiFontOptions => UiFontCatalog.Options;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SelectedTitle))]

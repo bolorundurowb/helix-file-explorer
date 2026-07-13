@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using HelixExplorer.ViewModels;
 
 namespace HelixExplorer.ViewModels.Pane;
 

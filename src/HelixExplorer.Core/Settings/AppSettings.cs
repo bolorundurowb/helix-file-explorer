@@ -6,6 +6,7 @@ namespace HelixExplorer.Core.Settings;
 public sealed class AppSettings
 {
     public ThemeMode Theme { get; set; } = ThemeMode.System;
+    public UiFontFamily UiFont { get; set; } = UiFontFamily.System;
     public double SidebarWidth { get; set; } = 200;
     public SizeDisplayMode SizeDisplay { get; set; } = SizeDisplayMode.Binary;
     public bool ShowHiddenFiles { get; set; }

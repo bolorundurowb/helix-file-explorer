@@ -22,6 +22,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly ISettingsStore _settingsStore;
     private readonly ISessionStore _sessionStore;
     private readonly IThemeService _themeService;
+    private readonly IUiFontService _uiFontService;
     private readonly IAccentBrushService _accentBrushes;
     private readonly IFileSystemProvider _fileSystem;
     private readonly IQuickAccessProvider _quickAccess;
@@ -63,6 +64,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         ISettingsStore settingsStore,
         ISessionStore sessionStore,
         IThemeService themeService,
+        IUiFontService uiFontService,
         IAccentBrushService accentBrushes,
         IFileSystemProvider fileSystem,
         IQuickAccessProvider quickAccess,
@@ -89,6 +91,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _settingsStore = settingsStore;
         _sessionStore = sessionStore;
         _themeService = themeService;
+        _uiFontService = uiFontService;
         _accentBrushes = accentBrushes;
         _fileSystem = fileSystem;
         _quickAccess = quickAccess;
@@ -123,6 +126,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         ShowHiddenFiles = settings.ShowHiddenFiles;
         ShowFileExtensions = settings.ShowFileExtensions;
         Theme = settings.Theme;
+        UiFont = settings.UiFont;
         SizeDisplay = settings.SizeDisplay;
         DefaultViewMode = settings.DefaultViewMode;
         DefaultThumbnailSize = Math.Clamp(settings.DefaultThumbnailSize, PaneViewModel.MinThumbnailSize, PaneViewModel.MaxThumbnailSize);
@@ -366,6 +370,22 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private ThemeMode _theme = ThemeMode.System;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SelectedUiFontOption))]
+    private UiFontFamily _uiFont = UiFontFamily.System;
+
+    public UiFontOption SelectedUiFontOption
+    {
+        get => UiFontCatalog.Options.First(option => option.Value == UiFont);
+        set
+        {
+            if (value is null || value.Value == UiFont)
+                return;
+
+            UiFont = value.Value;
+        }
+    }
+
+    [ObservableProperty]
     private SizeDisplayMode _sizeDisplay = SizeDisplayMode.Binary;
 
     public event Action<SizeDisplayMode>? SizeDisplayChanged;
@@ -387,6 +407,13 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _themeService.ApplyTheme(value);
         PersistChromeSettings();
         _accentBrushes.ApplyCustomAccent(AccentColorArgb);
+    }
+
+    partial void OnUiFontChanged(UiFontFamily value)
+    {
+        _uiFontService.ApplyFont(value);
+        PersistChromeSettings();
+        OnPropertyChanged(nameof(SelectedUiFontOption));
     }
 
     partial void OnSizeDisplayChanged(SizeDisplayMode value)
@@ -448,6 +475,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         var settings = _settingsStore.Load();
         settings.SidebarWidth = SidebarWidth;
         settings.Theme = Theme;
+        settings.UiFont = UiFont;
         settings.SizeDisplay = SizeDisplay;
         settings.DefaultViewMode = DefaultViewMode;
         settings.DefaultThumbnailSize = DefaultThumbnailSize;

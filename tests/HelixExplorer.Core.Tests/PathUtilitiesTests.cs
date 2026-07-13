@@ -1,4 +1,3 @@
-using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
 using Xunit;
 

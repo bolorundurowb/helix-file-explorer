@@ -4,7 +4,6 @@ using Microsoft.Extensions.Logging;
 using SharpCompress.Archives;
 using SharpCompress.Archives.Zip;
 using SharpCompress.Common;
-using SharpCompress.Writers;
 using SharpCompress.Writers.Zip;
 
 namespace HelixExplorer.Core.Archives;

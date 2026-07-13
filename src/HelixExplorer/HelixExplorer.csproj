@@ -26,4 +26,8 @@
     <ProjectReference Include="..\HelixExplorer.Core\HelixExplorer.Core.csproj" />
     <ProjectReference Include="..\HelixExplorer.Windows\HelixExplorer.Windows.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\Fonts\**\*.ttf" />
+  </ItemGroup>
 </Project>

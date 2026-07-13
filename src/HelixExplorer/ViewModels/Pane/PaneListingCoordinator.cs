@@ -2,7 +2,6 @@ using HelixExplorer.Core.Filtering;
 using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Sorting;
-using HelixExplorer.ViewModels;
 
 namespace HelixExplorer.ViewModels.Pane;
 

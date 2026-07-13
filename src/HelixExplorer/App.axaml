@@ -101,8 +101,8 @@
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 
-            <!-- Files-aligned typography: default control font is Segoe UI Variable on Windows. -->
-            <FontFamily x:Key="ContentControlThemeFontFamily">Segoe UI Variable Text, Segoe UI, Inter</FontFamily>
+            <!-- Applied at startup from saved settings via IUiFontService. -->
+            <FontFamily x:Key="ContentControlThemeFontFamily">Segoe UI Variable Text, Segoe UI</FontFamily>
 
             <CornerRadius x:Key="HelixContentCornerRadius">8</CornerRadius>
             <CornerRadius x:Key="HelixMenuCornerRadius">8</CornerRadius>

@@ -1,7 +1,6 @@
 using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Models;
-using HelixExplorer.ViewModels;
 using HelixExplorer.ViewModels.Pane;
 using Xunit;
 

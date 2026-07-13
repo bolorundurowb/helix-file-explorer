@@ -22,6 +22,7 @@ public class AppSettingsTests
         var settings = new AppSettings();
 
         Assert.Equal(ThemeMode.System, settings.Theme);
+        Assert.Equal(UiFontFamily.System, settings.UiFont);
         Assert.Equal(200, settings.SidebarWidth);
         Assert.Equal(SizeDisplayMode.Binary, settings.SizeDisplay);
         Assert.True(settings.ShowFileExtensions);
@@ -38,6 +39,7 @@ public class AppSettingsTests
         var original = new AppSettings
         {
             Theme = ThemeMode.Dark,
+            UiFont = UiFontFamily.DmSans,
             SidebarWidth = 280,
             SizeDisplay = SizeDisplayMode.Decimal,
             ShowHiddenFiles = true,
@@ -58,6 +60,7 @@ public class AppSettingsTests
 
         Assert.NotNull(loaded);
         Assert.Equal(ThemeMode.Dark, loaded.Theme);
+        Assert.Equal(UiFontFamily.DmSans, loaded.UiFont);
         Assert.Equal(280, loaded.SidebarWidth);
         Assert.Equal(SizeDisplayMode.Decimal, loaded.SizeDisplay);
         Assert.True(loaded.ShowHiddenFiles);

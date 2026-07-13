@@ -106,6 +106,25 @@
                         </Grid>
                     </Border>
                     <Border Classes="settingsRow">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Text="Font" FontSize="14" />
+                                <TextBlock Text="System uses the platform default UI font."
+                                           FontSize="12" Opacity="0.6" />
+                            </StackPanel>
+                            <ComboBox Grid.Column="1"
+                                      MinWidth="180"
+                                      ItemsSource="{Binding UiFontOptions}"
+                                      SelectedItem="{Binding Main.SelectedUiFontOption, Mode=TwoWay}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="theme:UiFontOption">
+                                        <TextBlock Text="{Binding Label}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </Grid>
+                    </Border>
+                    <Border Classes="settingsRow">
                         <StackPanel Spacing="10">
                             <TextBlock Text="Background colour" FontSize="14" />
                             <WrapPanel Orientation="Horizontal">

@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using HelixExplorer.Core.Infrastructure;
 using Microsoft.Extensions.Logging;
 using Xunit;

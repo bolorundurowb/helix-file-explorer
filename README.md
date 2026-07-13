@@ -1,6 +1,15 @@
 # Helix Explorer
 
+[![Build and Test](https://github.com/bolorundurowb/helix-explorer/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/bolorundurowb/helix-explorer/actions/workflows/build-and-test.yml)
+
 A modern Windows file manager built with Avalonia and .NET 10. Helix Explorer provides a Files-inspired experience with dual-pane browsing, tabs, archives, Git status, and deep Windows shell integration.
+
+> **AI Notice:** This project was built with significant assistance from AI coding assistants.
+
+
+## Why Helix Explorer?
+
+I built Helix Explorer after experiencing persistent performance issues with the [Files](https://files.community/) app even on powerful hardware. Helix Explorer is my attempt at a faster, more responsive alternative (specifically by replacing WinUI 3 with Avalonia UI). Feedback and contributions are welcome.
 
 ## Requirements
 
@@ -58,10 +67,10 @@ dotnet run --project src/HelixExplorer -- --path "C:\Users"
 | Ctrl+Shift+N | New folder |
 | Ctrl+Shift+P | Command palette |
 
-## Performance
-
-See [docs/performance-checkpoint.md](docs/performance-checkpoint.md) for manual benchmarking notes.
-
 ## License
 
 GPL-3.0 — see [LICENSE](LICENSE).
+
+---
+
+*Portions of this project were developed with AI assistance.*

@@ -945,7 +945,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         RefreshHomeDashboard();
         Title = SelectedTab is null || string.IsNullOrEmpty(SelectedTab.Title)
             ? "Helix Explorer"
-            : $"{SelectedTab.Title} — Helix Explorer";
+            : $"{SelectedTab.Title} - Helix Explorer";
         OnPropertyChanged(nameof(ActivePane));
         OnPropertyChanged(nameof(IsDualPaneActive));
         OnPropertyChanged(nameof(IsBrowserTab));

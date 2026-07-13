@@ -1,0 +1,69 @@
+# yaml-language-server: $schema=https://bolorundurowb.github.io/PolyInstall/schema/v1.json
+metadata:
+  name: Helix Explorer
+  version: "${HELIX_VERSION:-0.1.0}"
+  id: com.bolorundurowb.helix-explorer
+  publisher: Winner-Timothy Bolorunduro
+
+build:
+  output_dir: dist
+  output_name: "{name}-{version}-{target}"
+  compression: brotli
+  targets:
+    - windows-x64
+  windows:
+    install_scope: user
+    register_arp: true
+
+ui:
+  theme: system
+  logo_path: assets/helix-explorer-logo.svg
+  wizard_steps:
+    - type: welcome
+      title: Welcome to Helix Explorer
+    - type: eula
+      title: License Agreement
+      source: LICENSE
+    - type: destination
+      title: Choose Install Location
+      default_path: "{ProgramFiles}/Helix Explorer"
+    - type: progress
+      title: Installing Helix Explorer
+    - type: finish
+      title: Installation Complete
+
+files:
+  - source_dir: publish/win-x64
+    include:
+      - "**/*"
+    exclude:
+      - "**/*.pdb"
+      - "**/*.xml"
+  - source_dir: .
+    include:
+      - assets/**/*.svg
+      - assets/**/*.png
+      - LICENSE
+
+tasks:
+  post_install:
+    - action: create_shortcut
+      parameters:
+        target_path: "{AppDir}\\HelixExplorer.exe"
+        name: Helix Explorer
+        location: desktop
+        description: A modern Windows file manager
+    - action: create_shortcut
+      parameters:
+        target_path: "{AppDir}\\HelixExplorer.exe"
+        name: Helix Explorer
+        location: start_menu
+        description: A modern Windows file manager
+
+  pre_uninstall:
+    - action: write_registry
+      parameters:
+        key_path: "HKCU\\Software\\Helix Explorer"
+        value_name: UninstallStarted
+        value: "true"
+        value_kind: string

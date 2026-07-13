@@ -1,0 +1,15 @@
+<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <path fill="#0d223f" d="M48 20H30l-4-4H16c-2.2 0-4 1.8-4 4v8h40v-4c0-2.2-1.8-4-4-4"/>
+  <path fill="#3f2b96" d="M48 20H16c-2.2 0-4 1.8-4 4v20c0 2.2 1.8 4 4 4h32c2.2 0 4-1.8 4-4V24c0-2.2-1.8-4-4-4"/>
+  <g fill="none" stroke-width="3" stroke-linecap="round" stroke-miterlimit="10">
+    <path stroke="#e6ff00" d="M18.42 57.57s6.82-5 3.59-16.44S25 25 25 25s4.11-5.22 15.4-2.61 14.17-.87 16.62-2.7" transform="translate(23.2 25.375)scale(.275)"/>
+    <path stroke="#ff00e6" d="M45.58 6.43S38.76 11.48 42 22.87s-3 16.18-3 16.18-4.11 5.22-15.4 2.61-14.15.87-16.6 2.7" transform="translate(23.2 25.375)scale(.275)"/>
+    <path stroke="#e6ff00" d="M21.62 30.63 32.27 42.2" transform="translate(23.2 25.375)scale(.275)"/>
+    <path stroke="#ff00e6" d="m25.18 24.73 13.64 14.54" transform="translate(23.2 25.375)scale(.275)"/>
+    <path stroke="#e6ff00" d="m31.6 21.82 10.74 11.67" transform="translate(23.2 25.375)scale(.275)"/>
+    <path stroke="#ff00e6" d="m41.4 13.96 8.42 9.15" transform="translate(23.2 25.375)scale(.275)"/>
+    <path stroke="#e6ff00" d="m44.08 7.98 11.64 12.66" transform="translate(23.2 25.375)scale(.275)"/>
+    <path stroke="#ff00e6" d="m8.3 43.34 11.59 12.73" transform="translate(23.2 25.375)scale(.275)"/>
+    <path stroke="#e6ff00" d="m13.64 40.95 8.85 9.62" transform="translate(23.2 25.375)scale(.275)"/>
+  </g>
+</svg>

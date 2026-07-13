@@ -257,8 +257,8 @@ public sealed class WinTerminalLauncher : ITerminalLauncher
     {
         try
         {
-            Process.Start(startInfo);
-            return true;
+            using var process = Process.Start(startInfo);
+            return process is not null;
         }
         catch
         {

@@ -1,24 +1,34 @@
 namespace HelixExplorer.Core.Git;
 
 /// <summary>
-/// Snapshot from a single <c>git status --porcelain=v2 --branch</c> invocation.
+/// Snapshot from a single <c>git status --porcelain=v2 -z --branch</c> invocation.
 /// File keys are repo-relative paths normalized with forward slashes and no trailing slash.
 /// </summary>
-public sealed class GitStatusSnapshot(
-    GitStatus status,
-    string? repoRoot,
-    IReadOnlyDictionary<string, GitFileStatus> files)
+public sealed class GitStatusSnapshot
 {
     public static readonly GitStatusSnapshot Empty = new(
         GitStatus.Empty,
         repoRoot: null,
-        files: new Dictionary<string, GitFileStatus>(0, StringComparer.OrdinalIgnoreCase));
+        new Dictionary<string, GitFileStatus>(0, StringComparer.OrdinalIgnoreCase));
 
-    public GitStatus Status { get; } = status;
+    private readonly IReadOnlyDictionary<string, GitFileStatus> _folderStatuses;
 
-    public string? RepoRoot { get; } = repoRoot;
+    public GitStatusSnapshot(
+        GitStatus status,
+        string? repoRoot,
+        IReadOnlyDictionary<string, GitFileStatus> files)
+    {
+        Status = status;
+        RepoRoot = repoRoot;
+        Files = files;
+        _folderStatuses = BuildFolderIndex(files);
+    }
 
-    public IReadOnlyDictionary<string, GitFileStatus> Files { get; } = files;
+    public GitStatus Status { get; }
+
+    public string? RepoRoot { get; }
+
+    public IReadOnlyDictionary<string, GitFileStatus> Files { get; }
 
     public bool IsRepository => Status.IsRepository && !string.IsNullOrEmpty(RepoRoot);
 
@@ -34,19 +44,30 @@ public sealed class GitStatusSnapshot(
         if (Files.TryGetValue(relative, out var exact))
             return exact;
 
-        // Folders inherit the strongest status of any child.
         var prefix = relative.EndsWith('/') ? relative : relative + "/";
-        var best = GitFileStatus.None;
-        foreach (var (path, status) in Files)
+        if (_folderStatuses.TryGetValue(prefix, out var folderStatus))
+            return folderStatus;
+
+        return GitFileStatus.None;
+    }
+
+    private static Dictionary<string, GitFileStatus> BuildFolderIndex(IReadOnlyDictionary<string, GitFileStatus> files)
+    {
+        var index = new Dictionary<string, GitFileStatus>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (path, status) in files)
         {
-            if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                continue;
-            best = Max(best, status);
-            if (best == GitFileStatus.Conflict)
-                break;
+            var parts = path.Split('/');
+            for (var i = 1; i < parts.Length; i++)
+            {
+                var prefix = string.Join("/", parts, 0, i) + "/";
+                if (index.TryGetValue(prefix, out var existing))
+                    index[prefix] = Max(existing, status);
+                else
+                    index[prefix] = status;
+            }
         }
 
-        return best;
+        return index;
     }
 
     private static string? TryMakeRelative(string repoRoot, string fullPath)
@@ -65,7 +86,6 @@ public sealed class GitStatusSnapshot(
 
     internal static GitFileStatus Max(GitFileStatus a, GitFileStatus b)
     {
-        // Conflict > Modified > AddedOrStaged > Untracked > None
         static int Rank(GitFileStatus s) => s switch
         {
             GitFileStatus.Conflict => 4,

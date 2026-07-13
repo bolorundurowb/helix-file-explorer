@@ -21,27 +21,27 @@ public sealed class VirtualizingFileGrid : TemplatedControl
     public static readonly StyledProperty<IDataTemplate?> ItemTemplateProperty =
         AvaloniaProperty.Register<VirtualizingFileGrid, IDataTemplate?>(nameof(ItemTemplate));
 
-    private ItemsControl? _rows;
-    private ScrollViewer? _scrollViewer;
+    private ListBox? _rows;
     private INotifyCollectionChanged? _itemsSubscription;
     private bool _rebuildScheduled;
     private int _lastColumnCount = -1;
     private int _lastItemCount;
     private string _lastItemsPathsKey = string.Empty;
     private readonly Queue<Control> _itemContainerPool = new();
+    private readonly HashSet<Control> _pooledSet = new();
 
     static VirtualizingFileGrid()
     {
         ItemsSourceProperty.Changed.AddClassHandler<VirtualizingFileGrid>((g, e) =>
         {
             g.UpdateItemsSubscription(e.OldValue as IEnumerable, e.NewValue as IEnumerable);
-            g._itemContainerPool.Clear();
+            g.PoolClear();
             g.ScheduleRebuildRows();
         });
         ItemSizeProperty.Changed.AddClassHandler<VirtualizingFileGrid>((g, _) => g.ScheduleRebuildRows());
         ItemTemplateProperty.Changed.AddClassHandler<VirtualizingFileGrid>((g, _) =>
         {
-            g._itemContainerPool.Clear();
+            g.PoolClear();
             g.ApplyRowTemplate();
         });
     }
@@ -67,8 +67,7 @@ public sealed class VirtualizingFileGrid : TemplatedControl
     protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
     {
         base.OnApplyTemplate(e);
-        _rows = e.NameScope.Find<ItemsControl>("PART_Rows");
-        _scrollViewer = e.NameScope.Find<ScrollViewer>("PART_ScrollViewer");
+        _rows = e.NameScope.Find<ListBox>("PART_Rows");
         ApplyRowTemplate();
         UpdateItemsSubscription(null, ItemsSource);
         ScheduleRebuildRows();
@@ -77,7 +76,7 @@ public sealed class VirtualizingFileGrid : TemplatedControl
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         UnsubscribeFromItems();
-        _itemContainerPool.Clear();
+        PoolClear();
         base.OnDetachedFromVisualTree(e);
     }
 
@@ -145,7 +144,7 @@ public sealed class VirtualizingFileGrid : TemplatedControl
                         if (child is Control c)
                         {
                             c.DataContext = null;
-                            _itemContainerPool.Enqueue(c);
+                            PoolEnqueue(c);
                         }
                     }
                     s.Children.Clear();
@@ -159,16 +158,7 @@ public sealed class VirtualizingFileGrid : TemplatedControl
                 {
                     for (int i = currentChildCount; i < items.Count; i++)
                     {
-                        Control? content = null;
-                        if (_itemContainerPool.Count > 0)
-                        {
-                            content = _itemContainerPool.Dequeue();
-                        }
-                        else
-                        {
-                            content = ItemTemplate.Build(items[i]);
-                        }
-
+                        var content = PoolDequeue() ?? ItemTemplate.Build(items[i]);
                         if (content is not null)
                         {
                             s.Children.Add(content);
@@ -184,7 +174,7 @@ public sealed class VirtualizingFileGrid : TemplatedControl
                         if (child is Control c)
                         {
                             c.DataContext = null;
-                            _itemContainerPool.Enqueue(c);
+                            PoolEnqueue(c);
                         }
                     }
                 }
@@ -215,7 +205,7 @@ public sealed class VirtualizingFileGrid : TemplatedControl
                         if (child is Control c)
                         {
                             c.DataContext = null;
-                            _itemContainerPool.Enqueue(c);
+                            PoolEnqueue(c);
                         }
                     }
                     s.Children.Clear();
@@ -243,7 +233,8 @@ public sealed class VirtualizingFileGrid : TemplatedControl
             return;
         }
 
-        var viewportWidth = _scrollViewer?.Viewport.Width ?? Bounds.Width;
+        // ListBox scrolls internally; use this control's bounds as the viewport width.
+        var viewportWidth = Bounds.Width;
         if (viewportWidth <= 0)
             viewportWidth = 800;
 
@@ -282,6 +273,30 @@ public sealed class VirtualizingFileGrid : TemplatedControl
 
     private static string GetItemPathKey(object item)
         => item is EntryItemViewModel entry ? entry.FullPath : item.GetHashCode().ToString();
+
+    private void PoolEnqueue(Control control)
+    {
+        if (_pooledSet.Add(control))
+            _itemContainerPool.Enqueue(control);
+    }
+
+    private Control? PoolDequeue()
+    {
+        if (_itemContainerPool.Count > 0)
+        {
+            var control = _itemContainerPool.Dequeue();
+            _pooledSet.Remove(control);
+            return control;
+        }
+
+        return null;
+    }
+
+    private void PoolClear()
+    {
+        _itemContainerPool.Clear();
+        _pooledSet.Clear();
+    }
 
     private sealed class GridRow(IReadOnlyList<object> items)
     {

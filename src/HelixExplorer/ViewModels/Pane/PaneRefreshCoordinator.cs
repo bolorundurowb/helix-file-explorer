@@ -81,7 +81,6 @@ public sealed class PaneRefreshCoordinator(
         var cts = new CancellationTokenSource();
         _refreshCts = cts;
         try { previous?.Cancel(); } catch (ObjectDisposedException) { }
-        previous?.Dispose();
 
         var token = cts.Token;
         _refreshInFlight = true;
@@ -128,12 +127,12 @@ public sealed class PaneRefreshCoordinator(
             logger.LogDebug("Refresh '{Path}' listed {Count} items in {ElapsedMs} ms",
                 path, listing.Count, sw.ElapsedMilliseconds);
 
-            if (token.IsCancellationRequested || host.IsDisposed || generation != _refreshGeneration)
+            if (IsTokenCancelled(token) || host.IsDisposed || generation != _refreshGeneration)
                 return;
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                if (token.IsCancellationRequested || host.IsDisposed || generation != _refreshGeneration)
+                if (IsTokenCancelled(token) || host.IsDisposed || generation != _refreshGeneration)
                     return;
 
                 var result = host.ApplySortAndPublish(new ListingPublishRequest
@@ -159,7 +158,7 @@ public sealed class PaneRefreshCoordinator(
                 RequestEntryVisuals(host, result.VisualTargets);
             });
 
-            if (token.IsCancellationRequested || host.IsDisposed || generation != _refreshGeneration)
+            if (IsTokenCancelled(token) || host.IsDisposed || generation != _refreshGeneration)
                 return;
 
             StartGitStatusRefresh(host, generation, path);
@@ -221,8 +220,8 @@ public sealed class PaneRefreshCoordinator(
         if (previous is null)
             return;
 
+        // Cancel only — the owning RefreshAsync finally disposes the CTS.
         try { previous.Cancel(); } catch (ObjectDisposedException) { }
-        previous.Dispose();
     }
 
     public void CancelGitRefresh()
@@ -272,7 +271,7 @@ public sealed class PaneRefreshCoordinator(
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                if (token.IsCancellationRequested || host.IsDisposed || generation != _refreshGeneration)
+                if (IsTokenCancelled(token) || host.IsDisposed || generation != _refreshGeneration)
                     return;
                 if (!PathsEqual(path, host.CurrentPath))
                     return;
@@ -299,6 +298,12 @@ public sealed class PaneRefreshCoordinator(
 
     private static bool PathsEqual(string a, string b)
         => PathUtilities.PathsEqual(a, b);
+
+    private static bool IsTokenCancelled(CancellationToken token)
+    {
+        try { return token.IsCancellationRequested; }
+        catch (ObjectDisposedException) { return true; }
+    }
 
     public void Dispose()
     {

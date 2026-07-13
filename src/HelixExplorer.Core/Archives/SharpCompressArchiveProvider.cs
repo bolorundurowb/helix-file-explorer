@@ -260,7 +260,7 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
                         if (seenChildren.Add(tail))
                         {
                             poolList.Add(new FileSystemEntry(
-                                $"{ArchivePath.Scheme}{archivePath}!{filterPrefix}{tail}/",
+                                ArchivePath.Combine(archivePath, filterPrefix + tail + "/"),
                                 tail,
                                 true,
                                 0L,
@@ -271,7 +271,7 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
                     else if (seenChildren.Add(tail))
                     {
                         poolList.Add(new FileSystemEntry(
-                            $"{ArchivePath.Scheme}{archivePath}!{filterPrefix}{tail}",
+                            ArchivePath.Combine(archivePath, filterPrefix + tail),
                             tail,
                             false,
                             entry.Size,
@@ -285,7 +285,7 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
                     if (seenChildren.Add(child))
                     {
                         poolList.Add(new FileSystemEntry(
-                            $"{ArchivePath.Scheme}{archivePath}!{filterPrefix}{child}/",
+                            ArchivePath.Combine(archivePath, filterPrefix + child + "/"),
                             child,
                             true,
                             0L,

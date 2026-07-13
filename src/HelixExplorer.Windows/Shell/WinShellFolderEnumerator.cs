@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Text;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Models;
 using Microsoft.Extensions.Logging;
@@ -64,17 +65,19 @@ public sealed class WinShellFolderEnumerator(ILogger<WinShellFolderEnumerator> l
 
         var folderPtr = IntPtr.Zero;
         var enumPtr = IntPtr.Zero;
+        IShellFolder? folder = null;
+        IEnumIDList? enumIdList = null;
         try
         {
             var iid = ShellIID.IID_IShellFolder;
             if (desktop.BindToObject(pidlFolder, IntPtr.Zero, ref iid, out folderPtr) != 0 || folderPtr == IntPtr.Zero)
                 return entries;
 
-            var folder = (IShellFolder)Marshal.GetObjectForIUnknown(folderPtr);
+            folder = (IShellFolder)Marshal.GetObjectForIUnknown(folderPtr);
             if (folder.EnumObjects(IntPtr.Zero, ShcontFolder | ShcontNonFolder, out enumPtr) != 0 || enumPtr == IntPtr.Zero)
                 return entries;
 
-            var enumIdList = (IEnumIDList)Marshal.GetObjectForIUnknown(enumPtr);
+            enumIdList = (IEnumIDList)Marshal.GetObjectForIUnknown(enumPtr);
             while (true)
             {
                 ct.ThrowIfCancellationRequested();
@@ -101,8 +104,12 @@ public sealed class WinShellFolderEnumerator(ILogger<WinShellFolderEnumerator> l
         }
         finally
         {
+            if (enumIdList is not null)
+                Marshal.ReleaseComObject(enumIdList);
             if (enumPtr != IntPtr.Zero)
                 Marshal.Release(enumPtr);
+            if (folder is not null)
+                Marshal.ReleaseComObject(folder);
             if (folderPtr != IntPtr.Zero)
                 Marshal.Release(folderPtr);
             Shell32Native.SHFree(pidlFolder);
@@ -140,18 +147,14 @@ public sealed class WinShellFolderEnumerator(ILogger<WinShellFolderEnumerator> l
 
     private static string GetDisplayName(IShellFolder folder, IntPtr pidl, uint flags)
     {
-        var hr = folder.GetDisplayNameOf(pidl, flags, out var strPtr);
-        if (hr != 0 || strPtr == IntPtr.Zero)
+        var strret = new STRRET();
+        var hr = folder.GetDisplayNameOf(pidl, flags, out strret);
+        if (hr != 0)
             return string.Empty;
 
-        try
-        {
-            return Marshal.PtrToStringUni(strPtr) ?? string.Empty;
-        }
-        finally
-        {
-            Marshal.FreeCoTaskMem(strPtr);
-        }
+        var sb = new StringBuilder(260);
+        Shell32Native.StrRetToBuf(ref strret, pidl, sb, sb.Capacity);
+        return sb.ToString();
     }
 }
 

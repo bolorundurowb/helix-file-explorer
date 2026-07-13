@@ -1,6 +1,6 @@
 namespace HelixExplorer.Core.Git;
 
-/// <summary>Parses <c>git status --porcelain=v2 --branch</c> output into an aggregate + file map.</summary>
+/// <summary>Parses <c>git status --porcelain=v2 -z --branch</c> output into an aggregate + file map.</summary>
 public static class GitPorcelainParser
 {
     public static GitStatusSnapshot Parse(string output, string? repoRoot)
@@ -17,24 +17,22 @@ public static class GitPorcelainParser
         var hasUpstream = false;
         var files = new Dictionary<string, GitFileStatus>(StringComparer.OrdinalIgnoreCase);
 
-        var lines = output.AsSpan();
-        while (!lines.IsEmpty)
+        var span = output.AsSpan();
+        while (!span.IsEmpty)
         {
-            var newline = lines.IndexOf('\n');
+            var nul = span.IndexOf('\0');
             ReadOnlySpan<char> line;
-            if (newline < 0)
+            if (nul < 0)
             {
-                line = lines;
-                lines = ReadOnlySpan<char>.Empty;
+                line = span;
+                span = ReadOnlySpan<char>.Empty;
             }
             else
             {
-                line = lines[..newline];
-                lines = lines[(newline + 1)..];
+                line = span[..nul];
+                span = span[(nul + 1)..];
             }
 
-            if (line.Length > 0 && line[^1] == '\r')
-                line = line[..^1];
             if (line.IsEmpty)
                 continue;
 
@@ -116,7 +114,6 @@ public static class GitPorcelainParser
 
     private static void CountXy(ReadOnlySpan<char> line, ref int staged, ref int unstaged)
     {
-        // "<type> <XY> ..." — XY are the two chars after the leading type + space.
         if (line.Length < 4)
             return;
 
@@ -136,7 +133,6 @@ public static class GitPorcelainParser
         var x = line[2];
         var y = line[3];
 
-        // Working-tree dirt wins over staged-only.
         if (y is 'M' or 'D' or 'T' or 'R' or 'C' or 'A' or 'U')
             return GitFileStatus.Modified;
 
@@ -153,37 +149,93 @@ public static class GitPorcelainParser
 
     private static string? ExtractUntrackedPath(ReadOnlySpan<char> line)
     {
-        // "? <path>" or "? <path with spaces>"
         if (line.Length < 3 || line[1] != ' ')
             return null;
-        return NormalizePath(line[2..].ToString());
+        return DequotePath(line[2..]);
     }
 
     private static string? ExtractOrdinaryPath(ReadOnlySpan<char> line)
     {
-        // Ordinary / rename / unmerged lines end with the path (rename: path\torig).
-        // Walk fields until the last remaining span for type '1' / 'u', and for '2'
-        // take the substring before the tab.
         var tab = line.IndexOf('\t');
         var body = tab >= 0 ? line[..tab] : line;
 
-        // Skip fixed fields: type, XY, sub, then N octal/hashes depending on type.
-        // Safer: find the last field after a known minimum of tokens.
         var start = FindPathStart(body);
         if (start < 0 || start >= body.Length)
             return null;
 
-        return NormalizePath(body[start..].ToString());
+        return DequotePath(body[start..]);
+    }
+
+    private static string? DequotePath(ReadOnlySpan<char> raw)
+    {
+        if (raw.Length == 0)
+            return string.Empty;
+
+        var s = raw.TrimStart();
+        if (s.Length >= 2 && s[0] == '"' && s[^1] == '"')
+        {
+            var inner = s[1..^1];
+            return UnescapeGitPath(inner);
+        }
+
+        return s.ToString().Replace('\\', '/').TrimEnd('/');
+    }
+
+    private static string? UnescapeGitPath(ReadOnlySpan<char> s)
+    {
+        var bytes = new List<byte>(s.Length);
+        for (var i = 0; i < s.Length; i++)
+        {
+            if (s[i] == '\\' && i + 1 < s.Length)
+            {
+                var next = s[i + 1];
+                if (next >= '0' && next <= '7')
+                {
+                    var octal = next - '0';
+                    i++;
+                    if (i + 1 < s.Length && s[i + 1] >= '0' && s[i + 1] <= '7')
+                    {
+                        octal = octal * 8 + (s[++i] - '0');
+                        if (i + 1 < s.Length && s[i + 1] >= '0' && s[i + 1] <= '7')
+                            octal = octal * 8 + (s[++i] - '0');
+                    }
+                    bytes.Add((byte)octal);
+                }
+                else
+                {
+                    switch (next)
+                    {
+                        case 'n': bytes.Add((byte)'\n'); i++; break;
+                        case 't': bytes.Add((byte)'\t'); i++; break;
+                        case '\\': bytes.Add((byte)'\\'); i++; break;
+                        case '"': bytes.Add((byte)'"'); i++; break;
+                        case 'a': bytes.Add((byte)'\a'); i++; break;
+                        case 'b': bytes.Add((byte)'\b'); i++; break;
+                        case 'f': bytes.Add((byte)'\f'); i++; break;
+                        case 'r': bytes.Add((byte)'\r'); i++; break;
+                        case 'v': bytes.Add((byte)'\v'); i++; break;
+                        default:
+                            bytes.Add((byte)'\\');
+                            bytes.Add((byte)next);
+                            i++;
+                            break;
+                    }
+                }
+            }
+            else
+            {
+                bytes.Add((byte)s[i]);
+            }
+        }
+
+        return System.Text.Encoding.UTF8.GetString(bytes.ToArray()).Replace('\\', '/').TrimEnd('/');
     }
 
     private static int FindPathStart(ReadOnlySpan<char> line)
     {
-        // Porcelain v2 ordinary changed: "1 <XY> <sub> <mH> <mI> <mW> <hH> <hI> <path>"
-        // Rename: "2 <XY> <sub> <mH> <mI> <mW> <hH> <hI> <X><score> <path>"
-        // Unmerged: "u <XY> <sub> <m1> <m2> <m3> <mW> <h1> <h2> <h3> <path>"
         var fieldCount = line[0] switch
         {
-            '1' => 8, // type + 7 fields before path
+            '1' => 8,
             '2' => 9,
             'u' => 10,
             _ => -1
@@ -204,15 +256,6 @@ public static class GitPorcelainParser
             index++;
 
         return index < line.Length ? index : -1;
-    }
-
-    private static string? NormalizePath(string? path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-            return null;
-
-        path = path.Trim().Replace('\\', '/').TrimEnd('/');
-        return path.Length == 0 ? null : path;
     }
 
     private static void Upsert(Dictionary<string, GitFileStatus> files, string? path, GitFileStatus status)

@@ -34,8 +34,11 @@ internal static class Shell32Native
     [DllImport("user32.dll")]
     public static extern IntPtr CreatePopupMenu();
 
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     public static extern bool ShellExecuteEx(ref SHELLEXECUTEINFO lpExecInfo);
+
+    [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)]
+    public static extern int StrRetToBuf(ref STRRET pstr, IntPtr pidl, [MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder pszBuf, int cchBuf);
 }
 
 [ComImport]
@@ -80,7 +83,7 @@ internal interface IShellFolder
         out IntPtr ppv);
 
     [PreserveSig]
-    int GetDisplayNameOf(IntPtr pidl, uint uFlags, out IntPtr pName);
+    int GetDisplayNameOf(IntPtr pidl, uint uFlags, out STRRET pName);
 
     [PreserveSig]
     int SetNameOf(
@@ -104,6 +107,52 @@ internal interface IContextMenu
 
     [PreserveSig]
     int GetCommandString(uint idCmd, uint uType, IntPtr pReserved, out string pName, uint cchMax);
+}
+
+/// <summary>
+/// Extends IContextMenu for owner-drawn / cascading shell submenu messages.
+/// Methods from IContextMenu are redeclared for COM layout.
+/// </summary>
+[ComImport]
+[Guid("000214F4-0000-0000-C000-000000000046")]
+[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface IContextMenu2
+{
+    [PreserveSig]
+    int QueryContextMenu(IntPtr hmenu, uint indexMenu, uint idCmdFirst, uint idCmdLast, uint flags);
+
+    [PreserveSig]
+    int InvokeCommand(ref CMINVOKECOMMANDINFO pici);
+
+    [PreserveSig]
+    int GetCommandString(uint idCmd, uint uType, IntPtr pReserved, out string pName, uint cchMax);
+
+    [PreserveSig]
+    int HandleMenuMsg(uint uMsg, IntPtr wParam, IntPtr lParam);
+}
+
+/// <summary>
+/// Extends IContextMenu2 with HandleMenuMsg2 (menu keyboard / owner-draw).
+/// </summary>
+[ComImport]
+[Guid("BCFCE0C0-EC17-11D0-8D10-00A0C90F2719")]
+[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface IContextMenu3
+{
+    [PreserveSig]
+    int QueryContextMenu(IntPtr hmenu, uint indexMenu, uint idCmdFirst, uint idCmdLast, uint flags);
+
+    [PreserveSig]
+    int InvokeCommand(ref CMINVOKECOMMANDINFO pici);
+
+    [PreserveSig]
+    int GetCommandString(uint idCmd, uint uType, IntPtr pReserved, out string pName, uint cchMax);
+
+    [PreserveSig]
+    int HandleMenuMsg(uint uMsg, IntPtr wParam, IntPtr lParam);
+
+    [PreserveSig]
+    int HandleMenuMsg2(uint uMsg, IntPtr wParam, IntPtr lParam, out IntPtr plResult);
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -136,4 +185,17 @@ internal struct SHELLEXECUTEINFO
     public uint dwHotKey;
     public IntPtr hIconOrMonitor;
     public IntPtr hProcess;
+}
+
+/// <summary>
+/// Shell STRRET union. Must be at least 264 bytes so the shell can write cStr[MAX_PATH]
+/// without corrupting the managed stack when uType is STRRET_CSTR.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 264, CharSet = CharSet.Unicode)]
+internal struct STRRET
+{
+    [FieldOffset(0)] public uint uType;
+    [FieldOffset(4)] public IntPtr pOleStr;
+    [FieldOffset(4)] public IntPtr pStr;
+    [FieldOffset(4)] public uint uOffset;
 }

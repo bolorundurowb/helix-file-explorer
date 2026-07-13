@@ -221,8 +221,8 @@ public static class PathUtilities
         var normalizedInner = inner.Replace(Path.DirectorySeparatorChar, '/').Trim('/');
 
         return string.IsNullOrEmpty(normalizedInner)
-            ? ArchivePath.Scheme + normalizedArchive + "!"
-            : ArchivePath.Scheme + normalizedArchive + "!" + normalizedInner + "/";
+            ? ArchivePath.Mount(normalizedArchive)
+            : ArchivePath.Combine(normalizedArchive, normalizedInner + "/");
     }
 }
 

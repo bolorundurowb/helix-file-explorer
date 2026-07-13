@@ -30,7 +30,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly INetworkLocationProvider _networkLocations;
     private readonly IFileOperationService _fileOps;
     private readonly IClipboardService _clipboard;
-    private readonly IOsFileClipboard _osClipboard;
     private readonly IShellContextMenuService _shellContextMenu;
     private readonly IUiHost _uiHost;
     private readonly IGitProvider _git;
@@ -49,6 +48,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly string _homePath;
     private readonly List<CommandItem> _allCommands = new();
     private readonly List<string> _recentPaths = new();
+    private AppSettings? _cachedSettings;
     private IReadOnlyList<NetworkLocationInfo> _lastNetworkLocations = [];
     private CancellationTokenSource? _networkCts;
     private bool _commandsBuilt;
@@ -72,7 +72,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         INetworkLocationProvider networkLocations,
         IFileOperationService fileOps,
         IClipboardService clipboard,
-        IOsFileClipboard osClipboard,
         IShellContextMenuService shellContextMenu,
         IUiHost uiHost,
         IGitProvider git,
@@ -99,7 +98,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _networkLocations = networkLocations;
         _fileOps = fileOps;
         _clipboard = clipboard;
-        _osClipboard = osClipboard;
         _shellContextMenu = shellContextMenu;
         _uiHost = uiHost;
         _git = git;
@@ -121,7 +119,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _homePath = _quickAccess.GetPath(KnownFolderKind.Home)
                     ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
-        var settings = _settingsStore.Load();
+        var settings = GetSettings();
         SidebarWidth = Math.Clamp(settings.SidebarWidth, 200, 450);
         ShowHiddenFiles = settings.ShowHiddenFiles;
         ShowFileExtensions = settings.ShowFileExtensions;
@@ -178,7 +176,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         if (!_restoreWindowLayout)
             return;
 
-        var settings = _settingsStore.Load();
+        var settings = GetSettings();
         if (settings.WindowWidth is not > 0 || settings.WindowHeight is not > 0)
             return;
 
@@ -198,7 +196,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         if (!_restoreWindowLayout)
             return;
 
-        var settings = _settingsStore.Load();
+        var settings = GetSettings();
         settings.WindowMaximized = window.WindowState == Avalonia.Controls.WindowState.Maximized;
 
         if (window.WindowState == Avalonia.Controls.WindowState.Normal)
@@ -210,7 +208,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         }
 
         settings.SidebarWidth = SidebarWidth;
-        _settingsStore.Save(settings);
+        SaveSettings(settings);
     }
 
     public void SyncSidebarWidth(double width)
@@ -278,7 +276,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private void RebuildSidebar(IReadOnlyList<NetworkLocationInfo> networkLocations)
     {
         var selectedPath = ActivePane?.CurrentPath;
-        var settings = _settingsStore.Load();
+        var settings = GetSettings();
         var items = SidebarFactory.Build(
             _quickAccess,
             _volumes,
@@ -464,15 +462,15 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     private void PersistViewSettings()
     {
-        var settings = _settingsStore.Load();
+        var settings = GetSettings();
         settings.ShowHiddenFiles = ShowHiddenFiles;
         settings.ShowFileExtensions = ShowFileExtensions;
-        _settingsStore.Save(settings);
+        SaveSettings(settings);
     }
 
     private void PersistChromeSettings()
     {
-        var settings = _settingsStore.Load();
+        var settings = GetSettings();
         settings.SidebarWidth = SidebarWidth;
         settings.Theme = Theme;
         settings.UiFont = UiFont;
@@ -482,7 +480,16 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         settings.DefaultDualPane = DefaultDualPane;
         settings.DefaultSplitOrientation = DefaultSplitOrientation;
         settings.AccentColorArgb = AccentColorArgb;
+        SaveSettings(settings);
+    }
+
+    private AppSettings GetSettings()
+        => _cachedSettings ??= _settingsStore.Load();
+
+    private void SaveSettings(AppSettings settings)
+    {
         _settingsStore.Save(settings);
+        _cachedSettings = settings;
     }
 
     private void ApplyViewSettingsToTabs()
@@ -559,7 +566,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             _fileSystem,
             _fileOps,
             _clipboard,
-            _osClipboard,
             _shellContextMenu,
             _uiHost,
             _git,
@@ -568,7 +574,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             _settingsStore,
             _watcherFactory,
             _coordinatorFactory,
-            _operationReporter,
             _quickAccess,
             _dialogs,
             _windowHost,
@@ -688,7 +693,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             return;
 
         var current = Tabs.IndexOf(SelectedTab);
-        var next = (current + delta % Tabs.Count + Tabs.Count) % Tabs.Count;
+        var next = ((current + delta) % Tabs.Count + Tabs.Count) % Tabs.Count;
         SelectedTab = Tabs[next];
     }
 
@@ -1080,7 +1085,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         if (string.IsNullOrEmpty(path) || ActivePane?.IsArchive == true || !Directory.Exists(path))
             return false;
 
-        var settings = _settingsStore.Load();
+        var settings = GetSettings();
         return !PinnedPathHelper.IsPinnedOrDefault(
             settings.PinnedPaths,
             settings.UnpinnedPaths,
@@ -1188,7 +1193,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
             return;
 
-        var settings = _settingsStore.Load();
+        var settings = GetSettings();
         var normalized = NormalizePinnedPath(path);
         settings.UnpinnedPaths.RemoveAll(p =>
             string.Equals(NormalizePinnedPath(p), normalized, StringComparison.OrdinalIgnoreCase));
@@ -1196,7 +1201,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         if (!PinnedPathHelper.IsPinned(settings.PinnedPaths, normalized))
             settings.PinnedPaths.Insert(0, normalized);
 
-        _settingsStore.Save(settings);
+        SaveSettings(settings);
         RebuildSidebar(_lastNetworkLocations);
         SelectedTab?.ActivePane.NotifyPinStateChanged();
     }
@@ -1206,7 +1211,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         if (string.IsNullOrWhiteSpace(path))
             return;
 
-        var settings = _settingsStore.Load();
+        var settings = GetSettings();
         var normalized = NormalizePinnedPath(path);
         settings.PinnedPaths.RemoveAll(p =>
             string.Equals(NormalizePinnedPath(p), normalized, StringComparison.OrdinalIgnoreCase));
@@ -1219,7 +1224,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             settings.UnpinnedPaths.Add(normalized);
         }
 
-        _settingsStore.Save(settings);
+        SaveSettings(settings);
         RebuildSidebar(_lastNetworkLocations);
         SelectedTab?.ActivePane.NotifyPinStateChanged();
     }
@@ -1229,7 +1234,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         if (item is null || !item.IsNavigable || string.IsNullOrEmpty(item.Path))
             return false;
 
-        var settings = _settingsStore.Load();
+        var settings = GetSettings();
         return PinnedPathHelper.IsVisibleInSidebar(
             settings.PinnedPaths,
             settings.UnpinnedPaths,
@@ -1245,7 +1250,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         if (item.Path.StartsWith("shell:", StringComparison.OrdinalIgnoreCase))
             return false;
 
-        var settings = _settingsStore.Load();
+        var settings = GetSettings();
         return !PinnedPathHelper.IsPinnedOrDefault(
             settings.PinnedPaths,
             settings.UnpinnedPaths,

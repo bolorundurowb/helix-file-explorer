@@ -19,7 +19,7 @@ public static class WindowsServiceExtensions
         services.AddSingleton<ITerminalLauncher, WinTerminalLauncher>();
         services.AddSingleton<IFileVisualProvider, Shell.WinFileVisualProvider>();
         services.AddTransient<IFileChangeWatcher, FileSystem.FileChangeWatcherService>();
-        services.AddSingleton<Func<IFileChangeWatcher>>(sp => () => sp.GetRequiredService<IFileChangeWatcher>());
+        services.AddScoped<Func<IFileChangeWatcher>>(sp => () => sp.GetRequiredService<IFileChangeWatcher>());
         return services;
     }
 }

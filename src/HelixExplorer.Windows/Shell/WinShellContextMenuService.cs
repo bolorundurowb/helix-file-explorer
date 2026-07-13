@@ -91,7 +91,9 @@ public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuServic
             return;
         }
 
+        IShellFolder? folder = null;
         var folderPtr = IntPtr.Zero;
+        IContextMenu? cm = null;
         var cmPtr = IntPtr.Zero;
         IntPtr[]? childPidls = null;
         var cidl = 0;
@@ -103,7 +105,7 @@ public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuServic
             if (hrBind != 0 || folderPtr == IntPtr.Zero)
                 return;
 
-            var folder = (IShellFolder)Marshal.GetObjectForIUnknown(folderPtr);
+            folder = (IShellFolder)Marshal.GetObjectForIUnknown(folderPtr);
 
             if (selectedPaths.Count > 0)
             {
@@ -140,13 +142,17 @@ public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuServic
                 return;
             }
 
-            var cm = (IContextMenu)Marshal.GetObjectForIUnknown(cmPtr);
+            cm = (IContextMenu)Marshal.GetObjectForIUnknown(cmPtr);
             TrackAndInvoke(hwnd, cm, screenX, screenY);
         }
         finally
         {
+            if (cm is not null)
+                Marshal.ReleaseComObject(cm);
             if (cmPtr != IntPtr.Zero)
                 Marshal.Release(cmPtr);
+            if (folder is not null)
+                Marshal.ReleaseComObject(folder);
             if (folderPtr != IntPtr.Zero)
                 Marshal.Release(folderPtr);
             FreePidls(childPidls, cidl);
@@ -160,6 +166,20 @@ public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuServic
         if (hmenu == IntPtr.Zero)
             return;
 
+        IContextMenu2? cm2 = null;
+        IContextMenu3? cm3 = null;
+        try
+        {
+            cm3 = cm as IContextMenu3;
+            cm2 = cm as IContextMenu2;
+        }
+        catch (InvalidCastException)
+        {
+            // Optional extensions; owner-drawn submenus simply won't paint.
+        }
+
+        IntPtr hook = IntPtr.Zero;
+        NativeMethods.HookProc? hookProc = null;
         try
         {
             var hrQ = cm.QueryContextMenu(hmenu, 0, IdCmdFirst, IdCmdLast, Shell32Native.CMF_NORMAL);
@@ -171,18 +191,45 @@ public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuServic
 
             if (screenX == 0 && screenY == 0)
             {
-                // Fallback near cursor if no coordinates were supplied.
                 GetCursorPos(out var pt);
                 screenX = pt.X;
                 screenY = pt.Y;
             }
 
+            // Forward owner-drawn / cascading submenu messages while the popup is open.
+            if (cm2 is not null || cm3 is not null)
+            {
+                hookProc = (code, wParam, lParam) =>
+                {
+                    if (code >= 0 && wParam == (IntPtr)NativeMethods.MSGF_MENU)
+                    {
+                        var msg = Marshal.PtrToStructure<NativeMethods.MSG>(lParam);
+                        if (IsContextMenuMessage(msg.message))
+                        {
+                            if (cm3 is not null)
+                                cm3.HandleMenuMsg2(msg.message, msg.wParam, msg.lParam, out _);
+                            else
+                                cm2!.HandleMenuMsg(msg.message, msg.wParam, msg.lParam);
+                        }
+                    }
+
+                    return NativeMethods.CallNextHookEx(hook, code, wParam, lParam);
+                };
+
+                hook = NativeMethods.SetWindowsHookEx(
+                    NativeMethods.WH_MSGFILTER,
+                    hookProc,
+                    IntPtr.Zero,
+                    NativeMethods.GetCurrentThreadId());
+            }
+
+            var owner = hwnd == IntPtr.Zero ? GetDesktopWindow() : hwnd;
             var cmdId = Shell32Native.TrackPopupMenuEx(
                 hmenu,
                 Shell32Native.TPM_LEFTALIGN | Shell32Native.TPM_TOPALIGN | Shell32Native.TPM_RETURNCMD,
                 screenX,
                 screenY,
-                hwnd == IntPtr.Zero ? GetDesktopWindow() : hwnd,
+                owner,
                 IntPtr.Zero);
 
             if (cmdId == 0)
@@ -206,7 +253,53 @@ public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuServic
         }
         finally
         {
+            if (hook != IntPtr.Zero)
+                NativeMethods.UnhookWindowsHookEx(hook);
+            GC.KeepAlive(hookProc);
             Shell32Native.DestroyMenu(hmenu);
+        }
+    }
+
+    private static bool IsContextMenuMessage(uint message)
+        => message is NativeMethods.WM_INITMENUPOPUP
+            or NativeMethods.WM_MEASUREITEM
+            or NativeMethods.WM_DRAWITEM
+            or NativeMethods.WM_MENUCHAR;
+
+    private static class NativeMethods
+    {
+        public const int WH_MSGFILTER = -1;
+        public const int MSGF_MENU = 2;
+        public const uint WM_INITMENUPOPUP = 0x0117;
+        public const uint WM_MEASUREITEM = 0x002C;
+        public const uint WM_DRAWITEM = 0x002B;
+        public const uint WM_MENUCHAR = 0x0120;
+
+        public delegate IntPtr HookProc(int code, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern IntPtr SetWindowsHookEx(int idHook, HookProc lpfn, IntPtr hMod, uint dwThreadId);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool UnhookWindowsHookEx(IntPtr hhk);
+
+        [DllImport("user32.dll")]
+        public static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("kernel32.dll")]
+        public static extern uint GetCurrentThreadId();
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct MSG
+        {
+            public IntPtr hwnd;
+            public uint message;
+            public IntPtr wParam;
+            public IntPtr lParam;
+            public uint time;
+            public int pt_x;
+            public int pt_y;
         }
     }
 

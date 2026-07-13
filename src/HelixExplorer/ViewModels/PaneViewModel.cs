@@ -30,13 +30,11 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     private readonly IFolderColorService _folderColors;
     private readonly IFileOperationService _fileOps;
     private readonly IClipboardService _clipboard;
-    private readonly IOsFileClipboard _osClipboard;
     private readonly IShellContextMenuService _shellContextMenu;
     private readonly IUiHost _uiHost;
     private readonly IGitProvider _git;
     private readonly IFileChangeWatcher _watcher;
     private readonly ISettingsStore _settingsStore;
-    private readonly IFileOperationReporter _operationReporter;
     private readonly IQuickAccessProvider _quickAccess;
     private readonly IUserDialogService _dialogs;
     private readonly IWindowHostService _windowHost;
@@ -57,13 +55,11 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         IFolderColorService folderColors,
         IFileOperationService fileOps,
         IClipboardService clipboard,
-        IOsFileClipboard osClipboard,
         IShellContextMenuService shellContextMenu,
         IUiHost uiHost,
         IGitProvider git,
         IFileChangeWatcher watcher,
         ISettingsStore settingsStore,
-        IFileOperationReporter operationReporter,
         IQuickAccessProvider quickAccess,
         IUserDialogService dialogs,
         IWindowHostService windowHost,
@@ -76,13 +72,11 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         _folderColors = folderColors;
         _fileOps = fileOps;
         _clipboard = clipboard;
-        _osClipboard = osClipboard;
         _shellContextMenu = shellContextMenu;
         _uiHost = uiHost;
         _git = git;
         _watcher = watcher;
         _settingsStore = settingsStore;
-        _operationReporter = operationReporter;
         _quickAccess = quickAccess;
         _dialogs = dialogs;
         _windowHost = windowHost;

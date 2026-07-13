@@ -4,7 +4,10 @@ using HelixExplorer.Core.Infrastructure;
 
 namespace HelixExplorer.Core.Settings;
 
-public sealed class JsonSettingsStore : ISettingsStore
+/// <summary>
+/// JSON-backed settings store. Saves are atomic: write to a sibling temp file, then move.
+/// </summary>
+public sealed class JsonSettingsStore(string path) : ISettingsStore
 {
     private static readonly JsonSerializerOptions Options = new()
     {
@@ -13,14 +16,18 @@ public sealed class JsonSettingsStore : ISettingsStore
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
+    public JsonSettingsStore() : this(AppPaths.SettingsFile)
+    {
+    }
+
     public AppSettings Load()
     {
-        if (!File.Exists(AppPaths.SettingsFile))
+        if (!File.Exists(path))
             return new AppSettings();
 
         try
         {
-            var json = File.ReadAllText(AppPaths.SettingsFile);
+            var json = File.ReadAllText(path);
             return JsonSerializer.Deserialize<AppSettings>(json, Options) ?? new AppSettings();
         }
         catch
@@ -31,8 +38,22 @@ public sealed class JsonSettingsStore : ISettingsStore
 
     public void Save(AppSettings settings)
     {
-        AppPaths.EnsureDirectoriesExist();
+        var directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(directory))
+            Directory.CreateDirectory(directory);
+
         var json = JsonSerializer.Serialize(settings, Options);
-        File.WriteAllText(AppPaths.SettingsFile, json);
+        var tempPath = path + ".tmp";
+
+        try
+        {
+            File.WriteAllText(tempPath, json);
+            File.Move(tempPath, path, overwrite: true);
+        }
+        catch (Exception ex)
+        {
+            try { File.Delete(tempPath); } catch { /* best-effort */ }
+            throw new IOException($"Failed to save settings to {path}", ex);
+        }
     }
 }

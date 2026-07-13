@@ -2,7 +2,8 @@ namespace HelixExplorer.Core.Archives;
 
 /// <summary>
 /// Helpers for the <c>archive://&lt;host-path&gt;!&lt;inner/path/&gt;</c> virtual path scheme.
-/// The host portion is a real archive file on disk; the inner portion uses forward slashes.
+/// The host portion is a real archive file on disk (with <c>!</c> / <c>%</c> percent-encoded);
+/// the inner portion uses forward slashes and may contain literal <c>!</c>.
 /// </summary>
 public static class ArchivePath
 {
@@ -29,7 +30,16 @@ public static class ArchivePath
     public static string Mount(string archiveFilePath)
     {
         var normalized = archiveFilePath.TrimEnd('\\', '/');
-        return Scheme + normalized + "!";
+        return Scheme + EscapeHost(normalized) + "!";
+    }
+
+    /// <summary>Builds <c>archive://host!inner</c> with a properly escaped host segment.</summary>
+    public static string Combine(string archiveFilePath, string innerPath)
+    {
+        if (string.IsNullOrEmpty(innerPath))
+            return Mount(archiveFilePath);
+
+        return Mount(archiveFilePath) + innerPath.Replace('\\', '/');
     }
 
     public static bool TryParse(string virtualPath, out string archiveFile, out string innerPath)
@@ -45,12 +55,12 @@ public static class ArchivePath
         var bang = body.IndexOf('!');
         if (bang < 0)
         {
-            archiveFile = body;
+            archiveFile = UnescapeHost(body);
             innerPath = string.Empty;
             return true;
         }
 
-        archiveFile = body[..bang];
+        archiveFile = UnescapeHost(body[..bang]);
         innerPath = body[(bang + 1)..];
         return true;
     }
@@ -79,7 +89,7 @@ public static class ArchivePath
         if (lastSlash < 0)
             return Mount(archiveFile);
 
-        return Mount(archiveFile) + trimmedInner[..lastSlash] + "/";
+        return Combine(archiveFile, trimmedInner[..lastSlash] + "/");
     }
 
     public static IReadOnlyList<ArchiveBreadcrumb> GetBreadcrumbs(string virtualPath)
@@ -108,7 +118,7 @@ public static class ArchivePath
             if (!isLast)
                 accumulator += "/";
 
-            crumbs.Add(new ArchiveBreadcrumb(segments[i], accumulator + (isLast ? string.Empty : "/"), isLast));
+            crumbs.Add(new ArchiveBreadcrumb(segments[i], accumulator, isLast));
         }
 
         if (virtualPath.EndsWith('/') || virtualPath.EndsWith('\\'))
@@ -116,6 +126,15 @@ public static class ArchivePath
 
         return crumbs;
     }
+
+    /// <summary>Percent-encodes host characters that would collide with the <c>!</c> delimiter.</summary>
+    public static string EscapeHost(string archiveFilePath)
+        => archiveFilePath.Replace("%", "%25", StringComparison.Ordinal)
+            .Replace("!", "%21", StringComparison.Ordinal);
+
+    public static string UnescapeHost(string encodedHost)
+        => encodedHost.Replace("%21", "!", StringComparison.Ordinal)
+            .Replace("%25", "%", StringComparison.Ordinal);
 
     private static string EnsureTrailingSeparator(string path)
     {

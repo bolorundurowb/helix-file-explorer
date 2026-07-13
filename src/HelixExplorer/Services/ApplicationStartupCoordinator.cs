@@ -1,4 +1,3 @@
-using Avalonia;
 using HelixExplorer.Core.Settings;
 using HelixExplorer.Core.Theming;
 using HelixExplorer.ViewModels;
@@ -16,12 +15,13 @@ public sealed class ApplicationStartupCoordinator(
     IThemeService themeService,
     IUiFontService uiFontService,
     IAccentBrushService accentBrushes,
-    IFolderColorService folderColors)
+    IFolderColorService folderColors,
+    WinThemeWatcher themeWatcher)
     : IDisposable
 {
-    private WinThemeWatcher? _themeWatcher;
+    private readonly WinThemeWatcher _themeWatcher = themeWatcher;
 
-    public void Initialize(Application application, MainWindowViewModel mainWindowViewModel)
+    public void Initialize(Avalonia.Application application, MainWindowViewModel mainWindowViewModel)
     {
         var settings = settingsStore.Load();
 
@@ -32,11 +32,9 @@ public sealed class ApplicationStartupCoordinator(
 
         WireResourceConverters(application, settings);
         WireMainWindowViewModel(mainWindowViewModel);
-
-        _themeWatcher = new WinThemeWatcher(themeService, () => settingsStore.Load().Theme);
     }
 
-    private void WireResourceConverters(Application application, Core.Settings.AppSettings settings)
+    private void WireResourceConverters(Avalonia.Application application, Core.Settings.AppSettings settings)
     {
         if (application.Resources.TryGetResource("FileSizeConverter", application.ActualThemeVariant, out var converterObj)
             && converterObj is Converters.FileSizeConverter converter)
@@ -70,9 +68,9 @@ public sealed class ApplicationStartupCoordinator(
 
         mainWindowViewModel.SizeDisplayChanged += mode =>
         {
-            if (Application.Current?.Resources.TryGetResource(
+            if (Avalonia.Application.Current?.Resources.TryGetResource(
                     "FileSizeConverter",
-                    Application.Current.ActualThemeVariant,
+                    Avalonia.Application.Current.ActualThemeVariant,
                     out var converterObj) == true
                 && converterObj is Converters.FileSizeConverter converter)
             {
@@ -82,8 +80,5 @@ public sealed class ApplicationStartupCoordinator(
     }
 
     public void Dispose()
-    {
-        _themeWatcher?.Dispose();
-        _themeWatcher = null;
-    }
+        => _themeWatcher.Dispose();
 }

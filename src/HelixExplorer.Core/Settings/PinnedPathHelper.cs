@@ -114,5 +114,5 @@ public static class PinnedPathHelper
         => Path.GetFileName(normalized.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)) ?? normalized;
 
     private static string Normalize(string path)
-        => path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        => Core.FileSystem.PathUtilities.NormalizePath(path);
 }

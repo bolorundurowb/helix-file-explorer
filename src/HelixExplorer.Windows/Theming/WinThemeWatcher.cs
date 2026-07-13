@@ -8,13 +8,13 @@ namespace HelixExplorer.Windows.Theming;
 /// </summary>
 public sealed class WinThemeWatcher : IDisposable
 {
-    private readonly IThemeService _themeService;
+    private readonly Action<ThemeMode> _applyTheme;
     private readonly Func<ThemeMode> _getConfiguredMode;
     private bool _disposed;
 
-    public WinThemeWatcher(IThemeService themeService, Func<ThemeMode> getConfiguredMode)
+    public WinThemeWatcher(Action<ThemeMode> applyTheme, Func<ThemeMode> getConfiguredMode)
     {
-        _themeService = themeService;
+        _applyTheme = applyTheme;
         _getConfiguredMode = getConfiguredMode;
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
     }
@@ -30,7 +30,7 @@ public sealed class WinThemeWatcher : IDisposable
         if (_getConfiguredMode() != ThemeMode.System)
             return;
 
-        _themeService.ApplyTheme(ThemeMode.System);
+        _applyTheme(ThemeMode.System);
     }
 
     public void Dispose()

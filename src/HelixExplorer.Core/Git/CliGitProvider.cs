@@ -21,7 +21,7 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
 
         try
         {
-            var output = await RunGitAsync(root, "status --porcelain=v2 --branch", cancellationToken)
+            var output = await RunGitAsync(root, "status --porcelain=v2 -z --branch", cancellationToken)
                 .ConfigureAwait(false);
             return GitPorcelainParser.Parse(output, root);
         }

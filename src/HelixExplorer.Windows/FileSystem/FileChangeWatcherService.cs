@@ -8,6 +8,7 @@ public sealed class FileChangeWatcherService(ILogger<FileChangeWatcherService> l
     private readonly TimeSpan _debounce = TimeSpan.FromMilliseconds(150);
     private FileSystemWatcher? _watcher;
     private CancellationTokenSource? _debounceCts;
+    private readonly object _debounceLock = new();
 
     public event EventHandler? Changed;
 
@@ -34,6 +35,7 @@ public sealed class FileChangeWatcherService(ILogger<FileChangeWatcherService> l
             _watcher.Deleted += OnFileSystemEvent;
             _watcher.Renamed += OnFileSystemEvent;
             _watcher.Changed += OnFileSystemEvent;
+            _watcher.Error += OnWatcherError;
         }
         catch (Exception ex)
         {
@@ -50,19 +52,43 @@ public sealed class FileChangeWatcherService(ILogger<FileChangeWatcherService> l
             _watcher.Deleted -= OnFileSystemEvent;
             _watcher.Renamed -= OnFileSystemEvent;
             _watcher.Changed -= OnFileSystemEvent;
+            _watcher.Error -= OnWatcherError;
             _watcher.Dispose();
             _watcher = null;
         }
     }
 
+    private void OnWatcherError(object sender, ErrorEventArgs e)
+    {
+        var ex = e.GetException();
+        if (ex is InternalBufferOverflowException)
+            logger.LogWarning(ex, "FileChangeWatcher buffer overflow, requesting refresh");
+        else
+            logger.LogError(ex, "FileChangeWatcher error");
+
+        try
+        {
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+        catch (Exception callbackEx)
+        {
+            logger.LogError(callbackEx, "Error handler callback error");
+        }
+    }
+
     private void OnFileSystemEvent(object sender, FileSystemEventArgs e)
     {
-        var old = Interlocked.Exchange(ref _debounceCts, null);
+        CancellationTokenSource? old;
+        CancellationTokenSource cts;
+        lock (_debounceLock)
+        {
+            old = _debounceCts;
+            cts = new CancellationTokenSource();
+            _debounceCts = cts;
+        }
+
         try { old?.Cancel(); } catch (ObjectDisposedException) { }
         old?.Dispose();
-
-        var cts = new CancellationTokenSource();
-        _debounceCts = cts;
 
         Task.Delay(_debounce, cts.Token).ContinueWith(t =>
         {
@@ -83,8 +109,13 @@ public sealed class FileChangeWatcherService(ILogger<FileChangeWatcherService> l
     public void Dispose()
     {
         Stop();
-        _debounceCts?.Cancel();
-        _debounceCts?.Dispose();
-        _debounceCts = null;
+        CancellationTokenSource? cts;
+        lock (_debounceLock)
+        {
+            cts = _debounceCts;
+            _debounceCts = null;
+        }
+        try { cts?.Cancel(); } catch (ObjectDisposedException) { }
+        cts?.Dispose();
     }
 }

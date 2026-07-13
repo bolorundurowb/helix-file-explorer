@@ -35,7 +35,9 @@ public sealed class WindowHostService(IServiceScopeFactory scopeFactory) : IWind
 
         vm.InitializeWindow(restoreSession, initialPath);
 
-        window.Closed += (_, _) => OnWindowClosed(scope);
+        // Capture the instance (and its SaveSession) — never re-resolve MainWindowViewModel on close.
+        var capturedVm = vm;
+        window.Closed += (_, _) => OnWindowClosed(scope, capturedVm.SaveSession);
 
         lock (_gate)
             _scopes.Add(scope);
@@ -45,20 +47,26 @@ public sealed class WindowHostService(IServiceScopeFactory scopeFactory) : IWind
         return window;
     }
 
-    private void OnWindowClosed(IServiceScope scope)
+    /// <summary>
+    /// Last-window close persists the captured window's session, then disposes its scope.
+    /// Exposed for tests so we exercise this exact path without opening an Avalonia window.
+    /// </summary>
+    internal void OnWindowClosed(IServiceScope scope, Action saveSession)
     {
-        MainWindowViewModel? vm = null;
-        if (scope.ServiceProvider.GetService<MainWindowViewModel>() is { } viewModel)
-            vm = viewModel;
-
         lock (_gate)
         {
             _scopes.Remove(scope);
-            if (_scopes.Count == 0 && vm is not null)
-                vm.SaveSession();
+            if (_scopes.Count == 0)
+                saveSession();
         }
 
-        vm?.Dispose();
         scope.Dispose();
+    }
+
+    /// <summary>Test helper: track a live window scope without constructing Avalonia chrome.</summary>
+    internal void TrackScopeForTests(IServiceScope scope)
+    {
+        lock (_gate)
+            _scopes.Add(scope);
     }
 }

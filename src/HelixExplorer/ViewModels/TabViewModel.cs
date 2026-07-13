@@ -19,7 +19,6 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     private readonly IFileSystemProvider _fileSystem;
     private readonly IFileOperationService _fileOps;
     private readonly IClipboardService _clipboard;
-    private readonly IOsFileClipboard _osClipboard;
     private readonly IShellContextMenuService _shellContextMenu;
     private readonly IUiHost _uiHost;
     private readonly IGitProvider _git;
@@ -28,7 +27,6 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     private readonly ISettingsStore _settingsStore;
     private readonly Func<IFileChangeWatcher> _watcherFactory;
     private readonly IPaneCoordinatorFactory _coordinatorFactory;
-    private readonly IFileOperationReporter _operationReporter;
     private readonly IQuickAccessProvider _quickAccess;
     private readonly IUserDialogService _dialogs;
     private readonly IWindowHostService _windowHost;
@@ -44,7 +42,6 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         IFileSystemProvider fileSystem,
         IFileOperationService fileOps,
         IClipboardService clipboard,
-        IOsFileClipboard osClipboard,
         IShellContextMenuService shellContextMenu,
         IUiHost uiHost,
         IGitProvider git,
@@ -53,7 +50,6 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         ISettingsStore settingsStore,
         Func<IFileChangeWatcher> watcherFactory,
         IPaneCoordinatorFactory coordinatorFactory,
-        IFileOperationReporter operationReporter,
         IQuickAccessProvider quickAccess,
         IUserDialogService dialogs,
         IWindowHostService windowHost,
@@ -66,7 +62,6 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         _fileSystem = fileSystem;
         _fileOps = fileOps;
         _clipboard = clipboard;
-        _osClipboard = osClipboard;
         _shellContextMenu = shellContextMenu;
         _uiHost = uiHost;
         _git = git;
@@ -75,7 +70,6 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         _settingsStore = settingsStore;
         _watcherFactory = watcherFactory;
         _coordinatorFactory = coordinatorFactory;
-        _operationReporter = operationReporter;
         _quickAccess = quickAccess;
         _dialogs = dialogs;
         _windowHost = windowHost;
@@ -162,13 +156,11 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
             _folderColors,
             _fileOps,
             _clipboard,
-            _osClipboard,
             _shellContextMenu,
             _uiHost,
             _git,
             _watcherFactory(),
             _settingsStore,
-            _operationReporter,
             _quickAccess,
             _dialogs,
             _windowHost,
@@ -200,19 +192,19 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         if (sender is not PaneViewModel pane)
             return;
 
-        var pathToOpen = entry.FullPath;
-        if (ArchivePath.IsVirtual(entry.FullPath))
-        {
-            pathToOpen = await _archive.ExtractEntryAsync(entry.FullPath).ConfigureAwait(true);
-            if (string.IsNullOrEmpty(pathToOpen))
-            {
-                pane.StatusText = $"Could not extract {entry.Name}";
-                return;
-            }
-        }
-
         try
         {
+            var pathToOpen = entry.FullPath;
+            if (ArchivePath.IsVirtual(entry.FullPath))
+            {
+                pathToOpen = await _archive.ExtractEntryAsync(entry.FullPath).ConfigureAwait(true);
+                if (string.IsNullOrEmpty(pathToOpen))
+                {
+                    pane.StatusText = $"Could not extract {entry.Name}";
+                    return;
+                }
+            }
+
             Process.Start(new ProcessStartInfo
             {
                 FileName = pathToOpen,

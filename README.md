@@ -1,6 +1,9 @@
+<p><img src="assets/helix-explorer-icon.png" alt="Helix Explorer icon" width="128" /></p>
+
 # Helix Explorer
 
 [![Build and Test](https://github.com/bolorundurowb/helix-file-explorer/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/bolorundurowb/helix-file-explorer/actions/workflows/build-and-test.yml)
+
 
 A fast Windows file manager built with Avalonia and .NET 10. Dual panes, tabs, archives, Git status, and native shell integration without WinUI 3.
 

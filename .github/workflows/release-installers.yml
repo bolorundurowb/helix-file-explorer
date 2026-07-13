@@ -1,97 +1,79 @@
-name: Build and Release Installers
+name: Release
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
-    inputs:
-      version:
-        description: "Version to release (e.g. 0.1.0)"
-        required: true
-        default: "0.1.0"
-      target:
-        description: "Build target"
-        required: true
-        type: choice
-        options:
-          - windows-x64
-        default: "windows-x64"
 
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: windows-latest
-            rid: win-x64
-            target: windows-x64
-            artifact: helix-explorer-installer-win-x64
-
-    runs-on: ${{ matrix.runner }}
+  build-and-release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read version from Directory.Build.props
+        id: version
+        shell: pwsh
+        run: |
+          [xml]$props = Get-Content Directory.Build.props
+          $version = $props.Project.PropertyGroup.Version
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Check if tag already exists
+        id: check
+        shell: pwsh
+        run: |
+          $tag = "v${{ steps.version.outputs.version }}"
+          if (git tag -l $tag) {
+            Write-Host "Tag $tag already exists, skipping release."
+            echo "skip=true" >> $env:GITHUB_OUTPUT
+          } else {
+            echo "skip=false" >> $env:GITHUB_OUTPUT
+          }
 
       - name: Setup .NET
+        if: steps.check.outputs.skip != 'true'
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
 
       - name: Restore dependencies
+        if: steps.check.outputs.skip != 'true'
         run: dotnet restore HelixExplorer.sln
 
       - name: Publish application
-        run: >
-          dotnet publish src/HelixExplorer/HelixExplorer.csproj
-          -c Release
-          -r ${{ matrix.rid }}
-          --self-contained true
-          -o publish/${{ matrix.rid }}
+        if: steps.check.outputs.skip != 'true'
+        run: dotnet publish src/HelixExplorer/HelixExplorer.csproj -c Release -r win-x64 --self-contained true -o publish/win-x64
 
       - name: Setup PolyInstall
+        if: steps.check.outputs.skip != 'true'
         uses: bolorundurowb/PolyInstall/.github/actions/setup-polyinstall@v1.0.0
         with:
           version: v1.0.0
-          rid: ${{ matrix.rid }}
+          rid: win-x64
 
       - name: Validate manifest
+        if: steps.check.outputs.skip != 'true'
         env:
-          HELIX_VERSION: ${{ github.event.inputs.version || github.ref_name }}
-          POLYINSTALL_TARGET: ${{ matrix.target }}
+          HELIX_VERSION: ${{ steps.version.outputs.version }}
+          POLYINSTALL_TARGET: windows-x64
         run: polyinstall validate installer/helix-explorer.install.yaml --base .
 
       - name: Build installer
+        if: steps.check.outputs.skip != 'true'
         env:
-          HELIX_VERSION: ${{ github.event.inputs.version || github.ref_name }}
-          POLYINSTALL_TARGET: ${{ matrix.target }}
+          HELIX_VERSION: ${{ steps.version.outputs.version }}
+          POLYINSTALL_TARGET: windows-x64
         run: polyinstall build installer/helix-explorer.install.yaml --base .
 
-      - name: Upload installer artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact }}
-          path: installer/dist/**
-
-  release:
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Create GitHub Release
+      - name: Create release
+        if: steps.check.outputs.skip != 'true'
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/**/*
+          tag_name: v${{ steps.version.outputs.version }}
+          files: installer/dist/**
           generate_release_notes: true
-          draft: false
-          prerelease: ${{ contains(github.ref_name, '-pre') || contains(github.ref_name, '-rc') }}

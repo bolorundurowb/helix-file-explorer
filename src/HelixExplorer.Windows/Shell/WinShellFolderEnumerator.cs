@@ -1,13 +1,13 @@
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Windows.Shell;
+using Microsoft.Extensions.Logging;
 
 namespace HelixExplorer.Windows.Shell;
 
-public sealed class WinShellFolderEnumerator : IShellFolderEnumerator
+public sealed class WinShellFolderEnumerator(ILogger<WinShellFolderEnumerator> logger) : IShellFolderEnumerator
 {
     private const uint ShgdnForParsing = 0x8000;
     private const uint ShgdnNormal = 0;
@@ -53,7 +53,7 @@ public sealed class WinShellFolderEnumerator : IShellFolderEnumerator
         }, ct).ConfigureAwait(false);
     }
 
-    private static IReadOnlyList<FileSystemEntry> Enumerate(string shellPath, CancellationToken ct)
+    private IReadOnlyList<FileSystemEntry> Enumerate(string shellPath, CancellationToken ct)
     {
         var entries = new List<FileSystemEntry>();
         if (Shell32Native.SHGetDesktopFolder(out var desktop) != 0)
@@ -99,7 +99,7 @@ public sealed class WinShellFolderEnumerator : IShellFolderEnumerator
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Shell enumerate failed for '{shellPath}': {ex.Message}");
+            logger.LogError(ex, "Shell enumerate failed for '{ShellPath}'", shellPath);
         }
         finally
         {

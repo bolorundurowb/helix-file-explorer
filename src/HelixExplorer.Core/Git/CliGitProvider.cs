@@ -1,12 +1,13 @@
 using System.Diagnostics;
 using System.Text;
+using Microsoft.Extensions.Logging;
 
 namespace HelixExplorer.Core.Git;
 
 /// <summary>
 /// Git status via the CLI. One <c>status --porcelain=v2 --branch</c> call per navigation.
 /// </summary>
-public sealed class CliGitProvider : IGitProvider
+public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvider
 {
     private const string GitExe = "git";
 
@@ -30,7 +31,7 @@ public sealed class CliGitProvider : IGitProvider
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"CliGitProvider.GetStatusAsync failed for '{path}': {ex.Message}");
+            logger.LogError(ex, "Git status query failed for '{Path}'", path);
             return GitStatusSnapshot.Empty;
         }
     }
@@ -61,7 +62,7 @@ public sealed class CliGitProvider : IGitProvider
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"CliGitProvider.ListBranchesAsync failed: {ex.Message}");
+            logger.LogError(ex, "Git branch list failed for '{Path}'", path);
             return Array.Empty<string>();
         }
     }
@@ -83,7 +84,7 @@ public sealed class CliGitProvider : IGitProvider
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"CliGitProvider.CheckoutBranchAsync failed: {ex.Message}");
+            logger.LogError(ex, "Git checkout failed for branch '{Branch}' in '{Path}'", branch, path);
             return false;
         }
     }

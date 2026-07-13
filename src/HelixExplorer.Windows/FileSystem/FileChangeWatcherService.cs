@@ -1,9 +1,9 @@
-using System.Diagnostics;
 using HelixExplorer.Core.FileSystem;
+using Microsoft.Extensions.Logging;
 
 namespace HelixExplorer.Windows.FileSystem;
 
-public sealed class FileChangeWatcherService : IFileChangeWatcher
+public sealed class FileChangeWatcherService(ILogger<FileChangeWatcherService> logger) : IFileChangeWatcher
 {
     private readonly TimeSpan _debounce = TimeSpan.FromMilliseconds(150);
     private FileSystemWatcher? _watcher;
@@ -37,7 +37,7 @@ public sealed class FileChangeWatcherService : IFileChangeWatcher
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"FileChangeWatcherService.Watch failed for '{path}': {ex.Message}");
+            logger.LogWarning(ex, "Watch failed for '{Path}'", path);
         }
     }
 
@@ -74,7 +74,7 @@ public sealed class FileChangeWatcherService : IFileChangeWatcher
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"FileChangeWatcherService debounce callback error: {ex.Message}");
+                logger.LogError(ex, "Debounce callback error");
             }
         }, TaskScheduler.Default);
     }

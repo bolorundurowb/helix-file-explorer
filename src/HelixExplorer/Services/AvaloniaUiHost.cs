@@ -6,15 +6,8 @@ using HelixExplorer.Core.Infrastructure;
 
 namespace HelixExplorer.Services;
 
-public sealed class AvaloniaUiHost : IUiHost
+public sealed class AvaloniaUiHost(IWindowOwnerContext ownerContext) : IUiHost
 {
-    private readonly IWindowOwnerContext _ownerContext;
-
-    public AvaloniaUiHost(IWindowOwnerContext ownerContext)
-    {
-        _ownerContext = ownerContext;
-    }
-
     public nint GetMainWindowHandle()
     {
         var window = GetOwnerWindow();
@@ -51,7 +44,7 @@ public sealed class AvaloniaUiHost : IUiHost
     }
 
     private Window? GetOwnerWindow()
-        => _ownerContext.OwnerWindow ?? GetFallbackMainWindow();
+        => ownerContext.OwnerWindow ?? GetFallbackMainWindow();
 
     private static Window? GetFallbackMainWindow()
     {

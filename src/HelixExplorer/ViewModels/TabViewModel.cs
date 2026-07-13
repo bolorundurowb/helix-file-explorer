@@ -10,6 +10,7 @@ using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Settings;
 using HelixExplorer.Core.Session;
 using HelixExplorer.Services;
+using HelixExplorer.ViewModels.Pane;
 
 namespace HelixExplorer.ViewModels;
 
@@ -25,8 +26,8 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     private readonly IArchiveProvider _archive;
     private readonly IFolderColorService _folderColors;
     private readonly ISettingsStore _settingsStore;
-    private readonly FileVisualService _visuals;
     private readonly Func<IFileChangeWatcher> _watcherFactory;
+    private readonly IPaneCoordinatorFactory _coordinatorFactory;
     private readonly IFileOperationReporter _operationReporter;
     private readonly IQuickAccessProvider _quickAccess;
     private readonly IUserDialogService _dialogs;
@@ -50,8 +51,8 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         IArchiveProvider archive,
         IFolderColorService folderColors,
         ISettingsStore settingsStore,
-        FileVisualService visuals,
         Func<IFileChangeWatcher> watcherFactory,
+        IPaneCoordinatorFactory coordinatorFactory,
         IFileOperationReporter operationReporter,
         IQuickAccessProvider quickAccess,
         IUserDialogService dialogs,
@@ -72,8 +73,8 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         _archive = archive;
         _folderColors = folderColors;
         _settingsStore = settingsStore;
-        _visuals = visuals;
         _watcherFactory = watcherFactory;
+        _coordinatorFactory = coordinatorFactory;
         _operationReporter = operationReporter;
         _quickAccess = quickAccess;
         _dialogs = dialogs;
@@ -173,14 +174,14 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
             _uiHost,
             _git,
             _watcherFactory(),
-            _visuals,
             _settingsStore,
             _operationReporter,
             _quickAccess,
             _dialogs,
             _windowHost,
             _shellEnumerator,
-            _terminalLauncher);
+            _terminalLauncher,
+            _coordinatorFactory);
         pane.SortChanged += OnPaneSortChanged;
         pane.LayoutChanged += OnPaneLayoutChanged;
         pane.Navigated += OnPaneNavigated;
@@ -365,7 +366,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
 
     private static string DescribePath(string path)
     {
-        if (string.Equals(path, PaneViewModel.HomeRoute, StringComparison.Ordinal))
+        if (string.Equals(path, PaneConstants.HomeRoute, StringComparison.Ordinal))
             return "Home";
 
         if (string.IsNullOrEmpty(path))

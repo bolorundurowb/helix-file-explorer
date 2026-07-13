@@ -2,24 +2,16 @@ using HelixExplorer.Core.Search;
 
 namespace HelixExplorer.ViewModels;
 
-public sealed class CommandItem
+public sealed class CommandItem(
+    string title,
+    string category,
+    Action<MainWindowViewModel> execute,
+    string shortcut = "")
 {
-    public CommandItem(
-        string title,
-        string category,
-        Action<MainWindowViewModel> execute,
-        string shortcut = "")
-    {
-        Title = title;
-        Category = category;
-        Shortcut = shortcut;
-        Execute = execute;
-    }
-
-    public string Title { get; }
-    public string Category { get; }
-    public string Shortcut { get; }
-    public Action<MainWindowViewModel>? Execute { get; }
+    public string Title { get; } = title;
+    public string Category { get; } = category;
+    public string Shortcut { get; } = shortcut;
+    public Action<MainWindowViewModel>? Execute { get; } = execute;
 
     public string SearchText => $"{Title} {Category} {Shortcut}";
 

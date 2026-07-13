@@ -1,6 +1,6 @@
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using HelixExplorer.Core.FileSystem;
+using Microsoft.Extensions.Logging;
 
 namespace HelixExplorer.Windows.Shell;
 
@@ -8,7 +8,7 @@ namespace HelixExplorer.Windows.Shell;
 /// Shows the Explorer-compatible shell context menu via IShellFolder / IContextMenu.
 /// Falls back gracefully when COM fails so Helix app menus still work alone.
 /// </summary>
-public sealed class WinShellContextMenuService : IShellContextMenuService
+public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuService> logger) : IShellContextMenuService
 {
     private const uint IdCmdFirst = 100;
     private const uint IdCmdLast = 0x7FFF;
@@ -35,7 +35,7 @@ public sealed class WinShellContextMenuService : IShellContextMenuService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"WinShellContextMenuService.ShowMoreOptionsAsync failed: {ex}");
+            logger.LogError(ex, "ShowMoreOptions failed");
         }
 
         return ValueTask.CompletedTask;
@@ -62,18 +62,18 @@ public sealed class WinShellContextMenuService : IShellContextMenuService
             if (!Shell32Native.ShellExecuteEx(ref info))
             {
                 var error = Marshal.GetLastWin32Error();
-                Debug.WriteLine($"ShellExecuteEx(properties) failed: {error}");
+                logger.LogError("ShellExecuteEx(properties) failed with error {Error}", error);
             }
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"WinShellContextMenuService.ShowPropertiesAsync failed: {ex}");
+            logger.LogError(ex, "ShowProperties failed");
         }
 
         return ValueTask.CompletedTask;
     }
 
-    private static void ShowContextMenu(
+    private void ShowContextMenu(
         IntPtr hwnd,
         string folderPath,
         IReadOnlyList<string> selectedPaths,
@@ -87,7 +87,7 @@ public sealed class WinShellContextMenuService : IShellContextMenuService
         var hr = desktop.ParseDisplayName(IntPtr.Zero, IntPtr.Zero, folderPath, 0, out var pidlFull, ref attr);
         if (hr != 0 || pidlFull == IntPtr.Zero)
         {
-            Debug.WriteLine($"ParseDisplayName failed for '{folderPath}': 0x{hr:X8}");
+            logger.LogError("ParseDisplayName failed for '{FolderPath}': 0x{Hr:X8}", folderPath, hr);
             return;
         }
 
@@ -136,7 +136,7 @@ public sealed class WinShellContextMenuService : IShellContextMenuService
             var hrCm = folder.GetUIObjectOf(IntPtr.Zero, (uint)cidl, apidl, ref iidCm, ref reserved, out cmPtr);
             if (hrCm != 0 || cmPtr == IntPtr.Zero)
             {
-                Debug.WriteLine($"GetUIObjectOf failed: 0x{hrCm:X8}");
+                logger.LogError("GetUIObjectOf failed: 0x{HrCm:X8}", hrCm);
                 return;
             }
 
@@ -154,7 +154,7 @@ public sealed class WinShellContextMenuService : IShellContextMenuService
         }
     }
 
-    private static void TrackAndInvoke(IntPtr hwnd, IContextMenu cm, int screenX, int screenY)
+    private void TrackAndInvoke(IntPtr hwnd, IContextMenu cm, int screenX, int screenY)
     {
         var hmenu = Shell32Native.CreatePopupMenu();
         if (hmenu == IntPtr.Zero)
@@ -165,7 +165,7 @@ public sealed class WinShellContextMenuService : IShellContextMenuService
             var hrQ = cm.QueryContextMenu(hmenu, 0, IdCmdFirst, IdCmdLast, Shell32Native.CMF_NORMAL);
             if (hrQ < 0)
             {
-                Debug.WriteLine($"QueryContextMenu returned 0x{hrQ:X8}");
+                logger.LogError("QueryContextMenu returned 0x{HrQ:X8}", hrQ);
                 return;
             }
 
@@ -202,7 +202,7 @@ public sealed class WinShellContextMenuService : IShellContextMenuService
 
             var hrInv = cm.InvokeCommand(ref ici);
             if (hrInv < 0)
-                Debug.WriteLine($"InvokeCommand returned 0x{hrInv:X8}");
+                logger.LogError("InvokeCommand returned 0x{HrInv:X8}", hrInv);
         }
         finally
         {

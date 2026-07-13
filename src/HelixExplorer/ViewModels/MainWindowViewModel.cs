@@ -11,7 +11,9 @@ using HelixExplorer.Core.Session;
 using HelixExplorer.Core.Settings;
 using HelixExplorer.Core.Theming;
 using HelixExplorer.Input;
+using HelixExplorer.Localization;
 using HelixExplorer.Services;
+using HelixExplorer.ViewModels.Pane;
 
 namespace HelixExplorer.ViewModels;
 
@@ -35,6 +37,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly IFolderColorService _folderColors;
     private readonly FileVisualService _visuals;
     private readonly Func<IFileChangeWatcher> _watcherFactory;
+    private readonly IPaneCoordinatorFactory _coordinatorFactory;
     private readonly FileOperationReporter _operationReporter;
     private readonly IUserDialogService _dialogs;
     private readonly IWindowHostService _windowHost;
@@ -75,6 +78,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         IFolderColorService folderColors,
         FileVisualService visuals,
         Func<IFileChangeWatcher> watcherFactory,
+        IPaneCoordinatorFactory coordinatorFactory,
         FileOperationReporter operationReporter,
         IUserDialogService dialogs,
         IWindowHostService windowHost,
@@ -100,6 +104,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _folderColors = folderColors;
         _visuals = visuals;
         _watcherFactory = watcherFactory;
+        _coordinatorFactory = coordinatorFactory;
         _operationReporter = operationReporter;
         _dialogs = dialogs;
         _windowHost = windowHost;
@@ -231,7 +236,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private bool _isDiscoveringNetwork;
 
     [ObservableProperty]
-    private string _networkBannerText = "Discovering network shares…";
+    private string _networkBannerText = UiStrings.NetworkDiscoveryBanner;
 
     private async Task RefreshNetworkLocationsAsync()
     {
@@ -533,8 +538,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             _archive,
             _folderColors,
             _settingsStore,
-            _visuals,
             _watcherFactory,
+            _coordinatorFactory,
             _operationReporter,
             _quickAccess,
             _dialogs,
@@ -771,7 +776,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private void RecordRecent(string? path)
     {
         if (string.IsNullOrWhiteSpace(path)
-            || string.Equals(path, PaneViewModel.HomeRoute, StringComparison.Ordinal))
+            || string.Equals(path, PaneConstants.HomeRoute, StringComparison.Ordinal))
             return;
 
         _recentPaths.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));

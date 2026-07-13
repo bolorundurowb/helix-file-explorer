@@ -72,14 +72,8 @@ public sealed class MillerColumnPanel : Panel
         => ColumnActivated?.Invoke(this, new MillerColumnActivatedEventArgs(columnIndex, item));
 }
 
-public sealed class MillerColumnActivatedEventArgs : EventArgs
+public sealed class MillerColumnActivatedEventArgs(int columnIndex, object? item) : EventArgs
 {
-    public MillerColumnActivatedEventArgs(int columnIndex, object? item)
-    {
-        ColumnIndex = columnIndex;
-        Item = item;
-    }
-
-    public int ColumnIndex { get; }
-    public object? Item { get; }
+    public int ColumnIndex { get; } = columnIndex;
+    public object? Item { get; } = item;
 }

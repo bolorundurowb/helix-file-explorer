@@ -8,15 +8,8 @@ using HelixExplorer.Core.Infrastructure;
 
 namespace HelixExplorer.Services;
 
-public sealed class AvaloniaUserDialogService : IUserDialogService
+public sealed class AvaloniaUserDialogService(IWindowOwnerContext ownerContext) : IUserDialogService
 {
-    private readonly IWindowOwnerContext _ownerContext;
-
-    public AvaloniaUserDialogService(IWindowOwnerContext ownerContext)
-    {
-        _ownerContext = ownerContext;
-    }
-
     public Task<bool> ConfirmAsync(string title, string message)
         => RunOnUiAsync(() => ShowConfirmAsync(title, message));
 
@@ -203,7 +196,7 @@ public sealed class AvaloniaUserDialogService : IUserDialogService
     }
 
     private Window? GetOwnerWindow()
-        => _ownerContext.OwnerWindow ?? GetFallbackMainWindow();
+        => ownerContext.OwnerWindow ?? GetFallbackMainWindow();
 
     private static Window? GetFallbackMainWindow()
     {

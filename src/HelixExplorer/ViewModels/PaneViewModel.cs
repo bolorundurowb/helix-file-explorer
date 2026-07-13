@@ -16,16 +16,15 @@ using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Session;
 using HelixExplorer.Core.Sorting;
 using HelixExplorer.Services;
+using HelixExplorer.Localization;
 using HelixExplorer.ViewModels.Pane;
 
 namespace HelixExplorer.ViewModels;
 
-public sealed partial class PaneViewModel : ObservableObject, IDisposable
+public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPaneRefreshHost
 {
     public const double MinThumbnailSize = 32;
     public const double MaxThumbnailSize = 256;
-
-    public const string HomeRoute = "__home__";
 
     private readonly IFileSystemProvider _fileSystem;
     private readonly IArchiveProvider _archive;
@@ -37,7 +36,6 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     private readonly IUiHost _uiHost;
     private readonly IGitProvider _git;
     private readonly IFileChangeWatcher _watcher;
-    private readonly FileVisualService _visuals;
     private readonly ISettingsStore _settingsStore;
     private readonly IFileOperationReporter _operationReporter;
     private readonly IQuickAccessProvider _quickAccess;
@@ -49,14 +47,9 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     private readonly PaneNavigationController _navigation;
     private readonly PaneListingCoordinator _listing = new();
     private readonly PaneFileOperationCoordinator _fileOperations;
+    private readonly PaneRefreshCoordinator _refreshCoordinator;
     private IReadOnlyList<FileSystemEntry> _allEntries = Array.Empty<FileSystemEntry>();
     private GitStatusSnapshot _gitSnapshot = GitStatusSnapshot.Empty;
-    private CancellationTokenSource? _refreshCts;
-    private CancellationTokenSource? _gitCts;
-    private CancellationTokenSource? _visualCts;
-    private int _refreshGeneration;
-    private bool _refreshInFlight;
-    private bool _watcherRefreshPending;
     private bool _disposed;
 
     public PaneViewModel(
@@ -70,14 +63,14 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         IUiHost uiHost,
         IGitProvider git,
         IFileChangeWatcher watcher,
-        FileVisualService visuals,
         ISettingsStore settingsStore,
         IFileOperationReporter operationReporter,
         IQuickAccessProvider quickAccess,
         IUserDialogService dialogs,
         IWindowHostService windowHost,
         IShellFolderEnumerator shell,
-        ITerminalLauncher terminalLauncher)
+        ITerminalLauncher terminalLauncher,
+        IPaneCoordinatorFactory coordinatorFactory)
     {
         _fileSystem = fileSystem;
         _archive = archive;
@@ -89,7 +82,6 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         _uiHost = uiHost;
         _git = git;
         _watcher = watcher;
-        _visuals = visuals;
         _settingsStore = settingsStore;
         _operationReporter = operationReporter;
         _quickAccess = quickAccess;
@@ -98,7 +90,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         _shellEnumerator = shell;
         _terminalLauncher = terminalLauncher;
         _navigation = new PaneNavigationController(fileSystem, archive);
-        _fileOperations = new PaneFileOperationCoordinator(fileOps, clipboard, osClipboard, dialogs, operationReporter);
+        _fileOperations = coordinatorFactory.CreateFileOperationCoordinator();
+        _refreshCoordinator = coordinatorFactory.CreateRefreshCoordinator();
         _watcher.Changed += OnWatcherChanged;
         _clipboard.Changed += OnClipboardChanged;
         _selection.SelectionChanged += OnSelectionModelChanged;
@@ -219,7 +212,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
     partial void OnCurrentPathChanged(string value)
     {
-        var isHomeRoute = string.Equals(value, HomeRoute, StringComparison.Ordinal);
+        var isHomeRoute = string.Equals(value, PaneConstants.HomeRoute, StringComparison.Ordinal);
         LocationKind = isHomeRoute
             ? PaneLocationKind.Home
             : ShellPath.IsShellPath(value)
@@ -232,7 +225,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         ClearFilter();
         RepositoryStatus = GitStatus.Empty;
         _gitSnapshot = GitStatusSnapshot.Empty;
-        CancelGitRefresh();
+        _refreshCoordinator.CancelGitRefresh();
         _watcher.Watch(isHomeRoute || IsArchive || ShellPath.IsShellPath(value) ? string.Empty : value);
         PasteCommand.NotifyCanExecuteChanged();
         CutCommand.NotifyCanExecuteChanged();
@@ -282,7 +275,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         if (IsHome)
             return;
 
-        RecordNavigation(HomeRoute);
+        RecordNavigation(PaneConstants.HomeRoute);
     }
 
     partial void OnSortColumnChanged(SortColumn value)
@@ -369,13 +362,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             if (_disposed || string.IsNullOrEmpty(CurrentPath))
                 return;
 
-            if (_refreshInFlight)
-            {
-                _watcherRefreshPending = true;
-                return;
-            }
-
-            _ = RefreshAsync(showLoading: false);
+            _refreshCoordinator.NotifyContentChanged(this);
         });
     }
 
@@ -498,189 +485,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
     public Task RefreshAsync() => RefreshAsync(showLoading: true);
 
-    public async Task RefreshAsync(bool showLoading)
-    {
-        if (string.IsNullOrEmpty(CurrentPath) || IsHome || _disposed)
-            return;
-
-        var generation = Interlocked.Increment(ref _refreshGeneration);
-        CancelGitRefresh();
-
-        var previous = _refreshCts;
-        var cts = new CancellationTokenSource();
-        _refreshCts = cts;
-        try { previous?.Cancel(); } catch (ObjectDisposedException) { }
-
-        previous?.Dispose();
-        var token = cts.Token;
-        var path = CurrentPath;
-
-        _refreshInFlight = true;
-        _watcher.Stop();
-
-        if (showLoading)
-        {
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                if (generation == _refreshGeneration && !_disposed)
-                    IsLoading = true;
-            });
-        }
-
-        try
-        {
-            var sw = Stopwatch.StartNew();
-            DirectoryListing listing;
-            string? errorMessage = null;
-            try
-            {
-                if (ArchivePath.IsVirtual(path))
-                {
-                    var entries = await _archive.EnumerateAsync(path, token).ConfigureAwait(false);
-                    listing = new DirectoryListing(path, entries);
-                }
-                else
-                {
-                    listing = await _fileSystem.GetDirectoryContentsAsync(path, token).ConfigureAwait(false);
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
-            catch (Exception ex)
-            {
-                errorMessage = FileSystemError.Describe(ex, path);
-                Debug.WriteLine($"PaneViewModel.RefreshAsync failed for '{path}': {ex.Message}");
-                listing = DirectoryListing.Empty;
-            }
-
-            sw.Stop();
-            Debug.WriteLine($"Refresh '{path}' listed {listing.Count} items in {sw.ElapsedMilliseconds} ms");
-
-            if (token.IsCancellationRequested || _disposed || generation != _refreshGeneration)
-                return;
-
-            _allEntries = listing.Entries;
-
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                if (token.IsCancellationRequested || _disposed || generation != _refreshGeneration)
-                    return;
-
-                ApplySortAndPublish();
-                if (!string.IsNullOrEmpty(errorMessage))
-                    StatusText = errorMessage;
-                Navigated?.Invoke(this, EventArgs.Empty);
-
-                if (showLoading)
-                    IsLoading = false;
-            });
-
-            if (token.IsCancellationRequested || _disposed || generation != _refreshGeneration)
-                return;
-
-            StartGitStatusRefresh(generation, path);
-        }
-        finally
-        {
-            if (generation == _refreshGeneration)
-            {
-                _refreshCts = null;
-                _refreshInFlight = false;
-
-                if (!_disposed && !string.IsNullOrEmpty(CurrentPath) && !IsArchive && !IsShellNamespace)
-                    _watcher.Watch(CurrentPath);
-
-                if (_watcherRefreshPending && !_disposed)
-                {
-                    _watcherRefreshPending = false;
-                    _ = RefreshAsync(showLoading: false);
-                }
-            }
-
-            cts.Dispose();
-        }
-    }
-
-    private void CancelGitRefresh()
-    {
-        if (_gitCts is null)
-            return;
-
-        try { _gitCts.Cancel(); } catch (ObjectDisposedException) { }
-        _gitCts.Dispose();
-        _gitCts = null;
-    }
-
-    private void StartGitStatusRefresh(int generation, string path)
-    {
-        if (!_git.IsInsideRepository(path))
-        {
-            _ = Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                if (generation != _refreshGeneration || _disposed)
-                    return;
-                if (!PathsEqual(path, CurrentPath))
-                    return;
-
-                _gitSnapshot = GitStatusSnapshot.Empty;
-                RepositoryStatus = GitStatus.Empty;
-                ApplyGitStatusesToEntries();
-            });
-            return;
-        }
-
-        var cts = new CancellationTokenSource();
-        _gitCts = cts;
-        _ = RefreshGitStatusAsync(generation, path, cts);
-    }
-
-    private async Task RefreshGitStatusAsync(int generation, string path, CancellationTokenSource cts)
-    {
-        var token = cts.Token;
-        try
-        {
-            var snapshot = await _git.GetStatusAsync(path, token).ConfigureAwait(false);
-
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                if (token.IsCancellationRequested || _disposed || generation != _refreshGeneration)
-                    return;
-                if (!PathsEqual(path, CurrentPath))
-                    return;
-
-                _gitSnapshot = snapshot;
-                RepositoryStatus = snapshot.Status;
-                ApplyGitStatusesToEntries();
-            });
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"Git status failed for '{path}': {ex.Message}");
-        }
-        finally
-        {
-            if (ReferenceEquals(_gitCts, cts))
-            {
-                _gitCts = null;
-                cts.Dispose();
-            }
-        }
-    }
-
-    private void ApplyGitStatusesToEntries()
-    {
-        foreach (var item in Entries)
-        {
-            var status = _gitSnapshot.GetStatusForPath(item.FullPath);
-            if (item.GitStatus != status)
-                item.GitStatus = status;
-        }
-    }
+    public Task RefreshAsync(bool showLoading)
+        => _refreshCoordinator.RefreshAsync(this, showLoading);
 
     public void RefreshFolderColorBindings()
     {
@@ -691,15 +497,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         }
     }
 
-    private static bool PathsEqual(string a, string b)
-        => string.Equals(
-            a.TrimEnd('\\', '/'),
-            b.TrimEnd('\\', '/'),
-            StringComparison.OrdinalIgnoreCase);
-
     private void ApplySortAndPublish()
-    {
-        var result = _listing.ApplySortAndPublish(new ListingPublishRequest
+        => ((IPaneRefreshHost)this).ApplySortAndPublish(new ListingPublishRequest
         {
             AllEntries = _allEntries,
             GitSnapshot = _gitSnapshot,
@@ -711,6 +510,10 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             SortDescending = SortDescending
         });
 
+    ListingPublishResult IPaneRefreshHost.ApplySortAndPublish(ListingPublishRequest request)
+    {
+        var result = _listing.ApplySortAndPublish(request);
+
         TotalCount = result.TotalCount;
         ListingSizeBytes = result.ListingSizeBytes;
         SyncEntriesCollection(result.Entries);
@@ -720,7 +523,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         SelectedEntries.Clear();
         SelectedCount = 0;
         UpdateStatusText();
-        RequestEntryVisuals(result.VisualTargets);
+        _refreshCoordinator.RequestEntryVisuals(this, result.VisualTargets);
+        return result;
     }
 
     private void SyncEntriesCollection(IReadOnlyList<EntryItemViewModel> nextEntries)
@@ -747,17 +551,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     }
 
     private void RequestEntryVisuals(IReadOnlyList<EntryItemViewModel>? targets = null)
-    {
-        _visualCts?.Cancel();
-        _visualCts?.Dispose();
-        _visualCts = new CancellationTokenSource();
-        var ct = _visualCts.Token;
-        var size = IsGridView ? (int)ThumbnailSize : 20;
-
-        var entries = targets ?? Entries;
-        foreach (var entry in entries)
-            _ = entry.RefreshVisualAsync(_visuals, size, IsGridView, ct);
-    }
+        => _refreshCoordinator.RequestEntryVisuals(this, targets);
 
     private void UpdateStatusText()
     {
@@ -984,8 +778,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         catch (Exception ex)
         {
             Debug.WriteLine($"Delete failed: {ex.Message}");
-            await _dialogs.ShowErrorAsync("Delete failed", ex.Message);
-            StatusText = "Delete failed";
+            await _dialogs.ShowErrorAsync(UiStrings.DeleteFailed, ex.Message);
+            StatusText = UiStrings.DeleteFailed;
         }
     }
 
@@ -996,8 +790,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             return;
 
         var confirmed = await _dialogs.ConfirmAsync(
-            "Permanently delete?",
-            "Selected items will be permanently deleted and cannot be restored.");
+            UiStrings.PermanentlyDeleteTitle,
+            UiStrings.PermanentlyDeleteMessage);
         if (!confirmed)
             return;
 
@@ -1011,8 +805,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         catch (Exception ex)
         {
             Debug.WriteLine($"Permanent delete failed: {ex.Message}");
-            await _dialogs.ShowErrorAsync("Delete failed", ex.Message);
-            StatusText = "Delete failed";
+            await _dialogs.ShowErrorAsync(UiStrings.DeleteFailed, ex.Message);
+            StatusText = UiStrings.DeleteFailed;
         }
     }
 
@@ -1051,8 +845,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             var result = await _fileOps.RenameAsync(oldPath, newName);
             if (result.Failed > 0)
             {
-                await _dialogs.ShowErrorAsync("Rename failed", result.Failures[0].Message);
-                StatusText = "Rename failed";
+                await _dialogs.ShowErrorAsync(UiStrings.RenameFailed, result.Failures[0].Message);
+                StatusText = UiStrings.RenameFailed;
                 IsRenaming = false;
                 return;
             }
@@ -1064,7 +858,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         catch (Exception ex)
         {
             Debug.WriteLine($"Rename failed: {ex.Message}");
-            StatusText = "Rename failed";
+            StatusText = UiStrings.RenameFailed;
             IsRenaming = false;
         }
     }
@@ -1086,7 +880,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         catch (Exception ex)
         {
             Debug.WriteLine($"NewFolder failed: {ex.Message}");
-            StatusText = "Could not create folder";
+            StatusText = UiStrings.NewFolderFailed;
         }
     }
 
@@ -1114,12 +908,12 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             IsLoading = true;
             await _archive.CreateZipAsync(sources, destination).ConfigureAwait(true);
             await RefreshAsync(showLoading: false).ConfigureAwait(true);
-            StatusText = $"Created {Path.GetFileName(destination)}";
+            StatusText = UiStrings.CreatedArchive(Path.GetFileName(destination));
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"CompressToZip failed: {ex.Message}");
-            StatusText = "Could not create archive";
+            StatusText = UiStrings.CompressToZipFailed;
             IsLoading = false;
         }
     }
@@ -1173,12 +967,12 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             else
                 IsLoading = false;
 
-            StatusText = "Extracted";
+            StatusText = UiStrings.Extracted;
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"ExtractHere failed: {ex.Message}");
-            StatusText = "Could not extract";
+            StatusText = UiStrings.ExtractFailed;
             IsLoading = false;
         }
     }
@@ -1195,7 +989,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
         var color = Avalonia.Media.Color.Parse(hex);
         _folderColors.SetColor(path, color.ToUInt32());
-        StatusText = $"Colored {SelectedEntries[0].Name}";
+        StatusText = UiStrings.FolderColored(SelectedEntries[0].Name);
     }
 
     [RelayCommand(CanExecute = nameof(CanSetFolderColor))]
@@ -1206,7 +1000,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
         var path = SelectedEntries[0].FullPath;
         _folderColors.RemoveColor(path);
-        StatusText = $"Cleared color for {SelectedEntries[0].Name}";
+        StatusText = UiStrings.FolderColorCleared(SelectedEntries[0].Name);
     }
 
     private bool CanSetFolderColor()
@@ -1263,7 +1057,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         if (!_terminalLauncher.TryOpenInDirectory(dirPath))
         {
             Debug.WriteLine("OpenInTerminal failed: no compatible terminal found");
-            StatusText = "Could not open terminal";
+            StatusText = UiStrings.OpenInTerminalFailed;
         }
     }
 
@@ -1359,7 +1153,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         catch (Exception ex)
         {
             Debug.WriteLine($"OpenBranchFlyout failed: {ex.Message}");
-            StatusText = "Could not list branches";
+            StatusText = UiStrings.ListBranchesFailed;
         }
     }
 
@@ -1375,7 +1169,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             var ok = await _git.CheckoutBranchAsync(CurrentPath, branch).ConfigureAwait(true);
             if (!ok)
             {
-                StatusText = $"Could not checkout {branch}";
+                StatusText = UiStrings.CheckoutBranchFailed(branch);
                 return;
             }
 
@@ -1384,7 +1178,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         catch (Exception ex)
         {
             Debug.WriteLine($"CheckoutBranch failed: {ex.Message}");
-            StatusText = $"Could not checkout {branch}";
+            StatusText = UiStrings.CheckoutBranchFailed(branch);
         }
     }
 
@@ -1398,11 +1192,12 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         {
             var text = string.Join(Environment.NewLine, SelectedEntries.Select(e => e.FullPath));
             await _uiHost.SetClipboardTextAsync(text).ConfigureAwait(true);
-            StatusText = SelectedEntries.Count == 1 ? "Path copied" : "Paths copied";
+            StatusText = SelectedEntries.Count == 1 ? UiStrings.PathCopied : UiStrings.PathsCopied;
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"CopyPath failed: {ex.Message}");
+            StatusText = UiStrings.CopyPathFailed;
         }
     }
 
@@ -1421,7 +1216,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         catch (Exception ex)
         {
             Debug.WriteLine($"ShowProperties failed: {ex.Message}");
-            StatusText = "Could not open properties";
+            StatusText = UiStrings.ShowPropertiesFailed;
         }
     }
 
@@ -1448,7 +1243,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         catch (Exception ex)
         {
             Debug.WriteLine($"Show more options failed: {ex.Message}");
-            StatusText = "Could not show more options";
+            StatusText = UiStrings.ShowMoreOptionsFailed;
         }
     }
 
@@ -1472,12 +1267,12 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
                 await _shellEnumerator.RestoreAsync(entry.FullPath).ConfigureAwait(true);
 
             await RefreshAsync(showLoading: false);
-            StatusText = "Restored selected item(s)";
+            StatusText = UiStrings.RestoredFromRecycleBin;
         }
         catch (Exception ex)
         {
-            await _dialogs.ShowErrorAsync("Restore failed", ex.Message);
-            StatusText = "Restore failed";
+            await _dialogs.ShowErrorAsync(UiStrings.RestoreFailed, ex.Message);
+            StatusText = UiStrings.RestoreFailed;
         }
     }
 
@@ -1490,8 +1285,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             return;
 
         var confirmed = await _dialogs.ConfirmAsync(
-            "Empty Recycle Bin?",
-            "All items in the Recycle Bin will be permanently deleted.");
+            UiStrings.EmptyRecycleBinTitle,
+            UiStrings.EmptyRecycleBinMessage);
         if (!confirmed)
             return;
 
@@ -1499,11 +1294,11 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         {
             await _shellEnumerator.EmptyRecycleBinAsync().ConfigureAwait(true);
             await RefreshAsync(showLoading: false);
-            StatusText = "Recycle Bin emptied";
+            StatusText = UiStrings.RecycleBinEmptied;
         }
         catch (Exception ex)
         {
-            await _dialogs.ShowErrorAsync("Empty Recycle Bin failed", ex.Message);
+            await _dialogs.ShowErrorAsync(UiStrings.EmptyRecycleBinFailed, ex.Message);
         }
     }
 
@@ -1597,6 +1392,70 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             Breadcrumbs.Add(crumb);
     }
 
+    bool IPaneRefreshHost.IsDisposed => _disposed;
+
+    string IPaneRefreshHost.CurrentPath => CurrentPath;
+
+    bool IPaneRefreshHost.IsHome => IsHome;
+
+    bool IPaneRefreshHost.IsArchive => IsArchive;
+
+    bool IPaneRefreshHost.IsShellNamespace => IsShellNamespace;
+
+    bool IPaneRefreshHost.ShowHiddenFiles => ShowHiddenFiles;
+
+    bool IPaneRefreshHost.ShowFileExtensions => ShowFileExtensions;
+
+    bool IPaneRefreshHost.IsFilterVisible => IsFilterVisible;
+
+    string IPaneRefreshHost.FilterText => FilterText;
+
+    SortColumn IPaneRefreshHost.SortColumn => SortColumn;
+
+    bool IPaneRefreshHost.SortDescending => SortDescending;
+
+    bool IPaneRefreshHost.IsGridView => IsGridView;
+
+    double IPaneRefreshHost.ThumbnailSize => ThumbnailSize;
+
+    LayoutMode IPaneRefreshHost.ViewMode => ViewMode;
+
+    IReadOnlyList<EntryItemViewModel> IPaneRefreshHost.Entries => Entries;
+
+    void IPaneRefreshHost.SetLoading(bool loading) => IsLoading = loading;
+
+    void IPaneRefreshHost.SetStatusText(string text) => StatusText = text;
+
+    void IPaneRefreshHost.OnNavigated() => Navigated?.Invoke(this, EventArgs.Empty);
+
+    void IPaneRefreshHost.ApplyGitSnapshot(GitStatusSnapshot snapshot, GitStatus status)
+    {
+        _gitSnapshot = snapshot;
+        RepositoryStatus = status;
+        ApplyGitStatusesToEntries();
+    }
+
+    void IPaneRefreshHost.StopWatcher() => _watcher.Stop();
+
+    void IPaneRefreshHost.RestartWatcher()
+    {
+        if (!_disposed && !string.IsNullOrEmpty(CurrentPath) && !IsArchive && !IsShellNamespace)
+            _watcher.Watch(CurrentPath);
+    }
+
+    void IPaneRefreshHost.RequestRefresh()
+        => _ = RefreshAsync(showLoading: false);
+
+    private void ApplyGitStatusesToEntries()
+    {
+        foreach (var item in Entries)
+        {
+            var status = _gitSnapshot.GetStatusForPath(item.FullPath);
+            if (item.GitStatus != status)
+                item.GitStatus = status;
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -1605,13 +1464,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         _clipboard.Changed -= OnClipboardChanged;
         _watcher.Changed -= OnWatcherChanged;
         _watcher.Dispose();
-        try { _refreshCts?.Cancel(); } catch (ObjectDisposedException) { }
-        _refreshCts?.Dispose();
-        _refreshCts = null;
-        CancelGitRefresh();
-        try { _visualCts?.Cancel(); } catch (ObjectDisposedException) { }
-        _visualCts?.Dispose();
-        _visualCts = null;
+        _refreshCoordinator.Dispose();
         IsLoading = false;
     }
 }

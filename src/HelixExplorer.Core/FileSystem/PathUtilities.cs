@@ -1,4 +1,5 @@
 using HelixExplorer.Core.Archives;
+using HelixExplorer.Core.Models;
 
 namespace HelixExplorer.Core.FileSystem;
 
@@ -125,8 +126,17 @@ public static class PathUtilities
             return false;
 
         var normalized = path.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
-        return normalized.StartsWith(@"\\", StringComparison.Ordinal)
-               && normalized.Length > 2;
+        if (!normalized.StartsWith(@"\\", StringComparison.Ordinal))
+            return false;
+
+        // A valid UNC path needs at least \server\share (two components after the leading \\).
+        var withoutPrefix = normalized[2..];
+        var firstSeparator = withoutPrefix.IndexOf(Path.DirectorySeparatorChar);
+        if (firstSeparator <= 0)
+            return false;
+
+        var afterServer = withoutPrefix[(firstSeparator + 1)..];
+        return !string.IsNullOrEmpty(afterServer) && afterServer[0] != Path.DirectorySeparatorChar;
     }
 
     private static bool IsSameOrChildPhysicalPath(string directory, string path)
@@ -146,17 +156,28 @@ public static class PathUtilities
 
     private static bool IsSameOrChildArchivePath(string directory, string path)
     {
-        var dir = NormalizeArchivePath(directory);
-        var candidate = NormalizeArchivePath(path);
+        if (!ArchivePath.TryParse(directory, out var dirArchive, out var dirInner) ||
+            !ArchivePath.TryParse(path, out var pathArchive, out var pathInner))
+        {
+            return false;
+        }
 
-        if (string.Equals(dir, candidate, StringComparison.OrdinalIgnoreCase))
+        if (!PathsEqual(dirArchive, pathArchive))
+            return false;
+
+        var dirInnerNorm = dirInner.Replace('\\', '/').Trim('/');
+        var pathInnerNorm = pathInner.Replace('\\', '/').Trim('/');
+
+        if (string.IsNullOrEmpty(dirInnerNorm))
             return true;
 
-        if (!dir.EndsWith('/'))
-            dir += "/";
+        if (string.IsNullOrEmpty(pathInnerNorm))
+            return false;
 
-        return candidate.StartsWith(dir, StringComparison.OrdinalIgnoreCase)
-               && candidate.Length > dir.Length;
+        if (string.Equals(dirInnerNorm, pathInnerNorm, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return pathInnerNorm.StartsWith(dirInnerNorm + "/", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string NormalizePhysicalPath(string path)
@@ -164,7 +185,17 @@ public static class PathUtilities
         try
         {
             // Resolves . and .. segments and normalizes separators. Does not require the path to exist.
-            var full = Path.GetFullPath(path);
+            var normalized = path.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+
+            // Path.GetFullPath interprets a lone "C:" as the current directory on that drive.
+            // Treat it as the drive root instead.
+            if (normalized.Length == 2 && normalized[1] == ':')
+                normalized += Path.DirectorySeparatorChar;
+
+            var full = Path.GetFullPath(normalized);
+            if (IsDriveRoot(full))
+                return full;
+
             return full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         }
         catch

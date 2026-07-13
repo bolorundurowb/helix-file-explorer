@@ -5,18 +5,10 @@ using HelixExplorer.ViewModels;
 namespace HelixExplorer.ViewModels.Pane;
 
 /// <summary>Back/forward stacks and path resolution for pane navigation.</summary>
-public sealed class PaneNavigationController
+public sealed class PaneNavigationController(IFileSystemProvider fileSystem, IArchiveProvider archive)
 {
-    private readonly IFileSystemProvider _fileSystem;
-    private readonly IArchiveProvider _archive;
     private readonly Stack<string> _backStack = new();
     private readonly Stack<string> _forwardStack = new();
-
-    public PaneNavigationController(IFileSystemProvider fileSystem, IArchiveProvider archive)
-    {
-        _fileSystem = fileSystem;
-        _archive = archive;
-    }
 
     public bool CanGoBack => _backStack.Count > 0;
 
@@ -44,8 +36,8 @@ public sealed class PaneNavigationController
                 : EnsureTrailingSeparator(parent.FullName);
         }
 
-        var resolved = _fileSystem.ResolvePath(path);
-        if (_archive.IsArchiveFile(resolved))
+        var resolved = fileSystem.ResolvePath(path);
+        if (archive.IsArchiveFile(resolved))
             return ArchivePath.Mount(resolved);
 
         return EnsureTrailingSeparator(resolved);

@@ -4,28 +4,21 @@ namespace HelixExplorer.Core.Git;
 /// Snapshot from a single <c>git status --porcelain=v2 --branch</c> invocation.
 /// File keys are repo-relative paths normalized with forward slashes and no trailing slash.
 /// </summary>
-public sealed class GitStatusSnapshot
+public sealed class GitStatusSnapshot(
+    GitStatus status,
+    string? repoRoot,
+    IReadOnlyDictionary<string, GitFileStatus> files)
 {
     public static readonly GitStatusSnapshot Empty = new(
         GitStatus.Empty,
         repoRoot: null,
         files: new Dictionary<string, GitFileStatus>(0, StringComparer.OrdinalIgnoreCase));
 
-    public GitStatusSnapshot(
-        GitStatus status,
-        string? repoRoot,
-        IReadOnlyDictionary<string, GitFileStatus> files)
-    {
-        Status = status;
-        RepoRoot = repoRoot;
-        Files = files;
-    }
+    public GitStatus Status { get; } = status;
 
-    public GitStatus Status { get; }
+    public string? RepoRoot { get; } = repoRoot;
 
-    public string? RepoRoot { get; }
-
-    public IReadOnlyDictionary<string, GitFileStatus> Files { get; }
+    public IReadOnlyDictionary<string, GitFileStatus> Files { get; } = files;
 
     public bool IsRepository => Status.IsRepository && !string.IsNullOrEmpty(RepoRoot);
 

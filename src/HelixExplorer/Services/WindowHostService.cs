@@ -14,16 +14,10 @@ public interface IWindowHostService
     int OpenWindowCount { get; }
 }
 
-public sealed class WindowHostService : IWindowHostService
+public sealed class WindowHostService(IServiceScopeFactory scopeFactory) : IWindowHostService
 {
-    private readonly IServiceScopeFactory _scopeFactory;
     private readonly object _gate = new();
     private readonly List<IServiceScope> _scopes = new();
-
-    public WindowHostService(IServiceScopeFactory scopeFactory)
-    {
-        _scopeFactory = scopeFactory;
-    }
 
     public int OpenWindowCount
     {
@@ -36,7 +30,7 @@ public sealed class WindowHostService : IWindowHostService
 
     public async Task<MainWindow> OpenWindowAsync(string? initialPath = null, bool restoreSession = false)
     {
-        var scope = _scopeFactory.CreateScope();
+        var scope = scopeFactory.CreateScope();
         var window = scope.ServiceProvider.GetRequiredService<MainWindow>();
         var vm = scope.ServiceProvider.GetRequiredService<MainWindowViewModel>();
         scope.ServiceProvider.GetRequiredService<IWindowOwnerContext>().SetOwner(window);

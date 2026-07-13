@@ -19,17 +19,9 @@ public interface IFileConflictResolver
 }
 
 /// <summary>Default implementation backed by <see cref="IUserDialogService"/>.</summary>
-public sealed class FileConflictResolver : IFileConflictResolver
+public sealed class FileConflictResolver(IUserDialogService dialogs, bool canApplyToAll = true) : IFileConflictResolver
 {
-    private readonly IUserDialogService _dialogs;
     private FileConflictChoice? _applyToAll;
-    private readonly bool _canApplyToAll;
-
-    public FileConflictResolver(IUserDialogService dialogs, bool canApplyToAll = true)
-    {
-        _dialogs = dialogs;
-        _canApplyToAll = canApplyToAll;
-    }
 
     public bool ApplyToAllChosen => _applyToAll.HasValue;
 
@@ -38,7 +30,7 @@ public sealed class FileConflictResolver : IFileConflictResolver
         if (_applyToAll.HasValue)
             return _applyToAll.Value;
 
-        var resolution = await _dialogs.ResolveConflictAsync(conflict, _canApplyToAll).ConfigureAwait(true);
+        var resolution = await dialogs.ResolveConflictAsync(conflict, canApplyToAll).ConfigureAwait(true);
         if (resolution is null)
             return null;
 

@@ -67,18 +67,11 @@ public sealed partial class SettingsPageViewModel : ObservableObject
     }
 }
 
-public sealed partial class SettingsSection : ObservableObject
+public sealed partial class SettingsSection(string key, string title, string iconGeometry) : ObservableObject
 {
-    public SettingsSection(string key, string title, string iconGeometry)
-    {
-        Key = key;
-        Title = title;
-        IconGeometry = iconGeometry;
-    }
-
-    public string Key { get; }
-    public string Title { get; }
-    public string IconGeometry { get; }
+    public string Key { get; } = key;
+    public string Title { get; } = title;
+    public string IconGeometry { get; } = iconGeometry;
 
     [ObservableProperty]
     private bool _isSelected;

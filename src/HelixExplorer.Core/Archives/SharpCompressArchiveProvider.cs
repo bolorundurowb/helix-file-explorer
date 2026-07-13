@@ -1,6 +1,6 @@
-using System.Diagnostics;
 using HelixExplorer.Core.Collections;
 using HelixExplorer.Core.Models;
+using Microsoft.Extensions.Logging;
 using SharpCompress.Archives;
 using SharpCompress.Archives.Zip;
 using SharpCompress.Common;
@@ -13,7 +13,7 @@ namespace HelixExplorer.Core.Archives;
 /// SharpCompress-backed virtual file system for zip/7z/rar/tar/gzip archives.
 /// Uses <see cref="ArchiveFactory.OpenArchive"/> for random-access enumeration.
 /// </summary>
-public sealed class SharpCompressArchiveProvider : IArchiveProvider
+public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchiveProvider> logger) : IArchiveProvider
 {
     public bool IsArchiveFile(string path) => ArchivePath.IsArchiveFile(path);
 
@@ -77,7 +77,7 @@ public sealed class SharpCompressArchiveProvider : IArchiveProvider
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"ExtractEntryAsync failed for '{virtualPath}': {ex.Message}");
+                logger.LogError(ex, "Archive extract failed for '{VirtualPath}'", virtualPath);
             }
 
             return null;
@@ -217,7 +217,7 @@ public sealed class SharpCompressArchiveProvider : IArchiveProvider
                || entryKey.StartsWith(wantedPrefix + "/", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static IReadOnlyList<FileSystemEntry> Enumerate(
+    private IReadOnlyList<FileSystemEntry> Enumerate(
         string archivePath,
         string innerFilter,
         CancellationToken token)
@@ -293,7 +293,7 @@ public sealed class SharpCompressArchiveProvider : IArchiveProvider
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
                                        or NotSupportedException or InvalidOperationException)
         {
-            Debug.WriteLine($"Archive enumerate failed for '{archivePath}': {ex.Message}");
+            logger.LogError(ex, "Archive enumerate failed for '{ArchivePath}'", archivePath);
         }
 
         return poolList.ToArray();

@@ -5,15 +5,9 @@ using HelixExplorer.Core.FileSystem;
 
 namespace HelixExplorer.Services;
 
-public sealed class FileVisualService
+public sealed class FileVisualService(IFileVisualProvider provider)
 {
-    private readonly IFileVisualProvider _provider;
     private readonly ConcurrentDictionary<VisualCacheKey, Bitmap> _cache = new();
-
-    public FileVisualService(IFileVisualProvider provider)
-    {
-        _provider = provider;
-    }
 
     public async Task<Bitmap?> GetBitmapAsync(
         string path,
@@ -30,7 +24,7 @@ public sealed class FileVisualService
             return cached;
 
         var request = new FileVisualRequest(path, isDirectory, size, preferThumbnail);
-        var data = await _provider.GetAsync(request, cancellationToken).ConfigureAwait(false);
+        var data = await provider.GetAsync(request, cancellationToken).ConfigureAwait(false);
         if (data is null || data.Png.Length == 0)
             return null;
 

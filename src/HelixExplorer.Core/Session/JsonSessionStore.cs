@@ -8,7 +8,7 @@ namespace HelixExplorer.Core.Session;
 /// JSON-backed session store. Saves are atomic: the document is written to a sibling
 /// temp file and then moved over the target so a crash mid-write cannot corrupt session.json.
 /// </summary>
-public sealed class JsonSessionStore : ISessionStore
+public sealed class JsonSessionStore(string path) : ISessionStore
 {
     private static readonly JsonSerializerOptions Options = new()
     {
@@ -17,25 +17,18 @@ public sealed class JsonSessionStore : ISessionStore
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    private readonly string _path;
-
     public JsonSessionStore() : this(AppPaths.SessionFile)
     {
     }
 
-    public JsonSessionStore(string path)
-    {
-        _path = path;
-    }
-
     public SessionDocument Load()
     {
-        if (!File.Exists(_path))
+        if (!File.Exists(path))
             return new SessionDocument();
 
         try
         {
-            var json = File.ReadAllText(_path);
+            var json = File.ReadAllText(path);
             return JsonSerializer.Deserialize<SessionDocument>(json, Options) ?? new SessionDocument();
         }
         catch
@@ -46,14 +39,14 @@ public sealed class JsonSessionStore : ISessionStore
 
     public void Save(SessionDocument document)
     {
-        var directory = Path.GetDirectoryName(_path);
+        var directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
 
         var json = JsonSerializer.Serialize(document, Options);
-        var tempPath = _path + ".tmp";
+        var tempPath = path + ".tmp";
 
         File.WriteAllText(tempPath, json);
-        File.Move(tempPath, _path, overwrite: true);
+        File.Move(tempPath, path, overwrite: true);
     }
 }

@@ -1,8 +1,8 @@
-using System.Diagnostics;
 using HelixExplorer.Core.Collections;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Sorting;
+using Microsoft.Extensions.Logging;
 
 namespace HelixExplorer.Windows.FileSystem;
 
@@ -11,7 +11,8 @@ namespace HelixExplorer.Windows.FileSystem;
 /// <see cref="DirectoryInfo.EnumerateFileSystemInfos"/> pass so attributes, size, and
 /// timestamps come from the Win32 find data without extra per-entry stats.
 /// </summary>
-public sealed class WinFileSystemProvider : IFileSystemProvider
+public sealed class WinFileSystemProvider(IShellFolderEnumerator shell, ILogger<WinFileSystemProvider> logger)
+    : IFileSystemProvider
 {
     private static readonly EnumerationOptions Options = new()
     {
@@ -22,13 +23,6 @@ public sealed class WinFileSystemProvider : IFileSystemProvider
         MatchType = MatchType.Simple
     };
 
-    private readonly IShellFolderEnumerator _shell;
-
-    public WinFileSystemProvider(IShellFolderEnumerator shell)
-    {
-        _shell = shell;
-    }
-
     public async ValueTask<DirectoryListing> GetDirectoryContentsAsync(string path, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(path) || !DirectoryExists(path))
@@ -36,7 +30,7 @@ public sealed class WinFileSystemProvider : IFileSystemProvider
 
         if (ShellPath.IsShellPath(path))
         {
-            var shellEntries = await _shell.EnumerateAsync(path, cancellationToken).ConfigureAwait(false);
+            var shellEntries = await shell.EnumerateAsync(path, cancellationToken).ConfigureAwait(false);
             return new DirectoryListing(path, shellEntries);
         }
 
@@ -62,7 +56,7 @@ public sealed class WinFileSystemProvider : IFileSystemProvider
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"WinFileSystemProvider.ResolvePath failed for '{path}': {ex.Message}");
+            logger.LogWarning(ex, "ResolvePath failed for '{Path}'", path);
             return path;
         }
     }
@@ -72,7 +66,7 @@ public sealed class WinFileSystemProvider : IFileSystemProvider
 
     public bool FileExists(string path) => !string.IsNullOrEmpty(path) && File.Exists(path);
 
-    private static IReadOnlyList<FileSystemEntry> Enumerate(string path, CancellationToken token)
+    private IReadOnlyList<FileSystemEntry> Enumerate(string path, CancellationToken token)
     {
         using var entries = new ArrayPoolList<FileSystemEntry>(128);
 
@@ -94,7 +88,7 @@ public sealed class WinFileSystemProvider : IFileSystemProvider
                 }
                 catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
                 {
-                    Debug.WriteLine($"Skipping inaccessible entry '{info.FullName}': {ex.Message}");
+                    logger.LogWarning(ex, "Skipping inaccessible entry '{FullName}'", info.FullName);
                     modified = DateTime.MinValue;
                 }
 
@@ -105,7 +99,7 @@ public sealed class WinFileSystemProvider : IFileSystemProvider
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or DirectoryNotFoundException)
         {
-            Debug.WriteLine($"Enumerate failed on '{path}': {ex.Message}");
+            logger.LogError(ex, "Enumerate failed on '{Path}'", path);
         }
 
         var snapshot = entries.ToArray();

@@ -1,10 +1,10 @@
-using System.Diagnostics;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Infrastructure;
+using Microsoft.Extensions.Logging;
 
 namespace HelixExplorer.Windows.FileSystem;
 
-public sealed class WinFileOperationService : IFileOperationService
+public sealed class WinFileOperationService(ILogger<WinFileOperationService> logger) : IFileOperationService
 {
     public async ValueTask<FileOperationResult> CopyAsync(
         IReadOnlyList<string> sources,
@@ -59,7 +59,7 @@ public sealed class WinFileOperationService : IFileOperationService
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"Delete failed for '{path}': {ex.Message}");
+                    logger.LogError(ex, "Delete failed for '{Path}'", path);
                     failures.Add(new FileOperationFailure(path, ex.Message));
                 }
             }
@@ -91,7 +91,7 @@ public sealed class WinFileOperationService : IFileOperationService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Rename failed for '{path}': {ex.Message}");
+            logger.LogError(ex, "Rename failed for '{Path}'", path);
             return new FileOperationResult(0, 0, 1, [new FileOperationFailure(path, ex.Message)]);
         }
     }
@@ -109,7 +109,7 @@ public sealed class WinFileOperationService : IFileOperationService
         }, ct).ConfigureAwait(false);
     }
 
-    private static FileOperationResult ProcessSources(
+    private FileOperationResult ProcessSources(
         IReadOnlyList<string> sources,
         string destination,
         FileOperationKind kind,
@@ -147,7 +147,7 @@ public sealed class WinFileOperationService : IFileOperationService
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"{kind} failed for '{source}': {ex.Message}");
+                logger.LogError(ex, "{Kind} failed for '{Source}'", kind, source);
                 failures.Add(new FileOperationFailure(source, ex.Message));
             }
 
@@ -373,7 +373,7 @@ public sealed class WinFileOperationService : IFileOperationService
         }
     }
 
-    private static void SendToRecycleBin(string path)
+    private void SendToRecycleBin(string path)
     {
         try
         {
@@ -398,7 +398,7 @@ public sealed class WinFileOperationService : IFileOperationService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Recycle bin failed for '{path}': {ex.Message}");
+            logger.LogError(ex, "Recycle bin operation failed for '{Path}'", path);
             throw;
         }
     }

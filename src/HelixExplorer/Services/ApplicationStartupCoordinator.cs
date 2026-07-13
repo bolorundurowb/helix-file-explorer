@@ -30,18 +30,17 @@ public sealed class ApplicationStartupCoordinator(
         accentBrushes.ApplyCustomAccent(settings.AccentColorArgb);
         themeService.ThemeChanged += _ => accentBrushes.ApplyCustomAccent(accentBrushes.CustomAccentArgb);
 
-        WireResourceConverters(application);
+        WireResourceConverters(application, settings);
         WireMainWindowViewModel(mainWindowViewModel);
 
         _themeWatcher = new WinThemeWatcher(themeService, () => settingsStore.Load().Theme);
     }
 
-    private void WireResourceConverters(Application application)
+    private void WireResourceConverters(Application application, Core.Settings.AppSettings settings)
     {
         if (application.Resources.TryGetResource("FileSizeConverter", application.ActualThemeVariant, out var converterObj)
             && converterObj is Converters.FileSizeConverter converter)
         {
-            var settings = settingsStore.Load();
             converter.Mode = settings.SizeDisplay;
         }
 

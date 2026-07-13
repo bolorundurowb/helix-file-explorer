@@ -61,7 +61,7 @@ public sealed class PaneFileOperationCoordinator(
                     ? (kind == FileOperationKind.Move
                         ? UiStrings.MovedItems(result.Succeeded)
                         : UiStrings.CopiedItems(result.Succeeded))
-                    : "No items copied");
+                    : UiStrings.NoItemsCopied);
 
             await FileOperationUiHelper.ReportResultAsync(
                 dialogs,

@@ -9,13 +9,17 @@ public sealed class FireAndForgetSafeTests
     [Fact]
     public async Task Run_swallows_operation_canceled_exception()
     {
-        var logger = new TestLogger();
+        var tcs = new TaskCompletionSource();
+        var logger = new TestLogger(onLog: tcs);
 
         FireAndForgetSafe.Run(
             () => throw new OperationCanceledException(),
             logger);
 
-        await Task.Delay(50);
+        // OperationCanceledException is swallowed, so the logger should never be called.
+        // Wait briefly and verify no errors were logged.
+        var completed = await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(1)));
+        Assert.NotEqual(tcs.Task, completed);
 
         Assert.Empty(logger.Errors);
     }
@@ -23,14 +27,15 @@ public sealed class FireAndForgetSafeTests
     [Fact]
     public async Task Run_logs_unexpected_exception()
     {
-        var logger = new TestLogger();
+        var tcs = new TaskCompletionSource();
+        var logger = new TestLogger(onLog: tcs);
         var exception = new InvalidOperationException("boom");
 
         FireAndForgetSafe.Run(
             () => throw exception,
             logger);
 
-        await Task.Delay(50);
+        await tcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.Single(logger.Errors);
         Assert.Same(exception, logger.Errors[0].Exception);
@@ -40,14 +45,15 @@ public sealed class FireAndForgetSafeTests
     [Fact]
     public async Task Run_task_logs_unexpected_exception()
     {
-        var logger = new TestLogger();
+        var tcs = new TaskCompletionSource();
+        var logger = new TestLogger(onLog: tcs);
         var exception = new InvalidOperationException("task boom");
 
         FireAndForgetSafe.Run(
             Task.Run(() => throw exception),
             logger);
 
-        await Task.Delay(50);
+        await tcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.Single(logger.Errors);
         Assert.Same(exception, logger.Errors[0].Exception);
@@ -55,6 +61,10 @@ public sealed class FireAndForgetSafeTests
 
     private sealed class TestLogger : ILogger
     {
+        private readonly TaskCompletionSource? _onLog;
+
+        public TestLogger(TaskCompletionSource? onLog = null) => _onLog = onLog;
+
         public readonly List<(Exception? Exception, string Message)> Errors = new();
 
         public IDisposable? BeginScope<TState>(TState state)
@@ -70,7 +80,10 @@ public sealed class FireAndForgetSafeTests
             Func<TState, Exception?, string> formatter)
         {
             if (logLevel >= LogLevel.Error)
+            {
                 Errors.Add((exception, formatter(state, exception)));
+                _onLog?.TrySetResult();
+            }
         }
     }
 }

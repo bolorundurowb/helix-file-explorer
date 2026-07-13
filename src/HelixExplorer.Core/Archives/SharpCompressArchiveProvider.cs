@@ -178,6 +178,12 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
                     var destPath = Path.Combine(
                         destinationDirectory,
                         key.Replace('/', Path.DirectorySeparatorChar));
+
+                    var fullDest = Path.GetFullPath(destPath);
+                    var fullBase = Path.GetFullPath(destinationDirectory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                    if (!fullDest.StartsWith(fullBase, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
                     var destDir = Path.GetDirectoryName(destPath);
                     if (!string.IsNullOrEmpty(destDir))
                         Directory.CreateDirectory(destDir);

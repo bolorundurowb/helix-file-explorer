@@ -85,17 +85,10 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         _settings = settings;
         Kind = kind;
         _clipboard.Changed += OnClipboardChanged;
+        LeftPane = CreatePane();
+        _activePane = LeftPane;
         if (kind == TabKind.Browser)
-        {
-            LeftPane = CreatePane();
-            _activePane = LeftPane;
             LeftPane.IsActive = true;
-        }
-        else
-        {
-            LeftPane = CreatePane();
-            _activePane = LeftPane;
-        }
 
         UpdateTitle();
     }

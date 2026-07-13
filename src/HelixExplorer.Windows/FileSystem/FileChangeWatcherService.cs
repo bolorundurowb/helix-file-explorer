@@ -57,8 +57,9 @@ public sealed class FileChangeWatcherService(ILogger<FileChangeWatcherService> l
 
     private void OnFileSystemEvent(object sender, FileSystemEventArgs e)
     {
-        _debounceCts?.Cancel();
-        _debounceCts?.Dispose();
+        var old = Interlocked.Exchange(ref _debounceCts, null);
+        try { old?.Cancel(); } catch (ObjectDisposedException) { }
+        old?.Dispose();
 
         var cts = new CancellationTokenSource();
         _debounceCts = cts;

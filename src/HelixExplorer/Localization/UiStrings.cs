@@ -70,5 +70,7 @@ public static class UiStrings
 
     public static string FolderColorCleared(string name) => $"Cleared color for {name}";
 
+    public static string NoItemsCopied => "No items copied";
+
     public static string NetworkDiscoveryBanner => "Discovering network shares…";
 }

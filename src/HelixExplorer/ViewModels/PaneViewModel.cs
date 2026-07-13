@@ -907,6 +907,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
             IsLoading = true;
             await _archive.CreateZipAsync(sources, destination).ConfigureAwait(true);
             await RefreshAsync(showLoading: false).ConfigureAwait(true);
+            IsLoading = false;
             StatusText = UiStrings.CreatedArchive(Path.GetFileName(destination));
         }
         catch (Exception ex)

@@ -75,7 +75,7 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
 
         try
         {
-            await RunGitAsync(root, $"checkout \"{branch}\"", cancellationToken).ConfigureAwait(false);
+            await RunGitWithArgsAsync(root, ["checkout", branch], cancellationToken).ConfigureAwait(false);
             return true;
         }
         catch (OperationCanceledException)
@@ -105,6 +105,45 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
         }
 
         return null;
+    }
+
+    private static async Task<string> RunGitWithArgsAsync(string workingDir, string[] args, CancellationToken token)
+    {
+        var psi = new ProcessStartInfo(GitExe)
+        {
+            WorkingDirectory = workingDir,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8
+        };
+
+        foreach (var arg in args)
+            psi.ArgumentList.Add(arg);
+
+        using var process = new Process { StartInfo = psi, EnableRaisingEvents = false };
+
+        if (!process.Start())
+            return string.Empty;
+
+        await using var reg = token.Register(static state =>
+        {
+            try
+            {
+                ((Process)state!).Kill(entireProcessTree: true);
+            }
+            catch
+            {
+                // Process already exited.
+            }
+        }, process);
+
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(token);
+        var stderrTask = process.StandardError.ReadToEndAsync(token);
+        await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
+        await process.WaitForExitAsync(token).ConfigureAwait(false);
+        return stdoutTask.Result;
     }
 
     private static async Task<string> RunGitAsync(string workingDir, string args, CancellationToken token)

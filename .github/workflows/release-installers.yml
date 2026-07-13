@@ -51,7 +51,7 @@ jobs:
 
       - name: Setup PolyInstall
         if: steps.check.outputs.skip != 'true'
-        uses: bolorundurowb/PolyInstall/.github/actions/setup-polyinstall@v1.0.0
+        uses: bolorundurowb/PolyInstall/.github/actions/setup-polyinstall@v2.0.0
         with:
           version: v1.0.0
           rid: win-x64

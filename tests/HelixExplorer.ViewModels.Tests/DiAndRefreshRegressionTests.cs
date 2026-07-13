@@ -125,7 +125,7 @@ public class PaneRefreshCoordinatorTests
 }
 
 /// <summary>
-/// Calls <see cref="WindowHostService.OnWindowClosed"/> — the same method production uses —
+/// Calls <see cref="WindowHostService.OnWindowClosed"/> (the same method production uses)
 /// with a scope that fails if <see cref="MainWindowViewModel"/> is re-resolved.
 /// </summary>
 public class WindowCloseSessionPolicyTests

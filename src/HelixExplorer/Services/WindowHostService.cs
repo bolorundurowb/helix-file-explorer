@@ -35,7 +35,7 @@ public sealed class WindowHostService(IServiceScopeFactory scopeFactory) : IWind
 
         vm.InitializeWindow(restoreSession, initialPath);
 
-        // Capture the instance (and its SaveSession) — never re-resolve MainWindowViewModel on close.
+        // Capture the instance (and its SaveSession); never re-resolve MainWindowViewModel on close.
         var capturedVm = vm;
         window.Closed += (_, _) => OnWindowClosed(scope, capturedVm.SaveSession);
 

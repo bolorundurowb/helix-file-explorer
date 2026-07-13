@@ -2,7 +2,7 @@ using HelixExplorer.Core.Models;
 
 namespace HelixExplorer.Core.Sorting;
 
-/// <summary>Singleton comparers — directories always precede files, then the requested column.</summary>
+/// <summary>Singleton comparers: directories always precede files, then the requested column.</summary>
 public static class FileSystemEntryComparer
 {
     public static IComparer<FileSystemEntry> For(SortColumn column, bool descending) => column switch

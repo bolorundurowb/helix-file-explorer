@@ -6,7 +6,7 @@ namespace HelixExplorer.Core.Filtering;
 /// <summary>
 /// Low-allocation, case-insensitive substring matching for the in-view quick filter (Ctrl+F).
 /// Hot path uses <see cref="SearchValues{T}"/> for a SIMD first-character probe, then confirms
-/// with span <c>Contains</c> — never allocates via <c>ToLower()</c>.
+/// with span <c>Contains</c>; never allocates via <c>ToLower()</c>.
 /// </summary>
 public static class FileNameFilter
 {

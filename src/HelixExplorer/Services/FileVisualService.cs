@@ -28,7 +28,7 @@ public sealed class FileVisualService(IFileVisualProvider provider) : IDisposabl
         var key = new VisualCacheKey(path, size, preferThumbnail);
         Touch(key);
 
-        // Loads must not be keyed to the caller's token — a cancelled caller would poison the cache.
+        // Loads must not be keyed to the caller's token; a cancelled caller would poison the cache.
         var task = _cache.GetOrAdd(key, static (k, state) =>
             state.self.LoadAndCacheAsync(k, state.isDirectory), (self: this, isDirectory));
 

@@ -220,7 +220,7 @@ public sealed class PaneRefreshCoordinator(
         if (previous is null)
             return;
 
-        // Cancel only — the owning RefreshAsync finally disposes the CTS.
+        // Cancel only; the owning RefreshAsync finally disposes the CTS.
         try { previous.Cancel(); } catch (ObjectDisposedException) { }
     }
 

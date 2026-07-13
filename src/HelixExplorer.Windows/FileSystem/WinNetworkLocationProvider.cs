@@ -32,8 +32,8 @@ public sealed class WinNetworkLocationProvider : INetworkLocationProvider
         if (results.Count == 0)
             return results;
 
-        // De-dupe by path (case-insensitive) without LINQ OrderBy allocations in a hot path sense —
-        // discovery itself is I/O-bound, but keep the filter explicit.
+        // De-dupe by path (case-insensitive) without LINQ OrderBy allocations in a hot path sense.
+        // Discovery itself is I/O-bound, but keep the filter explicit.
         results.Sort(static (a, b) => string.Compare(a.DisplayName, b.DisplayName, StringComparison.OrdinalIgnoreCase));
 
         var unique = new List<NetworkLocationInfo>(results.Count);

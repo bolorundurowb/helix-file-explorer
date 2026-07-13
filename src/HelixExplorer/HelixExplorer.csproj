@@ -29,5 +29,6 @@
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\Fonts\**\*.ttf" />
+    <AvaloniaResource Include="Assets\helix-explorer-icon.png" />
   </ItemGroup>
 </Project>

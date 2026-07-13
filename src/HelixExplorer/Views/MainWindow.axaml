@@ -12,7 +12,8 @@
         ExtendClientAreaToDecorationsHint="True"
         ExtendClientAreaTitleBarHeightHint="32"
         WindowDecorations="Full"
-        Background="{DynamicResource HelixChromeBrush}">
+        Background="{DynamicResource HelixChromeBrush}"
+        Icon="avares://HelixExplorer/Assets/helix-explorer-icon.png">
 
     <Window.Styles>
         <Style Selector="WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel > TextBlock">

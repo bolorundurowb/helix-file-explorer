@@ -1,5 +1,4 @@
 using Avalonia;
-using Avalonia.Fonts.Inter;
 using Avalonia.Media.Fonts;
 
 namespace HelixExplorer;

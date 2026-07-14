@@ -33,9 +33,9 @@ jobs:
           $tag = "v${{ steps.version.outputs.version }}"
           if (git tag -l $tag) {
             Write-Host "Tag $tag already exists, skipping release."
-            echo "skip=true" >> $env:GITHUB_OUTPUT
+            "skip=true" >> $env:GITHUB_OUTPUT
           } else {
-            echo "skip=false" >> $env:GITHUB_OUTPUT
+            "skip=false" >> $env:GITHUB_OUTPUT
           }
 
       - name: Setup .NET
@@ -73,10 +73,21 @@ jobs:
           POLYINSTALL_TARGET: windows-x64
         run: polyinstall build installer/helix-explorer.install.yaml --base .
 
+      - name: Verify installer artifacts
+        if: steps.check.outputs.skip != 'true'
+        shell: pwsh
+        run: |
+          $artifacts = Get-ChildItem -Path dist -File -Recurse -ErrorAction SilentlyContinue
+          if (-not $artifacts) {
+            throw "PolyInstall did not produce any files in dist."
+          }
+          $artifacts | ForEach-Object { Write-Host "Installer artifact: $($_.FullName)" }
+
       - name: Create release
         if: steps.check.outputs.skip != 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
-          files: installer/dist/**
+          files: dist/**
+          fail_on_unmatched_files: true
           generate_release_notes: true

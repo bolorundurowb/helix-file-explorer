@@ -20,8 +20,11 @@ jobs:
         shell: pwsh
         run: |
           [xml]$props = Get-Content Directory.Build.props
-          $version = $props.Project.PropertyGroup.Version
-          echo "version=$version" >> $env:GITHUB_OUTPUT
+          $version = $props.SelectSingleNode('/Project/PropertyGroup/Version')?.InnerText
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            throw "Directory.Build.props must define Project/PropertyGroup/Version."
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
 
       - name: Check if tag already exists
         id: check
@@ -47,13 +50,13 @@ jobs:
 
       - name: Publish application
         if: steps.check.outputs.skip != 'true'
-        run: dotnet publish src/HelixExplorer/HelixExplorer.csproj -c Release -r win-x64 --self-contained true -o publish/win-x64
+        run: dotnet publish src/HelixExplorer/HelixExplorer.csproj -c Release -r win-x64 --self-contained true -p:Version=${{ steps.version.outputs.version }} -o publish/win-x64
 
       - name: Setup PolyInstall
         if: steps.check.outputs.skip != 'true'
-        uses: bolorundurowb/PolyInstall/.github/actions/setup-polyinstall@v2.0.0
+        uses: bolorundurowb/PolyInstall/.github/actions/setup-polyinstall@v2.0.1
         with:
-          version: v1.0.0
+          version: v2.0.1
           rid: win-x64
 
       - name: Validate manifest

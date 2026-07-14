@@ -46,6 +46,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     private readonly PaneListingCoordinator _listing = new();
     private readonly PaneFileOperationCoordinator _fileOperations;
     private readonly PaneRefreshCoordinator _refreshCoordinator;
+    private EntryItemViewModel? _renamingEntry;
+    private bool _isCommittingRename;
     private IReadOnlyList<FileSystemEntry> _allEntries = Array.Empty<FileSystemEntry>();
     private IReadOnlyList<FileSystemEntry> _directoryEntries = Array.Empty<FileSystemEntry>();
     private CancellationTokenSource? _searchCts;
@@ -208,6 +210,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
 
     partial void OnCurrentPathChanged(string value)
     {
+        ClearRenameState();
         var isHomeRoute = string.Equals(value, PaneConstants.HomeRoute, StringComparison.Ordinal);
         LocationKind = isHomeRoute
             ? PaneLocationKind.Home
@@ -468,6 +471,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
 
     public bool CanSelectAllHere => CanModifyHere() && Entries.Count > 0;
 
+    public bool CanAcceptFileDrop => CanModifyHere() && !string.IsNullOrEmpty(CurrentPath);
+
     public void NavigateTo(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -570,6 +575,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
 
         TotalCount = result.TotalCount;
         ListingSizeBytes = result.ListingSizeBytes;
+        ClearRenameState();
         SyncEntriesCollection(result.Entries);
         RefreshCutState();
         ItemCount = result.ItemCount;
@@ -859,28 +865,36 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
             return;
 
         var entry = SelectedEntries[0];
+        ClearRenameState();
+        _renamingEntry = entry;
+        entry.RenameText = entry.Name;
         RenameText = entry.Name;
+        entry.IsRenaming = true;
         IsRenaming = true;
     }
 
     [RelayCommand]
     private async Task CommitRename()
     {
-        if (!IsRenaming || SelectedEntries.Count != 1)
+        if (_isCommittingRename)
+            return;
+
+        if (!IsRenaming || _renamingEntry is null)
         {
-            IsRenaming = false;
+            ClearRenameState();
             return;
         }
 
-        var entry = SelectedEntries[0];
-        var newName = RenameText.Trim();
+        var entry = _renamingEntry;
+        var newName = entry.RenameText.Trim();
 
         if (string.IsNullOrWhiteSpace(newName) || newName == entry.Name)
         {
-            IsRenaming = false;
+            ClearRenameState();
             return;
         }
 
+        _isCommittingRename = true;
         try
         {
             var oldPath = entry.FullPath;
@@ -889,24 +903,52 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
             {
                 await _dialogs.ShowErrorAsync(UiStrings.RenameFailed, result.Failures[0].Message);
                 StatusText = UiStrings.RenameFailed;
-                IsRenaming = false;
+                ClearRenameState();
                 return;
             }
 
             _listing.RemoveFromPool(oldPath);
-            IsRenaming = false;
+            ClearRenameState();
             await RefreshAsync(showLoading: false);
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"Rename failed: {ex.Message}");
             StatusText = UiStrings.RenameFailed;
-            IsRenaming = false;
+            ClearRenameState();
+        }
+        finally
+        {
+            _isCommittingRename = false;
         }
     }
 
     [RelayCommand]
-    private void CancelRename() => IsRenaming = false;
+    private void CancelRename() => ClearRenameState();
+
+    private void ClearRenameState()
+    {
+        if (_renamingEntry is not null)
+        {
+            _renamingEntry.IsRenaming = false;
+            _renamingEntry.RenameText = string.Empty;
+        }
+
+        _renamingEntry = null;
+        RenameText = string.Empty;
+        IsRenaming = false;
+    }
+
+    public static int GetRenameBaseNameLength(string name, bool isDirectory)
+    {
+        if (string.IsNullOrEmpty(name) || isDirectory)
+            return name.Length;
+
+        var extension = Path.GetExtension(name);
+        return string.IsNullOrEmpty(extension) || extension.Length >= name.Length
+            ? name.Length
+            : name.Length - extension.Length;
+    }
 
     [RelayCommand(CanExecute = nameof(CanModifyHere))]
     private async Task NewFolder()
@@ -1395,13 +1437,24 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    public Task HandleDropAsync(IReadOnlyList<string> paths, bool isCopy)
+    public string? ResolveDropDestination(EntryItemViewModel? targetEntry)
     {
-        if (IsArchive)
+        if (!CanAcceptFileDrop)
+            return null;
+
+        if (targetEntry is { IsDirectory: true } && !ArchivePath.IsVirtual(targetEntry.FullPath))
+            return targetEntry.FullPath;
+
+        return CurrentPath;
+    }
+
+    public Task HandleDropAsync(IReadOnlyList<string> paths, string destinationPath, bool isCopy)
+    {
+        if (!CanAcceptFileDrop || string.IsNullOrEmpty(destinationPath))
             return Task.CompletedTask;
 
         return _fileOperations.HandleDropAsync(
-            CurrentPath,
+            destinationPath,
             paths,
             isCopy,
             () => RefreshAsync(showLoading: false),

@@ -79,18 +79,16 @@ public sealed class PaneFileOperationCoordinator(
     }
 
     public async Task HandleDropAsync(
-        string currentPath,
+        string destinationPath,
         IReadOnlyList<string> paths,
         bool isCopy,
         Func<Task> refreshAsync,
         Action<string> setStatusText)
     {
-        if (string.IsNullOrEmpty(currentPath) || paths.Count == 0)
+        if (string.IsNullOrEmpty(destinationPath) || paths.Count == 0)
             return;
 
-        var filtered = paths
-            .Where(p => !IsSameOrChildPath(currentPath, p))
-            .ToList();
+        var filtered = GetDroppablePaths(destinationPath, paths, isCopy);
         if (filtered.Count == 0)
             return;
 
@@ -106,9 +104,9 @@ public sealed class PaneFileOperationCoordinator(
             var conflicts = FileOperationUiHelper.CreateConflictResolver(dialogs);
             FileOperationResult result;
             if (isCopy)
-                result = await fileOps.CopyAsync(filtered, currentPath, progress, conflicts).ConfigureAwait(true);
+                result = await fileOps.CopyAsync(filtered, destinationPath, progress, conflicts).ConfigureAwait(true);
             else
-                result = await fileOps.MoveAsync(filtered, currentPath, progress, conflicts).ConfigureAwait(true);
+                result = await fileOps.MoveAsync(filtered, destinationPath, progress, conflicts).ConfigureAwait(true);
 
             await refreshAsync().ConfigureAwait(true);
             operationReporter.Complete(
@@ -233,6 +231,48 @@ public sealed class PaneFileOperationCoordinator(
 
     public static bool IsSameOrChildPath(string directory, string path)
         => PathUtilities.IsSameOrChildPath(directory, path);
+
+    public static IReadOnlyList<string> GetDroppablePaths(
+        string destinationPath,
+        IReadOnlyList<string> paths,
+        bool isCopy)
+        => paths
+            .Where(path => CanDropPath(destinationPath, path, isCopy))
+            .ToList();
+
+    public static bool CanDropPath(string destinationPath, string sourcePath, bool isCopy)
+    {
+        if (string.IsNullOrWhiteSpace(destinationPath) || string.IsNullOrWhiteSpace(sourcePath))
+            return false;
+
+        if (PathUtilities.PathsEqual(destinationPath, sourcePath))
+            return false;
+
+        if (PathUtilities.IsSameOrChildPath(sourcePath, destinationPath))
+            return false;
+
+        if (!isCopy
+            && GetParentDirectory(sourcePath) is { } parent
+            && PathUtilities.PathsEqual(parent, destinationPath))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static string? GetParentDirectory(string path)
+    {
+        try
+        {
+            var normalized = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            return string.IsNullOrEmpty(normalized) ? null : Path.GetDirectoryName(normalized);
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     private async Task<ClipboardPayload?> ResolvePastePayloadAsync(string currentPath)
     {

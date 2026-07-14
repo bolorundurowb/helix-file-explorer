@@ -118,3 +118,69 @@ public class PaneNavigationControllerTests
             => ValueTask.CompletedTask;
     }
 }
+
+public class PaneFileOperationCoordinatorDropTests
+{
+    [Fact]
+    public void CanDropPath_AllowsMovingFileIntoSiblingFolder()
+    {
+        var allowed = PaneFileOperationCoordinator.CanDropPath(
+            @"C:\workspace\target",
+            @"C:\workspace\file.txt",
+            isCopy: false);
+
+        Assert.True(allowed);
+    }
+
+    [Fact]
+    public void CanDropPath_RejectsMovingItemIntoSameFolder()
+    {
+        var allowed = PaneFileOperationCoordinator.CanDropPath(
+            @"C:\workspace",
+            @"C:\workspace\file.txt",
+            isCopy: false);
+
+        Assert.False(allowed);
+    }
+
+    [Fact]
+    public void CanDropPath_AllowsCopyingItemIntoSameFolder()
+    {
+        var allowed = PaneFileOperationCoordinator.CanDropPath(
+            @"C:\workspace",
+            @"C:\workspace\file.txt",
+            isCopy: true);
+
+        Assert.True(allowed);
+    }
+
+    [Theory]
+    [InlineData(@"C:\workspace\folder", @"C:\workspace\folder")]
+    [InlineData(@"C:\workspace\folder\child", @"C:\workspace\folder")]
+    public void CanDropPath_RejectsDroppingFolderIntoItselfOrChild(string destination, string source)
+    {
+        var allowed = PaneFileOperationCoordinator.CanDropPath(
+            destination,
+            source,
+            isCopy: false);
+
+        Assert.False(allowed);
+    }
+}
+
+public class PaneRenameTests
+{
+    [Theory]
+    [InlineData("document.txt", false, 8)]
+    [InlineData("archive.tar.gz", false, 11)]
+    [InlineData("README", false, 6)]
+    [InlineData(".gitignore", false, 10)]
+    [InlineData("Folder.Name", true, 11)]
+    public void GetRenameBaseNameLength_SelectsNameWithoutFileExtension(
+        string name,
+        bool isDirectory,
+        int expected)
+    {
+        Assert.Equal(expected, PaneViewModel.GetRenameBaseNameLength(name, isDirectory));
+    }
+}

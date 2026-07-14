@@ -86,6 +86,15 @@ public sealed partial class EntryItemViewModel : ObservableObject
     [ObservableProperty]
     private bool _isCut;
 
+    public bool IsNotRenaming => !IsRenaming;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsNotRenaming))]
+    private bool _isRenaming;
+
+    [ObservableProperty]
+    private string _renameText = string.Empty;
+
     [ObservableProperty]
     private Bitmap? _entryImage;
 

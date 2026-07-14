@@ -38,7 +38,8 @@ public sealed class WinFileVisualProvider : IFileVisualProvider
                 return thumbnail;
         }
 
-        return TryGetShellIcon(request.Path, request.IsDirectory, size);
+        return TryGetShellIconFromImageList(request.Path, request.IsDirectory, size)
+               ?? TryGetShellIcon(request.Path, request.IsDirectory, size);
     }
 
     private static FileVisualData? TryLoadImageThumbnail(string path, int size)
@@ -99,6 +100,79 @@ public sealed class WinFileVisualProvider : IFileVisualProvider
                 ShellIconNative.DestroyIcon(shfi.hIcon);
         }
     }
+
+    private static FileVisualData? TryGetShellIconFromImageList(string path, bool isDirectory, int size)
+    {
+        if (!TryGetShellIconIndex(path, isDirectory, out var iconIndex))
+            return null;
+
+        var imageListSize = GetImageListSize(size);
+        var iid = ShellIconNative.IID_IImageList;
+        var hr = ShellIconNative.SHGetImageList(imageListSize, ref iid, out var imageList);
+        if (hr < 0 || imageList is null)
+            return null;
+
+        var hIcon = IntPtr.Zero;
+        try
+        {
+            hr = imageList.GetIcon(iconIndex, ImageListDrawFlags.Transparent, ref hIcon);
+            if (hr < 0 || hIcon == IntPtr.Zero)
+                return null;
+
+            using var icon = Icon.FromHandle(hIcon);
+            using var bitmap = icon.ToBitmap();
+            using var scaled = ResizeToSquare(bitmap, size);
+            return EncodePng(scaled);
+        }
+        catch
+        {
+            return null;
+        }
+        finally
+        {
+            if (hIcon != IntPtr.Zero)
+                ShellIconNative.DestroyIcon(hIcon);
+
+            Marshal.ReleaseComObject(imageList);
+        }
+    }
+
+    private static bool TryGetShellIconIndex(string path, bool isDirectory, out int iconIndex)
+    {
+        iconIndex = 0;
+
+        var shfi = new ShellFileInfo();
+        var useAttributes = !File.Exists(path) && !Directory.Exists(path);
+        var attributes = isDirectory
+            ? ShellFileAttributes.Directory
+            : ShellFileAttributes.Normal;
+
+        var flags = ShellGetFileInfoFlags.SysIconIndex;
+        if (useAttributes)
+            flags |= ShellGetFileInfoFlags.UseFileAttributes;
+
+        var result = ShellIconNative.SHGetFileInfo(
+            path,
+            useAttributes ? attributes : 0,
+            ref shfi,
+            (uint)Marshal.SizeOf<ShellFileInfo>(),
+            flags);
+
+        if (result == IntPtr.Zero)
+            return false;
+
+        iconIndex = shfi.iIcon;
+        return iconIndex >= 0;
+    }
+
+    private static ShellImageListSize GetImageListSize(int size)
+        => size switch
+        {
+            > 48 => ShellImageListSize.Jumbo,
+            > 32 => ShellImageListSize.ExtraLarge,
+            > 16 => ShellImageListSize.Large,
+            _ => ShellImageListSize.Small
+        };
 
     private static FileStream OpenReadShared(string path)
         => new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);

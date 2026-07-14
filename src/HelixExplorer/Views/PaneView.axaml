@@ -403,7 +403,19 @@
                                            FontSize="{DynamicResource HelixEntryFontSize}"
                                            TextTrimming="CharacterEllipsis"
                                            VerticalAlignment="Center"
-                                           Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}" />
+                                           Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}"
+                                           IsVisible="{Binding IsNotRenaming}" />
+                                <TextBox Grid.Column="1"
+                                         Text="{Binding RenameText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                         FontSize="{DynamicResource HelixEntryFontSize}"
+                                         MinWidth="160"
+                                         Padding="2,0"
+                                         BorderThickness="1"
+                                         VerticalAlignment="Center"
+                                         IsVisible="{Binding IsRenaming}"
+                                         Loaded="OnRenameTextBoxLoaded"
+                                         LostFocus="OnRenameTextBoxLostFocus"
+                                         KeyDown="OnRenameKeyDown" />
                             </Grid>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
@@ -491,7 +503,19 @@
                                    FontSize="{DynamicResource HelixEntryFontSize}"
                                    TextTrimming="CharacterEllipsis"
                                    VerticalAlignment="Center"
-                                   Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}" />
+                                   Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}"
+                                   IsVisible="{Binding IsNotRenaming}" />
+                        <TextBox Grid.Column="1"
+                                 Text="{Binding RenameText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 FontSize="{DynamicResource HelixEntryFontSize}"
+                                 MinWidth="160"
+                                 Padding="2,0"
+                                 BorderThickness="1"
+                                 VerticalAlignment="Center"
+                                 IsVisible="{Binding IsRenaming}"
+                                 Loaded="OnRenameTextBoxLoaded"
+                                 LostFocus="OnRenameTextBoxLostFocus"
+                                 KeyDown="OnRenameKeyDown" />
                     </Grid>
                 </DataTemplate>
             </ListBox.ItemTemplate>
@@ -562,7 +586,19 @@
                                            MaxLines="2"
                                            TextTrimming="CharacterEllipsis"
                                            HorizontalAlignment="Stretch"
-                                           Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}" />
+                                           Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}"
+                                           IsVisible="{Binding IsNotRenaming}" />
+                                <TextBox Text="{Binding RenameText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                         FontSize="{DynamicResource HelixEntryFontSize}"
+                                         TextAlignment="Center"
+                                         MinWidth="120"
+                                         Padding="2,0"
+                                         BorderThickness="1"
+                                         HorizontalAlignment="Stretch"
+                                         IsVisible="{Binding IsRenaming}"
+                                         Loaded="OnRenameTextBoxLoaded"
+                                         LostFocus="OnRenameTextBoxLostFocus"
+                                         KeyDown="OnRenameKeyDown" />
                                 </StackPanel>
                             </Panel>
                         </Border>
@@ -580,42 +616,6 @@
                                         ColumnSpacing="4"
                                         ColumnActivated="OnMillerColumnActivated" />
         </ScrollViewer>
-
-        <!-- Rename overlay -->
-        <Border IsVisible="{Binding IsRenaming}"
-                VerticalAlignment="Top" HorizontalAlignment="Center"
-                Margin="0,60,0,0"
-                Background="{DynamicResource HelixContentCardBrush}"
-                BorderBrush="{DynamicResource HelixAccentBrush}"
-                BorderThickness="1"
-                CornerRadius="6"
-                Padding="12,8"
-                BoxShadow="0 4 12 0 #30000000">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBox x:Name="RenameBox"
-                         Text="{Binding RenameText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                         Width="250"
-                         BorderThickness="0"
-                         Background="Transparent"
-                         Padding="0"
-                         VerticalAlignment="Center"
-                         KeyDown="OnRenameKeyDown" />
-                <Button Content="OK"
-                        Command="{Binding CommitRenameCommand}"
-                        Padding="8,4"
-                        Background="{DynamicResource HelixAccentBrush}"
-                        Foreground="White"
-                        BorderThickness="0"
-                        Cursor="Hand" />
-                <Button Content="Cancel"
-                        Command="{Binding CancelRenameCommand}"
-                        Padding="8,4"
-                        Background="Transparent"
-                        BorderThickness="1"
-                        BorderBrush="{DynamicResource HelixBorderColor}"
-                        Cursor="Hand" />
-            </StackPanel>
-        </Border>
 
         <!-- Quick filter pill (Ctrl+F) -->
         <Border IsVisible="{Binding IsFilterVisible}"

@@ -141,10 +141,21 @@
 
     <Style Selector="WindowDrawnDecorations /template/ DockPanel">
         <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="WindowDrawnDecorations /template/ Panel#PART_OverlayWrapper">
+        <Setter Property="Margin" Value="0" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="WindowDrawnDecorations /template/ Panel#PART_UnderlayWrapper">
+        <Setter Property="Margin" Value="0" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
     </Style>
     <Style Selector="WindowDrawnDecorations /template/ StackPanel#PART_OverlayPanel">
         <Setter Property="Spacing" Value="0" />
         <Setter Property="VerticalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalAlignment" Value="Right" />
+        <Setter Property="Margin" Value="0" />
     </Style>
     <Style Selector="WindowDrawnDecorations:has-shadow /template/ Panel#PART_OverlayWrapper">
         <Setter Property="Margin" Value="0" />
@@ -155,11 +166,13 @@
     <Style Selector="WindowDrawnDecorations:has-border /template/ StackPanel#PART_OverlayPanel">
         <Setter Property="Margin" Value="0" />
     </Style>
-    <Style Selector="WindowDrawnDecorations:has-border /template/ Panel#PART_TitleTextPanel">
+    <Style Selector="WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel">
         <Setter Property="Margin" Value="0" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
     </Style>
-    <Style Selector="WindowDrawnDecorations:has-border /template/ Panel#PART_TitleBar">
+    <Style Selector="WindowDrawnDecorations /template/ Panel#PART_TitleBar">
         <Setter Property="Margin" Value="0" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
     </Style>
 
     <Style Selector="WindowDrawnDecorations /template/ Button#PART_MinimizeButton">

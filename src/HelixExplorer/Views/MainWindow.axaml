@@ -54,6 +54,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
+
             <Border x:Name="SidebarBorder"
                     Grid.Column="0"
                     Background="{DynamicResource HelixSidebarBrush}"
@@ -76,6 +77,23 @@
                                        FontSize="{DynamicResource HelixSidebarFontSize}" />
                         </StackPanel>
                     </Button>
+
+                    <Border DockPanel.Dock="Top"
+                            Padding="20,16,12,16"
+                            IsHitTestVisible="False">
+                        <StackPanel Orientation="Horizontal"
+                                    Spacing="8"
+                                    VerticalAlignment="Center">
+                            <Image Source="avares://HelixExplorer/Assets/helix-explorer-icon.png"
+                                   Width="28"
+                                   Height="28"
+                                   VerticalAlignment="Center" />
+                            <TextBlock Text="Helix File Explorer"
+                                       VerticalAlignment="Center"
+                                       FontSize="16"
+                                       FontWeight="SemiBold" />
+                        </StackPanel>
+                    </Border>
 
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <ItemsControl ItemsSource="{Binding SidebarItems}" Margin="0,8">
@@ -178,7 +196,7 @@
 
                 <ListBox x:Name="TabStrip"
                          Grid.Column="1"
-                         HorizontalAlignment="Stretch"
+                         HorizontalAlignment="Left"
                          ItemsSource="{Binding Tabs}"
                          SelectedItem="{Binding SelectedTab, Mode=TwoWay}"
                          Background="Transparent"

@@ -80,11 +80,7 @@ public sealed partial class PaneView : UserControl
         }
         else if (e.PropertyName == nameof(PaneViewModel.IsRenaming) && _pane.IsRenaming)
         {
-            Dispatcher.UIThread.Post(() =>
-            {
-                RenameBox.Focus();
-                RenameBox.SelectAll();
-            });
+            Dispatcher.UIThread.Post(FocusRenameEditor);
         }
         else if (_pane.IsMillerView
                  && e.PropertyName is nameof(PaneViewModel.ViewMode)
@@ -238,6 +234,18 @@ public sealed partial class PaneView : UserControl
         }
     }
 
+    private void OnRenameTextBoxLoaded(object? sender, RoutedEventArgs e)
+    {
+        if (sender is TextBox { DataContext: EntryItemViewModel { IsRenaming: true } } textBox)
+            Dispatcher.UIThread.Post(() => FocusRenameEditor(textBox));
+    }
+
+    private void OnRenameTextBoxLostFocus(object? sender, RoutedEventArgs e)
+    {
+        if (Pane?.IsRenaming == true)
+            Pane.CommitRenameCommand.Execute(null);
+    }
+
     private void OnPaneKeyDown(object? sender, KeyEventArgs e)
     {
         if (Pane is null || TextInputFocus.IsActive())
@@ -330,6 +338,9 @@ public sealed partial class PaneView : UserControl
 
     private void OnGridItemPointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        if (IsTextBoxSource(e.Source))
+            return;
+
         if (Pane is null || TryGetEntryFromSource(sender) is not { } entry)
             return;
 
@@ -358,6 +369,17 @@ public sealed partial class PaneView : UserControl
         }
 
         return null;
+    }
+
+    private static bool IsTextBoxSource(object? source)
+    {
+        for (var control = source as Control; control is not null; control = control.Parent as Control)
+        {
+            if (control is TextBox)
+                return true;
+        }
+
+        return false;
     }
 
     private void OnGridItemDoubleTapped(object? sender, TappedEventArgs e)
@@ -448,6 +470,9 @@ public sealed partial class PaneView : UserControl
 
     private void OnListPointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        if (IsTextBoxSource(e.Source))
+            return;
+
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
             if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed
@@ -607,6 +632,27 @@ public sealed partial class PaneView : UserControl
     private void OnListPointerReleased(object? sender, PointerReleasedEventArgs e)
         => ResetPointerInteraction();
 
+    private void FocusRenameEditor()
+    {
+        var editor = this.GetVisualDescendants()
+            .OfType<TextBox>()
+            .FirstOrDefault(x => x.DataContext is EntryItemViewModel { IsRenaming: true });
+
+        if (editor is not null)
+            FocusRenameEditor(editor);
+    }
+
+    private void FocusRenameEditor(TextBox editor)
+    {
+        if (editor.DataContext is not EntryItemViewModel entry || !entry.IsRenaming)
+            return;
+
+        editor.Focus();
+        var length = PaneViewModel.GetRenameBaseNameLength(editor.Text ?? string.Empty, entry.IsDirectory);
+        editor.SelectionStart = 0;
+        editor.SelectionEnd = length;
+    }
+
     private async Task<DataTransfer?> BuildFileTransferAsync(IReadOnlyList<string> paths)
     {
         var topLevel = TopLevel.GetTopLevel(this);
@@ -638,24 +684,28 @@ public sealed partial class PaneView : UserControl
 
     private void OnDragOver(object? sender, DragEventArgs e)
     {
-        if (Pane is null || Pane.IsArchive)
+        if (Pane is null)
             return;
 
-        if (e.DataTransfer.Contains(DataFormat.File))
-        {
-            e.DragEffects = e.KeyModifiers.HasFlag(KeyModifiers.Control)
-                ? DragDropEffects.Copy
-                : DragDropEffects.Move;
-            e.Handled = true;
-        }
+        if (!e.DataTransfer.Contains(DataFormat.File) || ResolveDropDestination(e) is null)
+            return;
+
+        e.DragEffects = e.KeyModifiers.HasFlag(KeyModifiers.Control)
+            ? DragDropEffects.Copy
+            : DragDropEffects.Move;
+        e.Handled = true;
     }
 
     private async void OnDrop(object? sender, DragEventArgs e)
     {
-        if (Pane is null || Pane.IsArchive)
+        if (Pane is null)
             return;
 
         if (!e.DataTransfer.Contains(DataFormat.File))
+            return;
+
+        var destinationPath = ResolveDropDestination(e);
+        if (string.IsNullOrEmpty(destinationPath))
             return;
 
         var files = e.DataTransfer.TryGetFiles();
@@ -675,8 +725,11 @@ public sealed partial class PaneView : UserControl
 
         var isCopy = e.KeyModifiers.HasFlag(KeyModifiers.Control)
                      || e.DragEffects == DragDropEffects.Copy;
-        await Pane.HandleDropAsync(paths, isCopy);
+        await Pane.HandleDropAsync(paths, destinationPath, isCopy);
 
         e.Handled = true;
     }
+
+    private string? ResolveDropDestination(DragEventArgs e)
+        => Pane?.ResolveDropDestination(TryGetEntryFromSource(e.Source));
 }

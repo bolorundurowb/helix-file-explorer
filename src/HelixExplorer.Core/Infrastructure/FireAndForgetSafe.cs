@@ -51,7 +51,17 @@ public static class FireAndForgetSafe
     {
         try
         {
-            await work().ConfigureAwait(false);
+            var task = work();
+            if (task is null)
+            {
+                logger.LogError(
+                    "FireAndForgetSafe: work delegate returned null instead of a Task in {Caller} ({File}).",
+                    caller,
+                    file);
+                return;
+            }
+
+            await task.ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {

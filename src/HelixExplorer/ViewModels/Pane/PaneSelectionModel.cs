@@ -33,13 +33,28 @@ public sealed class PaneSelectionModel
 
     public void Toggle(EntryItemViewModel entry, IReadOnlyList<EntryItemViewModel> allEntries)
     {
-        if (SelectedEntries.Contains(entry))
+        var removed = SelectedEntries.Contains(entry);
+        if (removed)
             SelectedEntries.Remove(entry);
         else
             SelectedEntries.Add(entry);
 
         SelectedEntry = SelectedEntries.Count == 1 ? SelectedEntries[0] : null;
-        _anchorIndex = IndexOf(allEntries, entry);
+
+        if (removed)
+        {
+            // Toggling an entry OFF must not leave the anchor on a now-unselected row; otherwise a
+            // subsequent Shift+Click would extend the range from the wrong origin. Re-anchor to the
+            // first still-selected entry (or clear the anchor when nothing remains selected).
+            _anchorIndex = SelectedEntries.Count == 0
+                ? -1
+                : LowestIndexAmong(allEntries, SelectedEntries);
+        }
+        else
+        {
+            _anchorIndex = IndexOf(allEntries, entry);
+        }
+
         SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -99,6 +114,26 @@ public sealed class PaneSelectionModel
         SelectedEntry = null;
         _anchorIndex = -1;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Returns the lowest index in <paramref name="allEntries"/> among the given
+    /// <paramref name="selected"/> entries, giving visual top-of-range semantics regardless of
+    /// the order the user selected items.
+    /// </summary>
+    private static int LowestIndexAmong(
+        IReadOnlyList<EntryItemViewModel> allEntries,
+        IEnumerable<EntryItemViewModel> selected)
+    {
+        var min = int.MaxValue;
+        foreach (var entry in selected)
+        {
+            var idx = IndexOf(allEntries, entry);
+            if (idx >= 0 && idx < min)
+                min = idx;
+        }
+
+        return min == int.MaxValue ? -1 : min;
     }
 
     private static int IndexOf(IReadOnlyList<EntryItemViewModel> entries, EntryItemViewModel entry)

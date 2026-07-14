@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using HelixExplorer.Core.Collections;
 using HelixExplorer.Core.Models;
 using Microsoft.Extensions.Logging;
@@ -14,7 +16,34 @@ namespace HelixExplorer.Core.Archives;
 /// </summary>
 public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchiveProvider> logger) : IArchiveProvider
 {
+    private static string ExtractionRoot => Path.Combine(Path.GetTempPath(), "HelixExplorer");
+
     public bool IsArchiveFile(string path) => ArchivePath.IsArchiveFile(path);
+
+    /// <summary>
+    /// Derives a per-archive temp directory keyed on the FULL archive path (not just its file name)
+    /// so that two archives sharing a name in different folders do not extract over each other.
+    /// </summary>
+    private static string GetArchiveTempDir(string archivePath)
+    {
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(archivePath)));
+        var archiveId = Convert.ToHexString(hash)[..12];
+        return Path.Combine(ExtractionRoot, archiveId);
+    }
+
+    public void CleanupExtractedFiles()
+    {
+        try
+        {
+            if (Directory.Exists(ExtractionRoot))
+                Directory.Delete(ExtractionRoot, recursive: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Best-effort: files may still be open (e.g. a preview handler). Leave them for next run.
+            logger.LogWarning(ex, "Failed to clean up archive extraction directory '{Root}'", ExtractionRoot);
+        }
+    }
 
     public async ValueTask<IReadOnlyList<FileSystemEntry>> EnumerateAsync(
         string virtualPath,
@@ -57,10 +86,7 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
                     if (!key.Equals(wanted, StringComparison.OrdinalIgnoreCase))
                         continue;
 
-                    var tempDir = Path.Combine(
-                        Path.GetTempPath(),
-                        "HelixExplorer",
-                        Path.GetFileNameWithoutExtension(archivePath));
+                    var tempDir = GetArchiveTempDir(archivePath);
                     Directory.CreateDirectory(tempDir);
                     var dest = Path.Combine(tempDir, Path.GetFileName(wanted));
 

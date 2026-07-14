@@ -70,7 +70,7 @@ public sealed class WinFileSystemProvider(IShellFolderEnumerator shell, ILogger<
 
     public bool FileExists(string path) => !string.IsNullOrEmpty(path) && File.Exists(path);
 
-    private static IReadOnlyList<FileSystemEntry> SearchRecursive(string path, string query, CancellationToken token)
+    private IReadOnlyList<FileSystemEntry> SearchRecursive(string path, string query, CancellationToken token)
     {
         var results = new List<FileSystemEntry>();
         var dirQueue = new Queue<string>();
@@ -96,8 +96,9 @@ public sealed class WinFileSystemProvider(IShellFolderEnumerator shell, ILogger<
                 var dirInfo = new DirectoryInfo(currentDir);
                 infos = dirInfo.GetFileSystemInfos("*", opts);
             }
-            catch
+            catch (Exception ex) when (ex is not OutOfMemoryException)
             {
+                logger.LogDebug(ex, "Skipping inaccessible directory '{Directory}' during search", currentDir);
                 continue;
             }
 
@@ -123,8 +124,9 @@ public sealed class WinFileSystemProvider(IShellFolderEnumerator shell, ILogger<
                     if (!isDir && info is FileInfo fi)
                         size = fi.Length;
                 }
-                catch
+                catch (Exception ex) when (ex is not OutOfMemoryException)
                 {
+                    logger.LogDebug(ex, "Failed to read metadata for '{Path}' during search", info.FullName);
                 }
 
                 var ext = isDir ? string.Empty : info.Extension;

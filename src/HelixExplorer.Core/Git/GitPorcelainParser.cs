@@ -171,7 +171,10 @@ public static class GitPorcelainParser
         if (raw.Length == 0)
             return string.Empty;
 
-        var s = raw.TrimStart();
+        // Do NOT TrimStart here: the caller has already positioned the span at the start of the path
+        // field, and a filename may legitimately begin with spaces. Only quote characters (git quotes
+        // paths containing special characters) should be stripped.
+        var s = raw;
         if (s.Length >= 2 && s[0] == '"' && s[^1] == '"')
         {
             var inner = s[1..^1];

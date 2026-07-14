@@ -18,6 +18,7 @@ using HelixExplorer.Core.Sorting;
 using HelixExplorer.Services;
 using HelixExplorer.Localization;
 using HelixExplorer.ViewModels.Pane;
+using Microsoft.Extensions.Logging;
 
 namespace HelixExplorer.ViewModels;
 
@@ -41,6 +42,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     private readonly IWindowHostService _windowHost;
     private readonly IShellFolderEnumerator _shellEnumerator;
     private readonly ITerminalLauncher _terminalLauncher;
+    private readonly ILogger<PaneViewModel> _logger;
     private readonly PaneSelectionModel _selection = new();
     private readonly PaneNavigationController _navigation;
     private readonly PaneListingCoordinator _listing = new();
@@ -53,6 +55,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     private CancellationTokenSource? _searchCts;
     private GitStatusSnapshot _gitSnapshot = GitStatusSnapshot.Empty;
     private bool _disposed;
+    private bool _commandNotifyPending;
 
     public PaneViewModel(
         IFileSystemProvider fileSystem,
@@ -70,7 +73,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         IWindowHostService windowHost,
         IShellFolderEnumerator shell,
         ITerminalLauncher terminalLauncher,
-        IPaneCoordinatorFactory coordinatorFactory)
+        IPaneCoordinatorFactory coordinatorFactory,
+        ILogger<PaneViewModel> logger)
     {
         _fileSystem = fileSystem;
         _archive = archive;
@@ -87,13 +91,14 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         _windowHost = windowHost;
         _shellEnumerator = shell;
         _terminalLauncher = terminalLauncher;
+        _logger = logger;
         _navigation = new PaneNavigationController(fileSystem, archive);
         _fileOperations = coordinatorFactory.CreateFileOperationCoordinator();
         _refreshCoordinator = coordinatorFactory.CreateRefreshCoordinator();
         _watcher.Changed += OnWatcherChanged;
         _clipboard.Changed += OnClipboardChanged;
         _selection.SelectionChanged += OnSelectionModelChanged;
-        _selection.SelectedEntries.CollectionChanged += (_, e) => OnSelectedEntriesChanged(_, e);
+        _selection.SelectedEntries.CollectionChanged += OnSelectedEntriesChanged;
     }
 
     private void OnSelectionModelChanged(object? sender, EventArgs e)
@@ -258,7 +263,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         if (OmnibarMode == OmnibarMode.Home)
             OmnibarMode = OmnibarMode.Path;
 
-        _ = RefreshAsync(showLoading: true);
+        FireAndForgetSafe.Run(RefreshAsync(showLoading: true), _logger);
     }
 
     partial void OnLocationKindChanged(PaneLocationKind value)
@@ -328,13 +333,15 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
             return;
         }
 
-        _searchCts = new CancellationTokenSource();
-        var ct = _searchCts.Token;
+        var cts = new CancellationTokenSource();
+        _searchCts = cts;
         var query = value.Trim();
         var path = CurrentPath;
         var fileSystem = _fileSystem;
 
-        _ = SearchRecursiveAsync(fileSystem, path, query, ct);
+        // Pass the CTS (not just its token) so the completion logic can identity-check whether this
+        // search is still the current one before publishing results or disposing the source.
+        FireAndForgetSafe.Run(SearchRecursiveAsync(fileSystem, path, query, cts), _logger);
     }
 
     private void CancelSearch()
@@ -347,8 +354,9 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         }
     }
 
-    private async Task SearchRecursiveAsync(IFileSystemProvider fileSystem, string path, string query, CancellationToken ct)
+    private async Task SearchRecursiveAsync(IFileSystemProvider fileSystem, string path, string query, CancellationTokenSource cts)
     {
+        var ct = cts.Token;
         try
         {
             var results = await fileSystem.SearchRecursiveAsync(path, query, ct).ConfigureAwait(true);
@@ -360,11 +368,15 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         }
         catch (OperationCanceledException)
         {
+            return;
         }
         finally
         {
-            var cts = Interlocked.CompareExchange(ref _searchCts, null, _searchCts);
-            cts?.Dispose();
+            // Only clear and dispose the field if THIS search still owns it. If a newer search has
+            // already replaced _searchCts (or CancelSearch swapped it out), that owner is responsible
+            // for disposal — touching it here would dispose a live source or double-dispose.
+            if (ReferenceEquals(cts, Interlocked.CompareExchange(ref _searchCts, null, cts)))
+                cts.Dispose();
         }
     }
 
@@ -805,7 +817,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
 
         var paths = SelectedEntries.Select(e => e.FullPath).ToList();
         _clipboard.SetCut(paths, CurrentPath);
-        _ = _fileOperations.PublishToOsClipboardAsync(paths, ClipboardOperation.Cut);
+        FireAndForgetSafe.Run(_fileOperations.PublishToOsClipboardAsync(paths, ClipboardOperation.Cut), _logger);
         RefreshCutState();
         NotifyCommandsCanExecuteChanged();
     }
@@ -818,7 +830,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
 
         var paths = SelectedEntries.Select(e => e.FullPath).ToList();
         _clipboard.SetCopy(paths, CurrentPath);
-        _ = _fileOperations.PublishToOsClipboardAsync(paths, ClipboardOperation.Copy);
+        FireAndForgetSafe.Run(_fileOperations.PublishToOsClipboardAsync(paths, ClipboardOperation.Copy), _logger);
         PasteCommand.NotifyCanExecuteChanged();
     }
 
@@ -1119,7 +1131,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
 
         var entry = SelectedEntries[0];
         var path = entry.IsDirectory ? entry.FullPath : Path.GetDirectoryName(entry.FullPath) ?? entry.FullPath;
-        _ = _windowHost.OpenWindowAsync(path, restoreSession: false);
+        FireAndForgetSafe.Run(_windowHost.OpenWindowAsync(path, restoreSession: false), _logger);
     }
 
     [RelayCommand(CanExecute = nameof(HasSingleSelection))]
@@ -1412,6 +1424,22 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
 
     public void NotifyCommandsCanExecuteChanged()
     {
+        // Coalesce bursts of selection changes into a single notification pass on the next dispatcher
+        // cycle. A rubber-band drag or range-select can otherwise re-raise CanExecuteChanged on ~20
+        // commands many times per gesture. All callers run on the UI thread.
+        if (_commandNotifyPending || _disposed)
+            return;
+
+        _commandNotifyPending = true;
+        Dispatcher.UIThread.Post(RaiseCommandsCanExecuteChanged);
+    }
+
+    private void RaiseCommandsCanExecuteChanged()
+    {
+        _commandNotifyPending = false;
+        if (_disposed)
+            return;
+
         CutCommand.NotifyCanExecuteChanged();
         CopyCommand.NotifyCanExecuteChanged();
         DeleteCommand.NotifyCanExecuteChanged();
@@ -1542,7 +1570,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     }
 
     void IPaneRefreshHost.RequestRefresh()
-        => _ = RefreshAsync(showLoading: false);
+        => FireAndForgetSafe.Run(RefreshAsync(showLoading: false), _logger);
 
     private void ApplyGitStatusesToEntries()
     {
@@ -1556,10 +1584,11 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
 
     public void Dispose()
     {
-        if (_disposed)
+        if (Interlocked.Exchange(ref _disposed, true))
             return;
-        _disposed = true;
         CancelSearch();
+        _selection.SelectionChanged -= OnSelectionModelChanged;
+        _selection.SelectedEntries.CollectionChanged -= OnSelectedEntriesChanged;
         _clipboard.Changed -= OnClipboardChanged;
         _watcher.Changed -= OnWatcherChanged;
         _watcher.Dispose();

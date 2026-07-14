@@ -55,72 +55,84 @@ public sealed class WinShellFolderEnumerator(ILogger<WinShellFolderEnumerator> l
     private IReadOnlyList<FileSystemEntry> Enumerate(string shellPath, CancellationToken ct)
     {
         var entries = new List<FileSystemEntry>();
-        if (Shell32Native.SHGetDesktopFolder(out var desktop) != 0)
+        if (!Shell32Native.TryGetDesktopFolder(out var desktop) || desktop is null)
             return entries;
 
-        uint attr = 0;
-        var hr = desktop.ParseDisplayName(IntPtr.Zero, IntPtr.Zero, shellPath, 0, out var pidlFolder, ref attr);
-        if (hr != 0 || pidlFolder == IntPtr.Zero)
-            return entries;
-
-        var folderPtr = IntPtr.Zero;
-        var enumPtr = IntPtr.Zero;
-        IShellFolder? folder = null;
-        IEnumIDList? enumIdList = null;
+        // The desktop shell folder is a COM object we own; guarantee its release even on early exits.
         try
         {
-            var iid = ShellIID.IID_IShellFolder;
-            if (desktop.BindToObject(pidlFolder, IntPtr.Zero, ref iid, out folderPtr) != 0 || folderPtr == IntPtr.Zero)
-                return entries;
-
-            folder = (IShellFolder)Marshal.GetObjectForIUnknown(folderPtr);
-            if (folder.EnumObjects(IntPtr.Zero, ShcontFolder | ShcontNonFolder, out enumPtr) != 0 || enumPtr == IntPtr.Zero)
-                return entries;
-
-            enumIdList = (IEnumIDList)Marshal.GetObjectForIUnknown(enumPtr);
-            while (true)
+            uint attr = 0;
+            var hr = desktop.ParseDisplayName(IntPtr.Zero, IntPtr.Zero, shellPath, 0, out var pidlFolder, ref attr);
+            if (hr != 0 || pidlFolder == IntPtr.Zero)
             {
-                ct.ThrowIfCancellationRequested();
-                var childPidl = IntPtr.Zero;
-                var fetched = 0;
-                var next = enumIdList.Next(1, out childPidl, ref fetched);
-                if (next != 0 || fetched == 0 || childPidl == IntPtr.Zero)
-                    break;
+                if (pidlFolder != IntPtr.Zero)
+                    Shell32Native.SHFree(pidlFolder);
+                return entries;
+            }
 
-                try
+            var folderPtr = IntPtr.Zero;
+            var enumPtr = IntPtr.Zero;
+            IShellFolder? folder = null;
+            IEnumIDList? enumIdList = null;
+            try
+            {
+                var iid = ShellIID.IID_IShellFolder;
+                if (desktop.BindToObject(pidlFolder, IntPtr.Zero, ref iid, out folderPtr) != 0 || folderPtr == IntPtr.Zero)
+                    return entries;
+
+                folder = (IShellFolder)Marshal.GetObjectForIUnknown(folderPtr);
+                if (folder.EnumObjects(IntPtr.Zero, ShcontFolder | ShcontNonFolder, out enumPtr) != 0 || enumPtr == IntPtr.Zero)
+                    return entries;
+
+                enumIdList = (IEnumIDList)Marshal.GetObjectForIUnknown(enumPtr);
+                while (true)
                 {
-                    if (TryMapEntry(folder, childPidl, out var entry))
-                        entries.Add(entry);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(ex, "Skipping failed shell entry");
-                }
-                finally
-                {
-                    Shell32Native.SHFree(childPidl);
+                    ct.ThrowIfCancellationRequested();
+                    var childPidl = IntPtr.Zero;
+                    var fetched = 0;
+                    var next = enumIdList.Next(1, out childPidl, ref fetched);
+                    if (next != 0 || fetched == 0 || childPidl == IntPtr.Zero)
+                        break;
+
+                    try
+                    {
+                        if (TryMapEntry(folder, childPidl, out var entry))
+                            entries.Add(entry);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogWarning(ex, "Skipping failed shell entry");
+                    }
+                    finally
+                    {
+                        Shell32Native.SHFree(childPidl);
+                    }
                 }
             }
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Shell enumerate failed for '{ShellPath}'", shellPath);
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Shell enumerate failed for '{ShellPath}'", shellPath);
+            }
+            finally
+            {
+                if (enumIdList is not null)
+                    Marshal.ReleaseComObject(enumIdList);
+                if (enumPtr != IntPtr.Zero)
+                    Marshal.Release(enumPtr);
+                if (folder is not null)
+                    Marshal.ReleaseComObject(folder);
+                if (folderPtr != IntPtr.Zero)
+                    Marshal.Release(folderPtr);
+                Shell32Native.SHFree(pidlFolder);
+            }
+
+            entries.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+            return entries;
         }
         finally
         {
-            if (enumIdList is not null)
-                Marshal.ReleaseComObject(enumIdList);
-            if (enumPtr != IntPtr.Zero)
-                Marshal.Release(enumPtr);
-            if (folder is not null)
-                Marshal.ReleaseComObject(folder);
-            if (folderPtr != IntPtr.Zero)
-                Marshal.Release(folderPtr);
-            Shell32Native.SHFree(pidlFolder);
+            Marshal.ReleaseComObject(desktop);
         }
-
-        entries.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
-        return entries;
     }
 
     private static bool TryMapEntry(IShellFolder folder, IntPtr pidl, out FileSystemEntry entry)
@@ -158,7 +170,10 @@ public sealed class WinShellFolderEnumerator(ILogger<WinShellFolderEnumerator> l
         if (hr != 0)
             return string.Empty;
 
-        var sb = new StringBuilder(260);
+        // Legacy MAX_PATH (260) truncates long paths enabled on modern Windows. Use the extended
+        // maximum (~32K WCHARs). StrRetToBuf always null-terminates within the supplied capacity.
+        const int extendedMaxPath = 32768;
+        var sb = new StringBuilder(extendedMaxPath);
         Shell32Native.StrRetToBuf(ref strret, pidl, sb, sb.Capacity);
         return sb.ToString();
     }

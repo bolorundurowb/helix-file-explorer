@@ -1,9 +1,10 @@
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Models;
+using Microsoft.Extensions.Logging;
 
 namespace HelixExplorer.Windows.FileSystem;
 
-public sealed class WinQuickAccessProvider : IQuickAccessProvider
+public sealed class WinQuickAccessProvider(ILogger<WinQuickAccessProvider> logger) : IQuickAccessProvider
 {
     public string? GetPath(KnownFolderKind folder)
     {
@@ -22,8 +23,9 @@ public sealed class WinQuickAccessProvider : IQuickAccessProvider
                 _ => null
             };
         }
-        catch
+        catch (Exception ex)
         {
+            logger.LogWarning(ex, "Failed to resolve known folder {Folder}", folder);
             return null;
         }
     }

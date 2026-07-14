@@ -51,6 +51,12 @@ public struct ArrayPoolList<T> : IDisposable
 
     public void Clear()
     {
+        if (_buffer is null)
+        {
+            _count = 0;
+            return;
+        }
+
         if (RuntimeHelpers.IsReferenceOrContainsReferences<T>())
             Array.Clear(_buffer, 0, _count);
         _count = 0;
@@ -68,6 +74,9 @@ public struct ArrayPoolList<T> : IDisposable
 
     public readonly T[] ToArray()
     {
+        if (_buffer is null || _count == 0)
+            return [];
+
         var result = new T[_count];
         Array.Copy(_buffer, result, _count);
         return result;
@@ -75,11 +84,14 @@ public struct ArrayPoolList<T> : IDisposable
 
     public void Dispose()
     {
-        if (_buffer is not null)
+        // Idempotent: atomically detach the buffer so a second Dispose (or a Dispose racing with
+        // another) cannot return the same array to the pool twice, which corrupts the pool.
+        var buffer = Interlocked.Exchange(ref _buffer, null!);
+        if (buffer is not null)
         {
-            _pool.Return(_buffer, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
-            _buffer = [];
+            _pool.Return(buffer, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
             _count = 0;
+            _pool = null!;
         }
     }
 

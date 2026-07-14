@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
@@ -242,8 +243,14 @@ public sealed partial class PaneView : UserControl
 
     private void OnRenameTextBoxLostFocus(object? sender, RoutedEventArgs e)
     {
-        if (Pane?.IsRenaming == true)
-            Pane.CommitRenameCommand.Execute(null);
+        if (_pane?.IsRenaming != true)
+            return;
+
+        var entry = _pane.Entries.FirstOrDefault(x => x.IsRenaming);
+        if (entry is not null && string.IsNullOrWhiteSpace(entry.RenameText))
+            _pane.CancelRenameCommand.Execute(null);
+        else
+            _pane.CommitRenameCommand.Execute(null);
     }
 
     private void OnPaneKeyDown(object? sender, KeyEventArgs e)

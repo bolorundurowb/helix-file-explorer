@@ -25,6 +25,23 @@ internal static class Shell32Native
     [DllImport("shell32.dll")]
     public static extern void SHFree(IntPtr pidl);
 
+    /// <summary>
+    /// Obtains the desktop <see cref="IShellFolder"/>. The returned COM object is owned by the
+    /// caller and MUST be released with <see cref="Marshal.ReleaseComObject(object)"/> when done,
+    /// ideally in a <c>finally</c> block.
+    /// </summary>
+    public static bool TryGetDesktopFolder(out IShellFolder? desktop)
+    {
+        if (SHGetDesktopFolder(out var folder) == 0 && folder is not null)
+        {
+            desktop = folder;
+            return true;
+        }
+
+        desktop = null;
+        return false;
+    }
+
     [DllImport("user32.dll", CharSet = CharSet.Auto)]
     public static extern int TrackPopupMenuEx(IntPtr hmenu, uint uFlags, int x, int y, IntPtr hwnd, IntPtr lptpm);
 

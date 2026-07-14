@@ -49,6 +49,8 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
                             File.Delete(path);
                         else if (Directory.Exists(path))
                             Directory.Delete(path, recursive: true);
+                        else
+                            throw new FileNotFoundException($"The item '{path}' no longer exists.", path);
                     }
                     else
                     {
@@ -394,7 +396,12 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
                     path,
                     Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs,
                     Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
+                return;
             }
+
+            // Neither a file nor a directory exists at this path: surface it as a real failure
+            // instead of silently reporting success (which hid missing/already-deleted items).
+            throw new FileNotFoundException($"The item '{path}' no longer exists.", path);
         }
         catch (Exception ex)
         {

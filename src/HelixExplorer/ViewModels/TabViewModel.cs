@@ -11,6 +11,7 @@ using HelixExplorer.Core.Settings;
 using HelixExplorer.Core.Session;
 using HelixExplorer.Services;
 using HelixExplorer.ViewModels.Pane;
+using Microsoft.Extensions.Logging;
 
 namespace HelixExplorer.ViewModels;
 
@@ -32,6 +33,8 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     private readonly IWindowHostService _windowHost;
     private readonly IShellFolderEnumerator _shellEnumerator;
     private readonly ITerminalLauncher _terminalLauncher;
+    /// <summary>DI-resolved logger forwarded to child <see cref="PaneViewModel"/> instances at construction time.</summary>
+    private readonly ILogger<PaneViewModel> _paneViewModelLogger;
     private readonly HomePageViewModel _home;
     private readonly SettingsPageViewModel? _settings;
     private bool _showHiddenFiles;
@@ -55,6 +58,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         IWindowHostService windowHost,
         IShellFolderEnumerator shellEnumerator,
         ITerminalLauncher terminalLauncher,
+        ILogger<PaneViewModel> paneLogger,
         HomePageViewModel home,
         TabKind kind = TabKind.Browser,
         SettingsPageViewModel? settings = null)
@@ -75,6 +79,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         _windowHost = windowHost;
         _shellEnumerator = shellEnumerator;
         _terminalLauncher = terminalLauncher;
+        _paneViewModelLogger = paneLogger;
         _home = home;
         _settings = settings;
         Kind = kind;
@@ -166,7 +171,8 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
             _windowHost,
             _shellEnumerator,
             _terminalLauncher,
-            _coordinatorFactory);
+            _coordinatorFactory,
+            _paneViewModelLogger);
         pane.SortChanged += OnPaneSortChanged;
         pane.LayoutChanged += OnPaneLayoutChanged;
         pane.Navigated += OnPaneNavigated;

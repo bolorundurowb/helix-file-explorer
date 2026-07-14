@@ -54,7 +54,7 @@ public sealed class WinFileVisualProvider : IFileVisualProvider
             using var scaled = ResizeToSquare(image, size);
             return EncodePng(scaled);
         }
-        catch
+        catch (Exception)
         {
             return null;
         }
@@ -80,7 +80,9 @@ public sealed class WinFileVisualProvider : IFileVisualProvider
             (uint)Marshal.SizeOf<ShellFileInfo>(),
             flags);
 
-        if (result == IntPtr.Zero && shfi.hIcon == IntPtr.Zero)
+        // Bail out if the call failed OR no icon handle came back. Using || (not &&) is essential:
+        // a non-zero result with a zero hIcon would otherwise reach Icon.FromHandle(IntPtr.Zero).
+        if (result == IntPtr.Zero || shfi.hIcon == IntPtr.Zero)
             return null;
 
         try
@@ -90,7 +92,7 @@ public sealed class WinFileVisualProvider : IFileVisualProvider
             using var scaled = ResizeToSquare(bitmap, size);
             return EncodePng(scaled);
         }
-        catch
+        catch (Exception)
         {
             return null;
         }
@@ -124,7 +126,7 @@ public sealed class WinFileVisualProvider : IFileVisualProvider
             using var scaled = ResizeToSquare(bitmap, size);
             return EncodePng(scaled);
         }
-        catch
+        catch (Exception)
         {
             return null;
         }

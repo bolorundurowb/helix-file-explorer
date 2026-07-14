@@ -15,4 +15,10 @@ public interface IArchiveProvider
     ValueTask ExtractArchiveToDirectoryAsync(string archivePath, string destinationDirectory, CancellationToken token = default);
 
     ValueTask ExtractVirtualEntriesAsync(IReadOnlyList<string> virtualPaths, string destinationDirectory, CancellationToken token = default);
+
+    /// <summary>
+    /// Deletes any temporary files/directories the provider created while extracting archive
+    /// entries for preview/open. Safe to call on application shutdown; best-effort and never throws.
+    /// </summary>
+    void CleanupExtractedFiles();
 }

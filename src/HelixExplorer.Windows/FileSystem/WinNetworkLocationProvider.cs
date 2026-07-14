@@ -2,10 +2,11 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Models;
+using Microsoft.Extensions.Logging;
 
 namespace HelixExplorer.Windows.FileSystem;
 
-public sealed class WinNetworkLocationProvider : INetworkLocationProvider
+public sealed class WinNetworkLocationProvider(ILogger<WinNetworkLocationProvider> logger) : INetworkLocationProvider
 {
     private const int ResourceGlobalNet = 0x00000002;
     private const int ResourceTypeDisk = 0x00000001;
@@ -24,7 +25,7 @@ public sealed class WinNetworkLocationProvider : INetworkLocationProvider
             .ConfigureAwait(false);
     }
 
-    private static IReadOnlyList<NetworkLocationInfo> EnumerateNetworkLocations(CancellationToken cancellationToken)
+    private IReadOnlyList<NetworkLocationInfo> EnumerateNetworkLocations(CancellationToken cancellationToken)
     {
         var results = new List<NetworkLocationInfo>();
         Enumerate(null, results, cancellationToken);
@@ -47,7 +48,7 @@ public sealed class WinNetworkLocationProvider : INetworkLocationProvider
         return unique;
     }
 
-    private static void Enumerate(NetResource? parent, List<NetworkLocationInfo> results, CancellationToken cancellationToken)
+    private void Enumerate(NetResource? parent, List<NetworkLocationInfo> results, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -68,7 +69,15 @@ public sealed class WinNetworkLocationProvider : INetworkLocationProvider
                     if (result == ErrorNoMoreItems)
                         break;
                     if (result != 0)
-                        throw new Win32Exception(result);
+                    {
+                        // Enumeration failure (e.g. a provider dropped offline mid-scan). Log and stop
+                        // this branch gracefully rather than faulting the whole discovery task.
+                        logger.LogWarning(
+                            "WNetEnumResource failed ({Error}): {Message}",
+                            result,
+                            new Win32Exception(result).Message);
+                        break;
+                    }
 
                     var itemSize = Marshal.SizeOf<NetResource>();
                     for (var i = 0; i < count; i++)

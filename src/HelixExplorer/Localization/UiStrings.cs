@@ -42,6 +42,12 @@ public static class UiStrings
 
     public static string CopyingItems => "Copying items…";
 
+    public static string DeletingItems => "Deleting items…";
+
+    public static string DeletedItems(int count) => $"Deleted {count} item{(count == 1 ? "" : "s")}";
+
+    public static string NoItemsDeleted => "No items were deleted";
+
     public static string PermanentlyDeleteTitle => "Permanently delete?";
 
     public static string PermanentlyDeleteMessage => "Selected items will be permanently deleted and cannot be restored.";

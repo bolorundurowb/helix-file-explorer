@@ -20,6 +20,7 @@ public sealed class ApplicationStartupCoordinator(
     : IDisposable
 {
     private readonly WinThemeWatcher _themeWatcher = themeWatcher;
+    private Action<ThemeMode>? _onThemeChanged;
 
     public void Initialize(Avalonia.Application application, MainWindowViewModel mainWindowViewModel)
     {
@@ -28,7 +29,11 @@ public sealed class ApplicationStartupCoordinator(
         themeService.ApplyTheme(settings.Theme);
         uiFontService.ApplyFont(settings.UiFont);
         accentBrushes.ApplyCustomAccent(settings.AccentColorArgb);
-        themeService.ThemeChanged += _ => accentBrushes.ApplyCustomAccent(accentBrushes.CustomAccentArgb);
+
+        // Keep a reference to the handler so it can be unsubscribed on Dispose (otherwise the
+        // singleton theme service keeps this coordinator — and its graph — alive for the app's life).
+        _onThemeChanged = _ => accentBrushes.ApplyCustomAccent(accentBrushes.CustomAccentArgb);
+        themeService.ThemeChanged += _onThemeChanged;
 
         WireResourceConverters(application, settings);
         WireMainWindowViewModel(mainWindowViewModel);
@@ -80,5 +85,13 @@ public sealed class ApplicationStartupCoordinator(
     }
 
     public void Dispose()
-        => _themeWatcher.Dispose();
+    {
+        if (_onThemeChanged is not null)
+        {
+            themeService.ThemeChanged -= _onThemeChanged;
+            _onThemeChanged = null;
+        }
+
+        _themeWatcher.Dispose();
+    }
 }

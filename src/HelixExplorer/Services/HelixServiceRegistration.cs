@@ -60,7 +60,7 @@ public static class HelixServiceRegistration
         services.AddSingleton<HomePageViewModel>();
         services.AddScoped<FileOperationReporter>();
         services.AddScoped<IFileOperationReporter>(sp => sp.GetRequiredService<FileOperationReporter>());
-        services.AddScoped<MainWindowViewModel>();
+        services.AddSingleton<MainWindowViewModel>();
         services.AddTransient<MainWindow>();
         return services;
     }

@@ -89,4 +89,74 @@ public class ArrayPoolListTests
         Assert.Equal(3, span.Length);
         Assert.Equal(10, span[1]);
     }
+
+    [Fact]
+    public void Dispose_CalledTwice_DoesNotThrow()
+    {
+        var list = new ArrayPoolList<int>();
+        list.Add(1);
+        list.Add(2);
+
+        list.Dispose();
+        var ex = Record.Exception(() => list.Dispose());
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void Dispose_CalledTwice_DoesNotReturnBufferToPoolTwice()
+    {
+        // Rent, populate and dispose twice. If the second Dispose returned the (already returned)
+        // buffer again, subsequent independent rentals could hand out the same array, corrupting
+        // the pool. Renting fresh lists afterwards must yield distinct, isolated buffers.
+        var list = new ArrayPoolList<int>(initialCapacity: 32);
+        for (var i = 0; i < 32; i++)
+            list.Add(i);
+        list.Dispose();
+        list.Dispose();
+
+        using var a = new ArrayPoolList<int>(initialCapacity: 32);
+        using var b = new ArrayPoolList<int>(initialCapacity: 32);
+        for (var i = 0; i < 32; i++)
+        {
+            a.Add(1);
+            b.Add(2);
+        }
+
+        Assert.All(a.ToArray(), v => Assert.Equal(1, v));
+        Assert.All(b.ToArray(), v => Assert.Equal(2, v));
+    }
+
+    [Fact]
+    public void Clear_OnDefaultInitializedStruct_DoesNotThrow()
+    {
+        var list = default(ArrayPoolList<int>);
+
+        var ex = Record.Exception(() => list.Clear());
+
+        Assert.Null(ex);
+        Assert.Equal(0, list.Count);
+    }
+
+    [Fact]
+    public void ToArray_OnDefaultInitializedStruct_ReturnsEmpty()
+    {
+        var list = default(ArrayPoolList<int>);
+
+        var result = list.ToArray();
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void Clear_ThenReuse_WorksAfterDefaultInitialization()
+    {
+        var list = default(ArrayPoolList<int>);
+        list.Clear();
+        list.Add(42);
+
+        Assert.Equal(1, list.Count);
+        Assert.Equal(42, list[0]);
+        list.Dispose();
+    }
 }

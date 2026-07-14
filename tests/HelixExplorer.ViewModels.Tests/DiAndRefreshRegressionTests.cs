@@ -17,11 +17,11 @@ namespace HelixExplorer.ViewModels.Tests;
 public class ScopedDiWiringTests
 {
     [Fact]
-    public void ApplicationRegistration_UsesScopedLifetimesForWindowGraph()
+    public void ApplicationRegistration_UsesCorrectLifetimesForWindowGraph()
     {
         var services = CreateAppServices();
 
-        Assert.Equal(ServiceLifetime.Scoped, Descriptor<MainWindowViewModel>(services).Lifetime);
+        Assert.Equal(ServiceLifetime.Singleton, Descriptor<MainWindowViewModel>(services).Lifetime);
         Assert.Equal(ServiceLifetime.Scoped, Descriptor<FileOperationReporter>(services).Lifetime);
         Assert.Equal(ServiceLifetime.Scoped, Descriptor<IFileOperationReporter>(services).Lifetime);
         Assert.Equal(ServiceLifetime.Scoped, Descriptor<IPaneCoordinatorFactory>(services).Lifetime);

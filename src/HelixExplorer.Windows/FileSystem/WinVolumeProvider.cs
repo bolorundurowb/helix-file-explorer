@@ -1,9 +1,10 @@
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Models;
+using Microsoft.Extensions.Logging;
 
 namespace HelixExplorer.Windows.FileSystem;
 
-public sealed class WinVolumeProvider : IVolumeProvider
+public sealed class WinVolumeProvider(ILogger<WinVolumeProvider> logger) : IVolumeProvider
 {
     public IReadOnlyList<VolumeInfo> GetVolumes()
     {
@@ -30,8 +31,9 @@ public sealed class WinVolumeProvider : IVolumeProvider
                     free = drive.AvailableFreeSpace;
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                logger.LogWarning(ex, "Failed to read drive info for '{Drive}'", drive.Name);
                 label = string.Empty;
                 display = drive.Name.TrimEnd('\\');
             }

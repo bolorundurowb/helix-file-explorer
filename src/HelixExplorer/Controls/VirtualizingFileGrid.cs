@@ -254,7 +254,9 @@ public sealed class VirtualizingFileGrid : TemplatedControl
         for (var i = 0; i < items.Count; i += columns)
         {
             var count = Math.Min(columns, items.Count - i);
-            rows.Add(new GridRow(items.GetRange(i, count)));
+            // Slice view over the shared flat list instead of GetRange, which allocated and copied a
+            // new List<object> per row on every rebuild (once per resize / selection refresh).
+            rows.Add(new GridRow(items, i, count));
         }
 
         _rows.ItemsSource = rows;
@@ -298,8 +300,32 @@ public sealed class VirtualizingFileGrid : TemplatedControl
         _pooledSet.Clear();
     }
 
-    private sealed class GridRow(IReadOnlyList<object> items)
+    /// <summary>
+    /// A lightweight, zero-copy window over a contiguous span of the shared flat item list. Holding
+    /// a reference plus offset avoids the per-row list allocation/copy that <c>GetRange</c> incurred.
+    /// </summary>
+    private sealed class GridRow(IReadOnlyList<object> source, int start, int count) : IReadOnlyList<object>
     {
-        public IReadOnlyList<object> Items { get; } = items;
+        public IReadOnlyList<object> Items => this;
+
+        public int Count => count;
+
+        public object this[int index]
+        {
+            get
+            {
+                if ((uint)index >= (uint)count)
+                    throw new ArgumentOutOfRangeException(nameof(index));
+                return source[start + index];
+            }
+        }
+
+        public IEnumerator<object> GetEnumerator()
+        {
+            for (var i = 0; i < count; i++)
+                yield return source[start + i];
+        }
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }

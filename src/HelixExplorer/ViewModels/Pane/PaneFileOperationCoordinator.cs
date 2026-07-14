@@ -141,7 +141,7 @@ public sealed class PaneFileOperationCoordinator(
         try
         {
             var kind = FileOperationKind.Delete;
-            var title = permanently ? UiStrings.PermanentlyDeleteTitle : "Deleting items…";
+            var title = permanently ? UiStrings.PermanentlyDeleteTitle : UiStrings.DeletingItems;
             operationReporter.Begin(kind, paths.Count, title);
 
             var result = await fileOps.DeleteAsync(paths, permanently).ConfigureAwait(true);
@@ -151,8 +151,8 @@ public sealed class PaneFileOperationCoordinator(
                 kind,
                 result.Succeeded,
                 result.Succeeded > 0
-                    ? $"Deleted {result.Succeeded} item{(result.Succeeded == 1 ? "" : "s")}"
-                    : UiStrings.NoItemsCopied);
+                    ? UiStrings.DeletedItems(result.Succeeded)
+                    : UiStrings.NoItemsDeleted);
 
             await FileOperationUiHelper.ReportResultAsync(
                 dialogs,

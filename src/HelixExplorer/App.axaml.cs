@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Services;
 using HelixExplorer.ViewModels;
@@ -66,6 +67,7 @@ public partial class App : Application
     private void OnShutdownRequested(object? sender, ShutdownRequestedEventArgs e)
     {
         _host?.Services.GetService<ApplicationStartupCoordinator>()?.Dispose();
+        _host?.Services.GetService<IArchiveProvider>()?.CleanupExtractedFiles();
         _host?.Dispose();
         _host = null;
     }

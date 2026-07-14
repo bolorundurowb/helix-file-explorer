@@ -80,7 +80,7 @@ public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuServic
         int screenX,
         int screenY)
     {
-        if (Shell32Native.SHGetDesktopFolder(out var desktop) != 0)
+        if (!Shell32Native.TryGetDesktopFolder(out var desktop) || desktop is null)
             return;
 
         uint attr = 0;
@@ -88,6 +88,9 @@ public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuServic
         if (hr != 0 || pidlFull == IntPtr.Zero)
         {
             logger.LogError("ParseDisplayName failed for '{FolderPath}': 0x{Hr:X8}", folderPath, hr);
+            if (pidlFull != IntPtr.Zero)
+                Shell32Native.SHFree(pidlFull);
+            Marshal.ReleaseComObject(desktop);
             return;
         }
 
@@ -157,6 +160,7 @@ public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuServic
                 Marshal.Release(folderPtr);
             FreePidls(childPidls, cidl);
             Shell32Native.SHFree(pidlFull);
+            Marshal.ReleaseComObject(desktop);
         }
     }
 

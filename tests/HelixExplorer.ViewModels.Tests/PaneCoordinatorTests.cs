@@ -58,6 +58,51 @@ public class PaneSelectionModelTests
 
         Assert.Equal(3, model.SelectedCount);
     }
+
+    [Fact]
+    public void Toggle_Off_ReanchorsSoSubsequentShiftClickSelectsFromRemainingSelection()
+    {
+        var entries = CreateEntries(5);
+        var model = new PaneSelectionModel();
+
+        // Ctrl+click build-up: select 1, then 2, then 3.
+        model.SelectSingle(entries[1], entries);
+        model.Toggle(entries[2], entries);
+        model.Toggle(entries[3], entries);
+        Assert.Equal(3, model.SelectedCount);
+
+        // Ctrl+click the middle item OFF. The anchor must move off the now-unselected row.
+        model.Toggle(entries[2], entries);
+        Assert.Equal(2, model.SelectedCount);
+        Assert.DoesNotContain(entries[2], model.SelectedEntries);
+
+        // Shift+click to entries[4]. With the drifted anchor bug this would start at index 2 and
+        // drop entries[1]; with the fix it anchors on the first remaining selection (index 1).
+        model.SelectRange(entries[4], entries);
+
+        Assert.Equal(4, model.SelectedCount);
+        Assert.Contains(entries[1], model.SelectedEntries);
+        Assert.Contains(entries[2], model.SelectedEntries);
+        Assert.Contains(entries[3], model.SelectedEntries);
+        Assert.Contains(entries[4], model.SelectedEntries);
+    }
+
+    [Fact]
+    public void Toggle_OffLastSelected_ClearsAnchor()
+    {
+        var entries = CreateEntries(4);
+        var model = new PaneSelectionModel();
+
+        model.SelectSingle(entries[2], entries);
+        model.Toggle(entries[2], entries);
+
+        Assert.Equal(0, model.SelectedCount);
+
+        // With no anchor, a shift-click should behave like a single selection at the target.
+        model.SelectRange(entries[1], entries);
+        Assert.Equal(1, model.SelectedCount);
+        Assert.Contains(entries[1], model.SelectedEntries);
+    }
 }
 
 public class PaneNavigationControllerTests
@@ -116,6 +161,10 @@ public class PaneNavigationControllerTests
 
         public ValueTask ExtractVirtualEntriesAsync(IReadOnlyList<string> virtualPaths, string destinationDirectory, CancellationToken token = default)
             => ValueTask.CompletedTask;
+
+        public void CleanupExtractedFiles()
+        {
+        }
     }
 }
 

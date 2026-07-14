@@ -14,6 +14,7 @@ using HelixExplorer.Input;
 using HelixExplorer.Localization;
 using HelixExplorer.Services;
 using HelixExplorer.ViewModels.Pane;
+using Microsoft.Extensions.Logging;
 
 namespace HelixExplorer.ViewModels;
 
@@ -45,12 +46,16 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly ITerminalLauncher _terminalLauncher;
     private readonly HomePageViewModel _homePage;
     private readonly SettingsPageViewModel _settingsPage;
+    /// <summary>DI-resolved logger forwarded to child <see cref="PaneViewModel"/> instances at construction time.</summary>
+    private readonly ILogger<PaneViewModel> _paneViewModelLogger;
     private readonly string _homePath;
     private readonly List<CommandItem> _allCommands = new();
     private readonly List<string> _recentPaths = new();
     private AppSettings? _cachedSettings;
     private IReadOnlyList<NetworkLocationInfo> _lastNetworkLocations = [];
     private CancellationTokenSource? _networkCts;
+    private CancellationTokenSource? _persistCts;
+    private const int PersistDebounceMs = 500;
     private bool _commandsBuilt;
     private bool _disposed;
     private TabViewModel? _lastBrowserTab;
@@ -85,7 +90,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         IWindowHostService windowHost,
         IShellFolderEnumerator shellEnumerator,
         ITerminalLauncher terminalLauncher,
-        HomePageViewModel homePage)
+        HomePageViewModel homePage,
+        ILogger<PaneViewModel> paneLogger)
     {
         _settingsStore = settingsStore;
         _sessionStore = sessionStore;
@@ -113,6 +119,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _terminalLauncher = terminalLauncher;
         OperationReporter = operationReporter;
         _homePage = homePage;
+        _paneViewModelLogger = paneLogger;
         _settingsPage = new SettingsPageViewModel(this);
         _homePage.NavigateRequested += OnHomeNavigateRequested;
 
@@ -465,7 +472,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         var settings = GetSettings();
         settings.ShowHiddenFiles = ShowHiddenFiles;
         settings.ShowFileExtensions = ShowFileExtensions;
-        SaveSettings(settings);
+        _cachedSettings = settings;
+        SchedulePersistSettings();
     }
 
     private void PersistChromeSettings()
@@ -480,7 +488,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         settings.DefaultDualPane = DefaultDualPane;
         settings.DefaultSplitOrientation = DefaultSplitOrientation;
         settings.AccentColorArgb = AccentColorArgb;
-        SaveSettings(settings);
+        _cachedSettings = settings;
+        SchedulePersistSettings();
     }
 
     private AppSettings GetSettings()
@@ -490,6 +499,42 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         _settingsStore.Save(settings);
         _cachedSettings = settings;
+    }
+
+    /// <summary>
+    /// Debounces disk persistence of the cached settings. Frequent property changes (e.g. dragging
+    /// the sidebar or the thumbnail-size slider) previously wrote to disk synchronously on every
+    /// change; now the in-memory cache updates immediately and the disk write is coalesced.
+    /// </summary>
+    private void SchedulePersistSettings()
+    {
+        var cts = new CancellationTokenSource();
+        var previous = Interlocked.Exchange(ref _persistCts, cts);
+        previous?.Cancel();
+        previous?.Dispose();
+
+        var token = cts.Token;
+        _ = Task.Delay(PersistDebounceMs, token).ContinueWith(
+            _ =>
+            {
+                var settings = _cachedSettings;
+                if (settings is not null)
+                    _settingsStore.Save(settings);
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnRanToCompletion,
+            TaskScheduler.FromCurrentSynchronizationContext());
+    }
+
+    /// <summary>Cancels any pending debounced write and flushes the cached settings synchronously.</summary>
+    private void FlushSettings()
+    {
+        var cts = Interlocked.Exchange(ref _persistCts, null);
+        cts?.Cancel();
+        cts?.Dispose();
+
+        if (_cachedSettings is not null)
+            _settingsStore.Save(_cachedSettings);
     }
 
     private void ApplyViewSettingsToTabs()
@@ -579,6 +624,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             _windowHost,
             _shellEnumerator,
             _terminalLauncher,
+            _paneViewModelLogger,
             _homePage,
             kind,
             kind == TabKind.Settings ? _settingsPage : null);
@@ -712,7 +758,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         if (!ReferenceEquals(sender, SelectedTab))
             return;
 
-        RecordRecent(SelectedTab?.ActivePane.CurrentPath);
+        RecordRecent(SelectedTab?.ActivePane?.CurrentPath);
         SyncChromeToActivePane();
     }
 
@@ -858,7 +904,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
         IsStatusCentreOpen = false;
         foreach (var tab in Tabs.Where(t => t.IsBrowserTab))
-            RecordRecent(tab.ActivePane.CurrentPath);
+            RecordRecent(tab.ActivePane?.CurrentPath);
 
         CommandPaletteQuery = string.Empty;
         RefreshCommandPalette(string.Empty);
@@ -940,7 +986,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     private void SyncChromeToActivePane()
     {
-        var path = SelectedTab?.ActivePane.CurrentPath ?? string.Empty;
+        var path = SelectedTab?.ActivePane?.CurrentPath ?? string.Empty;
         UpdateSidebarSelection(path);
         RefreshHomeDashboard();
         Title = SelectedTab is null || string.IsNullOrEmpty(SelectedTab.Title)
@@ -1056,12 +1102,12 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private void ToggleFilter() => FocusSearch();
 
     [RelayCommand]
-    private void FocusSearch() => SelectedTab?.ActivePane.EnterSearchModeCommand.Execute(null);
+    private void FocusSearch() => SelectedTab?.ActivePane?.EnterSearchModeCommand.Execute(null);
 
     private static bool CanUseGlobalFileShortcuts() => !TextInputFocus.IsActive();
 
     [RelayCommand]
-    private void SetViewMode(LayoutMode mode) => SelectedTab?.ActivePane.SetViewModeCommand.Execute(mode);
+    private void SetViewMode(LayoutMode mode) => SelectedTab?.ActivePane?.SetViewModeCommand.Execute(mode);
 
     private bool CanCutSelection() => CanUseGlobalFileShortcuts() && ActivePane?.HasSelectionForOps == true;
 
@@ -1096,28 +1142,28 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand(CanExecute = nameof(CanCutSelection))]
-    private void Cut() => SelectedTab?.ActivePane.CutCommand.Execute(null);
+    private void Cut() => SelectedTab?.ActivePane?.CutCommand.Execute(null);
 
     [RelayCommand(CanExecute = nameof(CanCopySelection))]
-    private void Copy() => SelectedTab?.ActivePane.CopyCommand.Execute(null);
+    private void Copy() => SelectedTab?.ActivePane?.CopyCommand.Execute(null);
 
     [RelayCommand(CanExecute = nameof(CanPasteSelection))]
-    private void Paste() => SelectedTab?.ActivePane.PasteCommand.Execute(null);
+    private void Paste() => SelectedTab?.ActivePane?.PasteCommand.Execute(null);
 
     [RelayCommand(CanExecute = nameof(CanDeleteSelection))]
-    private void Delete() => SelectedTab?.ActivePane.DeleteCommand.Execute(null);
+    private void Delete() => SelectedTab?.ActivePane?.DeleteCommand.Execute(null);
 
     [RelayCommand(CanExecute = nameof(CanDeletePermanentlySelection))]
-    private void DeletePermanently() => SelectedTab?.ActivePane.DeletePermanentlyCommand.Execute(null);
+    private void DeletePermanently() => SelectedTab?.ActivePane?.DeletePermanentlyCommand.Execute(null);
 
     [RelayCommand(CanExecute = nameof(CanRenameSelection))]
-    private void Rename() => SelectedTab?.ActivePane.BeginRenameCommand.Execute(null);
+    private void Rename() => SelectedTab?.ActivePane?.BeginRenameCommand.Execute(null);
 
     [RelayCommand(CanExecute = nameof(CanCreateFolder))]
-    private void NewFolder() => SelectedTab?.ActivePane.NewFolderCommand.Execute(null);
+    private void NewFolder() => SelectedTab?.ActivePane?.NewFolderCommand.Execute(null);
 
     [RelayCommand(CanExecute = nameof(CanSelectAllEntries))]
-    private void SelectAll() => SelectedTab?.ActivePane.SelectAll();
+    private void SelectAll() => SelectedTab?.ActivePane?.SelectAll();
 
     [RelayCommand(CanExecute = nameof(CanCopyPathSelection))]
     private void CopyPath() => ActivePane?.CopyPathCommand.Execute(null);
@@ -1205,7 +1251,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
         SaveSettings(settings);
         RebuildSidebar(_lastNetworkLocations);
-        SelectedTab?.ActivePane.NotifyPinStateChanged();
+        SelectedTab?.ActivePane?.NotifyPinStateChanged();
     }
 
     public void UnpinPath(string path)
@@ -1228,7 +1274,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
         SaveSettings(settings);
         RebuildSidebar(_lastNetworkLocations);
-        SelectedTab?.ActivePane.NotifyPinStateChanged();
+        SelectedTab?.ActivePane?.NotifyPinStateChanged();
     }
 
     public bool CanUnpinSidebarItem(SidebarItemViewModel? item)
@@ -1304,6 +1350,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
         SaveSession();
         PersistChromeSettings();
+        FlushSettings();
 
         foreach (var tab in Tabs)
         {

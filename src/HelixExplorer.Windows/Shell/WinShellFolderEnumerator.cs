@@ -163,6 +163,14 @@ public sealed class WinShellFolderEnumerator(ILogger<WinShellFolderEnumerator> l
         return true;
     }
 
+    /// <summary>
+    /// Reusable buffer for <see cref="GetDisplayName"/>. Avoids allocating a 64 KB
+    /// <see cref="StringBuilder"/> per entry, which caused significant GC pressure when
+    /// enumerating large directories.
+    /// </summary>
+    [ThreadStatic]
+    private static StringBuilder? t_displayNameBuffer;
+
     private static string GetDisplayName(IShellFolder folder, IntPtr pidl, uint flags)
     {
         var strret = new STRRET();
@@ -173,8 +181,9 @@ public sealed class WinShellFolderEnumerator(ILogger<WinShellFolderEnumerator> l
         // Legacy MAX_PATH (260) truncates long paths enabled on modern Windows. Use the extended
         // maximum (~32K WCHARs). StrRetToBuf always null-terminates within the supplied capacity.
         const int extendedMaxPath = 32768;
-        var sb = new StringBuilder(extendedMaxPath);
-        Shell32Native.StrRetToBuf(ref strret, pidl, sb, sb.Capacity);
+        var sb = t_displayNameBuffer ??= new StringBuilder(extendedMaxPath);
+        sb.Clear();
+        Shell32Native.StrRetToBuf(ref strret, pidl, sb, extendedMaxPath);
         return sb.ToString();
     }
 }

@@ -64,11 +64,13 @@ public struct ArrayPoolList<T> : IDisposable
 
     public void Sort(IComparer<T> comparer)
     {
+        if (_buffer is null) return;
         Array.Sort(_buffer, 0, _count, comparer);
     }
 
     public void Sort(Comparison<T> comparison)
     {
+        if (_buffer is null) return;
         Array.Sort(_buffer, 0, _count, Comparer<T>.Create(comparison));
     }
 

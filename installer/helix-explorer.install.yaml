@@ -62,6 +62,7 @@ tasks:
 
   pre_uninstall:
     - action: write_registry
+      require: 'os.isWindows'
       parameters:
         key_path: "HKCU\\Software\\Helix Explorer"
         value_name: UninstallStarted

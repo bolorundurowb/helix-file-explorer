@@ -105,8 +105,6 @@ public sealed class FileVisualService(IFileVisualProvider provider) : IDisposabl
 
     private void EvictIfNeeded()
     {
-        List<Task<Bitmap?>>? toDispose = null;
-
         lock (_lruLock)
         {
             while (_lruOrder.Count > MaxCacheEntries)
@@ -115,22 +113,8 @@ public sealed class FileVisualService(IFileVisualProvider provider) : IDisposabl
                 _lruOrder.RemoveFirst();
                 _lruNodes.Remove(oldest);
 
-                if (_cache.TryRemove(oldest, out var task))
-                    (toDispose ??= []).Add(task);
+                _cache.TryRemove(oldest, out _);
             }
-        }
-
-        if (toDispose is null)
-            return;
-
-        foreach (var task in toDispose)
-        {
-            if (!task.IsCompletedSuccessfully)
-                continue;
-
-            var bitmap = task.Result;
-            if (bitmap is not null)
-                Dispatcher.UIThread.Post(bitmap.Dispose);
         }
     }
 

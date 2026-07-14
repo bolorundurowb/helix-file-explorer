@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Diagnostics;
+using System.Threading;
 using Avalonia.Input;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -46,6 +47,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     private readonly PaneFileOperationCoordinator _fileOperations;
     private readonly PaneRefreshCoordinator _refreshCoordinator;
     private IReadOnlyList<FileSystemEntry> _allEntries = Array.Empty<FileSystemEntry>();
+    private IReadOnlyList<FileSystemEntry> _directoryEntries = Array.Empty<FileSystemEntry>();
+    private CancellationTokenSource? _searchCts;
     private GitStatusSnapshot _gitSnapshot = GitStatusSnapshot.Empty;
     private bool _disposed;
 
@@ -311,7 +314,56 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         OnPropertyChanged(nameof(IsSortDescendingActive));
     }
 
-    partial void OnFilterTextChanged(string value) => ApplySortAndPublish();
+    partial void OnFilterTextChanged(string value)
+    {
+        CancelSearch();
+
+        if (string.IsNullOrWhiteSpace(value) || !IsFileSystem)
+        {
+            _allEntries = _directoryEntries;
+            ApplySortAndPublish();
+            return;
+        }
+
+        _searchCts = new CancellationTokenSource();
+        var ct = _searchCts.Token;
+        var query = value.Trim();
+        var path = CurrentPath;
+        var fileSystem = _fileSystem;
+
+        _ = SearchRecursiveAsync(fileSystem, path, query, ct);
+    }
+
+    private void CancelSearch()
+    {
+        var cts = Interlocked.Exchange(ref _searchCts, null);
+        if (cts is not null)
+        {
+            try { cts.Cancel(); } catch (ObjectDisposedException) { }
+            cts.Dispose();
+        }
+    }
+
+    private async Task SearchRecursiveAsync(IFileSystemProvider fileSystem, string path, string query, CancellationToken ct)
+    {
+        try
+        {
+            var results = await fileSystem.SearchRecursiveAsync(path, query, ct).ConfigureAwait(true);
+            if (ct.IsCancellationRequested || _disposed)
+                return;
+
+            _allEntries = results;
+            ApplySortAndPublish();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            var cts = Interlocked.CompareExchange(ref _searchCts, null, _searchCts);
+            cts?.Dispose();
+        }
+    }
 
     partial void OnThumbnailSizeChanged(double value)
     {
@@ -405,6 +457,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         => _selection.SelectAll(Entries);
 
     public bool HasSelectionForOps => CanModifySelection();
+
+    public bool HasSelectionForDeletePerm => CanDeletePermanently();
 
     public bool HasSingleSelectionForOps => CanRename();
 
@@ -505,6 +559,13 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
 
     ListingPublishResult IPaneRefreshHost.ApplySortAndPublish(ListingPublishRequest request)
     {
+        if (request.AllEntries.Count > 0)
+        {
+            _directoryEntries = request.AllEntries;
+            if (!IsFilterActive)
+                _allEntries = request.AllEntries;
+        }
+
         var result = _listing.ApplySortAndPublish(request);
 
         TotalCount = result.TotalCount;
@@ -690,12 +751,19 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
 
     public void ClearFilter()
     {
+        CancelSearch();
         var wasFiltering = IsFilterActive;
         IsFilterVisible = false;
         if (FilterText.Length != 0)
+        {
             FilterText = string.Empty;
+            _allEntries = _directoryEntries;
+        }
         else if (wasFiltering)
+        {
+            _allEntries = _directoryEntries;
             ApplySortAndPublish();
+        }
 
         if (OmnibarMode == OmnibarMode.Search)
             OmnibarMode = IsHome ? OmnibarMode.Home : OmnibarMode.Path;
@@ -756,27 +824,16 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
             t => StatusText = t);
 
     [RelayCommand(CanExecute = nameof(CanModifySelection))]
-    private async Task Delete()
-    {
-        if (SelectedEntries.Count == 0)
-            return;
+    private Task Delete()
+        => SelectedEntries.Count == 0
+            ? Task.CompletedTask
+            : _fileOperations.DeleteAsync(
+                SelectedEntries.Select(e => e.FullPath).ToList(),
+                permanently: false,
+                () => RefreshAsync(showLoading: false),
+                t => StatusText = t);
 
-        var paths = SelectedEntries.Select(e => e.FullPath).ToList();
-        try
-        {
-            var result = await _fileOps.DeleteAsync(paths, permanently: false);
-            await RefreshAsync(showLoading: false);
-            await FileOperationUiHelper.ReportResultAsync(_dialogs, result, "Delete", t => StatusText = t);
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"Delete failed: {ex.Message}");
-            await _dialogs.ShowErrorAsync(UiStrings.DeleteFailed, ex.Message);
-            StatusText = UiStrings.DeleteFailed;
-        }
-    }
-
-    [RelayCommand(CanExecute = nameof(CanModifySelection))]
+    [RelayCommand(CanExecute = nameof(CanDeletePermanently))]
     private async Task DeletePermanently()
     {
         if (SelectedEntries.Count == 0)
@@ -788,19 +845,11 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         if (!confirmed)
             return;
 
-        var paths = SelectedEntries.Select(e => e.FullPath).ToList();
-        try
-        {
-            var result = await _fileOps.DeleteAsync(paths, permanently: true);
-            await RefreshAsync(showLoading: false);
-            await FileOperationUiHelper.ReportResultAsync(_dialogs, result, "Permanent delete", t => StatusText = t);
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"Permanent delete failed: {ex.Message}");
-            await _dialogs.ShowErrorAsync(UiStrings.DeleteFailed, ex.Message);
-            StatusText = UiStrings.DeleteFailed;
-        }
+        await _fileOperations.DeleteAsync(
+            SelectedEntries.Select(e => e.FullPath).ToList(),
+            permanently: true,
+            () => RefreshAsync(showLoading: false),
+            t => StatusText = t);
     }
 
     [RelayCommand(CanExecute = nameof(CanRename))]
@@ -1247,7 +1296,9 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
 
     private bool CanModifyHere() => !IsArchive && !IsHome && !IsShellNamespace;
 
-    private bool CanModifySelection() => (CanModifyHere() || IsRecycleBin) && HasSelection();
+    private bool CanModifySelection() => CanModifyHere() && HasSelection();
+
+    private bool CanDeletePermanently() => (CanModifyHere() || IsRecycleBin) && HasSelection();
 
     [RelayCommand(CanExecute = nameof(CanRestoreFromRecycleBin))]
     private async Task RestoreFromRecycleBin()
@@ -1455,6 +1506,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         if (_disposed)
             return;
         _disposed = true;
+        CancelSearch();
         _clipboard.Changed -= OnClipboardChanged;
         _watcher.Changed -= OnWatcherChanged;
         _watcher.Dispose();

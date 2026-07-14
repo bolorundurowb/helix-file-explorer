@@ -92,6 +92,10 @@ public sealed class WinShellFolderEnumerator(ILogger<WinShellFolderEnumerator> l
                     if (TryMapEntry(folder, childPidl, out var entry))
                         entries.Add(entry);
                 }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Skipping failed shell entry");
+                }
                 finally
                 {
                     Shell32Native.SHFree(childPidl);
@@ -131,8 +135,10 @@ public sealed class WinShellFolderEnumerator(ILogger<WinShellFolderEnumerator> l
 
         uint attributes = SfgaoFolder;
         var apidl = new[] { pidl };
-        folder.GetAttributesOf(1, apidl, ref attributes);
-        var isDir = (attributes & SfgaoFolder) != 0;
+        var hr = folder.GetAttributesOf(1, apidl, ref attributes);
+        var isDir = hr == 0
+            ? (attributes & SfgaoFolder) != 0
+            : parsingName.IndexOfAny(['\\', '/']) < 0;
 
         entry = new FileSystemEntry(
             parsingName,

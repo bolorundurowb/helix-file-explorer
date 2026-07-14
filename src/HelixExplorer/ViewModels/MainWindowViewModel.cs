@@ -1069,6 +1069,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     private bool CanDeleteSelection() => CanUseGlobalFileShortcuts() && ActivePane?.HasSelectionForOps == true;
 
+    private bool CanDeletePermanentlySelection() => CanUseGlobalFileShortcuts() && ActivePane?.HasSelectionForDeletePerm == true;
+
     private bool CanRenameSelection() => CanUseGlobalFileShortcuts() && ActivePane?.HasSingleSelectionForOps == true;
 
     private bool CanPasteSelection() => CanUseGlobalFileShortcuts() && ActivePane?.CanPasteHere == true;
@@ -1105,7 +1107,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     [RelayCommand(CanExecute = nameof(CanDeleteSelection))]
     private void Delete() => SelectedTab?.ActivePane.DeleteCommand.Execute(null);
 
-    [RelayCommand(CanExecute = nameof(CanDeleteSelection))]
+    [RelayCommand(CanExecute = nameof(CanDeletePermanentlySelection))]
     private void DeletePermanently() => SelectedTab?.ActivePane.DeletePermanentlyCommand.Execute(null);
 
     [RelayCommand(CanExecute = nameof(CanRenameSelection))]

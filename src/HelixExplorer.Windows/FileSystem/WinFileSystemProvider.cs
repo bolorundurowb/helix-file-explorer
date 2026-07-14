@@ -6,11 +6,6 @@ using Microsoft.Extensions.Logging;
 
 namespace HelixExplorer.Windows.FileSystem;
 
-/// <summary>
-/// Low-allocation directory enumeration via a single
-/// <see cref="DirectoryInfo.EnumerateFileSystemInfos"/> pass so attributes, size, and
-/// timestamps come from the Win32 find data without extra per-entry stats.
-/// </summary>
 public sealed class WinFileSystemProvider(IShellFolderEnumerator shell, ILogger<WinFileSystemProvider> logger)
     : IFileSystemProvider
 {
@@ -39,6 +34,15 @@ public sealed class WinFileSystemProvider(IShellFolderEnumerator shell, ILogger<
         return new DirectoryListing(resolved, entries);
     }
 
+    public async ValueTask<IReadOnlyList<FileSystemEntry>> SearchRecursiveAsync(string path, string query, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !DirectoryExists(path) || string.IsNullOrWhiteSpace(query))
+            return Array.Empty<FileSystemEntry>();
+
+        var resolved = ResolvePath(path);
+        return await Task.Run(() => SearchRecursive(resolved, query.Trim(), cancellationToken), cancellationToken).ConfigureAwait(false);
+    }
+
     public string ResolvePath(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -65,6 +69,72 @@ public sealed class WinFileSystemProvider(IShellFolderEnumerator shell, ILogger<
         => ShellPath.IsShellPath(path) || (!string.IsNullOrEmpty(path) && Directory.Exists(path));
 
     public bool FileExists(string path) => !string.IsNullOrEmpty(path) && File.Exists(path);
+
+    private static IReadOnlyList<FileSystemEntry> SearchRecursive(string path, string query, CancellationToken token)
+    {
+        var results = new List<FileSystemEntry>();
+        var dirQueue = new Queue<string>();
+        dirQueue.Enqueue(path);
+
+        var opts = new EnumerationOptions
+        {
+            IgnoreInaccessible = true,
+            RecurseSubdirectories = false,
+            AttributesToSkip = 0,
+            ReturnSpecialDirectories = false,
+            MatchType = MatchType.Simple
+        };
+
+        while (dirQueue.Count > 0)
+        {
+            token.ThrowIfCancellationRequested();
+            var currentDir = dirQueue.Dequeue();
+
+            FileSystemInfo[] infos;
+            try
+            {
+                var dirInfo = new DirectoryInfo(currentDir);
+                infos = dirInfo.GetFileSystemInfos("*", opts);
+            }
+            catch
+            {
+                continue;
+            }
+
+            foreach (var info in infos)
+            {
+                token.ThrowIfCancellationRequested();
+
+                var isDir = (info.Attributes & FileAttributes.Directory) != 0;
+                var name = info.Name;
+                var matches = name.AsSpan().Contains(query.AsSpan(), StringComparison.OrdinalIgnoreCase);
+
+                if (isDir)
+                    dirQueue.Enqueue(info.FullName);
+
+                if (!matches)
+                    continue;
+
+                long size = 0;
+                DateTime modified = DateTime.MinValue;
+                try
+                {
+                    modified = info.LastWriteTimeUtc;
+                    if (!isDir && info is FileInfo fi)
+                        size = fi.Length;
+                }
+                catch
+                {
+                }
+
+                var ext = isDir ? string.Empty : info.Extension;
+                var isHidden = (info.Attributes & FileAttributes.Hidden) != 0;
+                results.Add(new FileSystemEntry(info.FullName, info.Name, isDir, size, modified, ext, isHidden));
+            }
+        }
+
+        return results;
+    }
 
     private IReadOnlyList<FileSystemEntry> Enumerate(string path, CancellationToken token)
     {

@@ -131,6 +131,46 @@ public sealed class PaneFileOperationCoordinator(
         }
     }
 
+    public async Task DeleteAsync(
+        IReadOnlyList<string> paths,
+        bool permanently,
+        Func<Task> refreshAsync,
+        Action<string> setStatusText)
+    {
+        if (paths.Count == 0)
+            return;
+
+        try
+        {
+            var kind = FileOperationKind.Delete;
+            var title = permanently ? UiStrings.PermanentlyDeleteTitle : "Deleting items…";
+            operationReporter.Begin(kind, paths.Count, title);
+
+            var result = await fileOps.DeleteAsync(paths, permanently).ConfigureAwait(true);
+
+            await refreshAsync().ConfigureAwait(true);
+            operationReporter.Complete(
+                kind,
+                result.Succeeded,
+                result.Succeeded > 0
+                    ? $"Deleted {result.Succeeded} item{(result.Succeeded == 1 ? "" : "s")}"
+                    : UiStrings.NoItemsCopied);
+
+            await FileOperationUiHelper.ReportResultAsync(
+                dialogs,
+                result,
+                "Delete",
+                setStatusText).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Delete failed");
+            await dialogs.ShowErrorAsync(UiStrings.DeleteFailed, ex.Message).ConfigureAwait(true);
+            setStatusText(UiStrings.DeleteFailed);
+            operationReporter.Fail(UiStrings.DeleteFailed);
+        }
+    }
+
     public async Task PublishToOsClipboardAsync(IReadOnlyList<string> paths, ClipboardOperation operation)
     {
         try

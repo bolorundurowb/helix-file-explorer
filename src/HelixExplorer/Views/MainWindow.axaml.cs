@@ -223,9 +223,16 @@ public partial class MainWindow : Window
     {
         for (var current = sender as Control; current is not null; current = current.Parent as Control)
         {
-            if (current is ContextMenu { PlacementTarget: Border border }
-                && border.DataContext is SidebarItemViewModel item)
-                return item;
+            if (current is not ContextMenu { PlacementTarget: { } target })
+                continue;
+
+            for (var t = target as Control; t is not null; t = t.Parent as Control)
+            {
+                if (t.DataContext is SidebarItemViewModel item)
+                    return item;
+            }
+
+            return null;
         }
 
         return null;

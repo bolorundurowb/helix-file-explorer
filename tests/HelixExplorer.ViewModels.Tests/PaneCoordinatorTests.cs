@@ -90,6 +90,9 @@ public class PaneNavigationControllerTests
         public ValueTask<DirectoryListing> GetDirectoryContentsAsync(string path, CancellationToken cancellationToken = default)
             => ValueTask.FromResult(DirectoryListing.Empty);
 
+        public ValueTask<IReadOnlyList<FileSystemEntry>> SearchRecursiveAsync(string path, string query, CancellationToken cancellationToken = default)
+            => ValueTask.FromResult<IReadOnlyList<FileSystemEntry>>(Array.Empty<FileSystemEntry>());
+
         public bool DirectoryExists(string path) => false;
 
         public bool FileExists(string path) => false;

@@ -44,13 +44,25 @@ public sealed class PaneFileOperationCoordinator(
             FileOperationResult result;
             if (payload.Operation == ClipboardOperation.Cut)
             {
-                result = await fileOps.MoveAsync(payload.Paths, currentPath, progress, conflicts).ConfigureAwait(true);
+                result = await fileOps.MoveAsync(
+                    payload.Paths,
+                    currentPath,
+                    progress,
+                    conflicts,
+                    operationReporter.CancellationToken,
+                    operationReporter).ConfigureAwait(true);
                 if (result.Succeeded > 0)
                     clipboard.Clear();
             }
             else
             {
-                result = await fileOps.CopyAsync(payload.Paths, currentPath, progress, conflicts).ConfigureAwait(true);
+                result = await fileOps.CopyAsync(
+                    payload.Paths,
+                    currentPath,
+                    progress,
+                    conflicts,
+                    operationReporter.CancellationToken,
+                    operationReporter).ConfigureAwait(true);
             }
 
             await refreshAsync().ConfigureAwait(true);
@@ -71,6 +83,13 @@ public sealed class PaneFileOperationCoordinator(
         }
         catch (Exception ex)
         {
+            if (ex is OperationCanceledException)
+            {
+                setStatusText(UiStrings.OperationCancelled);
+                operationReporter.Cancelled(UiStrings.OperationCancelled);
+                return;
+            }
+
             logger.LogError(ex, "Paste failed");
             await dialogs.ShowErrorAsync(UiStrings.PasteFailed, ex.Message).ConfigureAwait(true);
             setStatusText(UiStrings.PasteFailed);
@@ -104,9 +123,21 @@ public sealed class PaneFileOperationCoordinator(
             var conflicts = FileOperationUiHelper.CreateConflictResolver(dialogs);
             FileOperationResult result;
             if (isCopy)
-                result = await fileOps.CopyAsync(filtered, destinationPath, progress, conflicts).ConfigureAwait(true);
+                result = await fileOps.CopyAsync(
+                    filtered,
+                    destinationPath,
+                    progress,
+                    conflicts,
+                    operationReporter.CancellationToken,
+                    operationReporter).ConfigureAwait(true);
             else
-                result = await fileOps.MoveAsync(filtered, destinationPath, progress, conflicts).ConfigureAwait(true);
+                result = await fileOps.MoveAsync(
+                    filtered,
+                    destinationPath,
+                    progress,
+                    conflicts,
+                    operationReporter.CancellationToken,
+                    operationReporter).ConfigureAwait(true);
 
             await refreshAsync().ConfigureAwait(true);
             operationReporter.Complete(
@@ -122,6 +153,13 @@ public sealed class PaneFileOperationCoordinator(
         }
         catch (Exception ex)
         {
+            if (ex is OperationCanceledException)
+            {
+                setStatusText(UiStrings.OperationCancelled);
+                operationReporter.Cancelled(UiStrings.OperationCancelled);
+                return;
+            }
+
             logger.LogError(ex, "Drop failed");
             await dialogs.ShowErrorAsync(UiStrings.DropFailed, ex.Message).ConfigureAwait(true);
             setStatusText(UiStrings.DropFailed);
@@ -145,7 +183,12 @@ public sealed class PaneFileOperationCoordinator(
             operationReporter.Begin(kind, paths.Count, title);
 
             var progress = new Progress<FileOperationProgress>(p => operationReporter.Report(p));
-            var result = await fileOps.DeleteAsync(paths, permanently, progress).ConfigureAwait(true);
+            var result = await fileOps.DeleteAsync(
+                paths,
+                permanently,
+                progress,
+                operationReporter.CancellationToken,
+                operationReporter).ConfigureAwait(true);
 
             await refreshAsync().ConfigureAwait(true);
             operationReporter.Complete(
@@ -163,6 +206,13 @@ public sealed class PaneFileOperationCoordinator(
         }
         catch (Exception ex)
         {
+            if (ex is OperationCanceledException)
+            {
+                setStatusText(UiStrings.OperationCancelled);
+                operationReporter.Cancelled(UiStrings.OperationCancelled);
+                return;
+            }
+
             logger.LogError(ex, "Delete failed");
             await dialogs.ShowErrorAsync(UiStrings.DeleteFailed, ex.Message).ConfigureAwait(true);
             setStatusText(UiStrings.DeleteFailed);

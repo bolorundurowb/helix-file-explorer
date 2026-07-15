@@ -9,20 +9,23 @@ public interface IFileOperationService
         string destination,
         IProgress<FileOperationProgress>? progress = null,
         IFileConflictResolver? conflicts = null,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        IFileOperationControl? control = null);
 
     ValueTask<FileOperationResult> MoveAsync(
         IReadOnlyList<string> sources,
         string destination,
         IProgress<FileOperationProgress>? progress = null,
         IFileConflictResolver? conflicts = null,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        IFileOperationControl? control = null);
 
     ValueTask<FileOperationResult> DeleteAsync(
         IReadOnlyList<string> paths,
         bool permanently,
         IProgress<FileOperationProgress>? progress = null,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        IFileOperationControl? control = null);
 
     ValueTask<FileOperationResult> RenameAsync(string path, string newName, CancellationToken ct = default);
 

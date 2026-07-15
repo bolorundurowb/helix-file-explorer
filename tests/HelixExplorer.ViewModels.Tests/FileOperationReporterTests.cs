@@ -22,6 +22,8 @@ public class FileOperationReporterTests
         Assert.Equal(0, reporter.Progress);
         Assert.False(reporter.IsIndeterminate);
         Assert.Equal("Copying items", reporter.ActiveTitle);
+        Assert.True(reporter.CanPauseOperation);
+        Assert.True(reporter.CanCancelOperation);
     }
 
     [Fact]
@@ -64,6 +66,7 @@ public class FileOperationReporterTests
         Assert.Equal("Copied 1 item", entry.Message);
         Assert.True(entry.Succeeded);
         Assert.False(entry.Failed);
+        Assert.False(entry.Cancelled);
         Assert.Equal(FileOperationKind.Copy, entry.Kind);
         Assert.Equal(1, entry.ItemCount);
     }
@@ -80,8 +83,55 @@ public class FileOperationReporterTests
         var entry = Assert.Single(reporter.Completed);
         Assert.True(entry.Failed);
         Assert.False(entry.Succeeded);
+        Assert.False(entry.Cancelled);
         Assert.Null(entry.Kind);
         Assert.Equal(0, entry.ItemCount);
+    }
+
+    [Fact]
+    public void Pause_and_resume_update_operation_control_state()
+    {
+        var reporter = new FileOperationReporter();
+        reporter.Begin(FileOperationKind.Copy, 2, "Copying");
+
+        reporter.PauseOperationCommand.Execute(null);
+
+        Assert.True(reporter.IsPaused);
+        Assert.False(reporter.CanPauseOperation);
+        Assert.True(reporter.CanResumeOperation);
+
+        reporter.ResumeOperationCommand.Execute(null);
+
+        Assert.False(reporter.IsPaused);
+        Assert.True(reporter.CanPauseOperation);
+        Assert.False(reporter.CanResumeOperation);
+    }
+
+    [Fact]
+    public void Cancel_operation_signals_token()
+    {
+        var reporter = new FileOperationReporter();
+        reporter.Begin(FileOperationKind.Move, 1, "Moving");
+
+        reporter.CancelOperationCommand.Execute(null);
+
+        Assert.True(reporter.CancellationToken.IsCancellationRequested);
+        Assert.False(reporter.IsPaused);
+    }
+
+    [Fact]
+    public void Cancelled_emits_neutral_completed_entry()
+    {
+        var reporter = new FileOperationReporter();
+        reporter.Begin(FileOperationKind.Copy, 1, "Copying");
+
+        reporter.Cancelled("Operation cancelled");
+
+        Assert.False(reporter.HasActive);
+        var entry = Assert.Single(reporter.Completed);
+        Assert.True(entry.Cancelled);
+        Assert.False(entry.Succeeded);
+        Assert.False(entry.Failed);
     }
 
     [Fact]

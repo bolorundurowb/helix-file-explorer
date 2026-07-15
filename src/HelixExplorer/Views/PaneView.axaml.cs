@@ -60,6 +60,7 @@ public sealed partial class PaneView : UserControl
         AttachDragGestureHandlers(DetailsGrid);
         AttachDragGestureHandlers(ListView);
         AttachDragGestureHandlers(GridView);
+        AddHandler(PointerPressedEvent, OnBlankAreaPointerPressed, RoutingStrategies.Bubble, handledEventsToo: true);
     }
 
     private void AttachDragGestureHandlers(Control control)
@@ -625,6 +626,7 @@ public sealed partial class PaneView : UserControl
             return;
 
         Pane.UpdateSelection(Array.Empty<EntryItemViewModel>());
+        SyncSelectionToView();
         // Arm marquee after clearing so dragging from blank space still rubber-bands.
         _pressPoint = e.GetPosition(this);
         _pressArgs = e;

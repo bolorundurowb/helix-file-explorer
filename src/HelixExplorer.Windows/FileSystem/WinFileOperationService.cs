@@ -11,11 +11,12 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
         string destination,
         IProgress<FileOperationProgress>? progress = null,
         IFileConflictResolver? conflicts = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        IFileOperationControl? control = null)
     {
         return await Task.Run(() => ProcessSources(
-            sources, destination, FileOperationKind.Copy, progress, ct, conflicts,
-            (s, d, t, r, c) => CopyOne(s, d, t, r, c)), ct).ConfigureAwait(false);
+            sources, destination, FileOperationKind.Copy, progress, ct, control, conflicts,
+            (s, d, t, r, c, o) => CopyOne(s, d, t, r, c, o)), ct).ConfigureAwait(false);
     }
 
     public async ValueTask<FileOperationResult> MoveAsync(
@@ -23,18 +24,20 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
         string destination,
         IProgress<FileOperationProgress>? progress = null,
         IFileConflictResolver? conflicts = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        IFileOperationControl? control = null)
     {
         return await Task.Run(() => ProcessSources(
-            sources, destination, FileOperationKind.Move, progress, ct, conflicts,
-            (s, d, t, r, c) => MoveOne(s, d, t, r, c)), ct).ConfigureAwait(false);
+            sources, destination, FileOperationKind.Move, progress, ct, control, conflicts,
+            (s, d, t, r, c, o) => MoveOne(s, d, t, r, c, o)), ct).ConfigureAwait(false);
     }
 
     public async ValueTask<FileOperationResult> DeleteAsync(
         IReadOnlyList<string> paths,
         bool permanently,
         IProgress<FileOperationProgress>? progress = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        IFileOperationControl? control = null)
     {
         var total = paths.Count;
         var succeeded = 0;
@@ -45,6 +48,7 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
             for (var i = 0; i < total; i++)
             {
                 ct.ThrowIfCancellationRequested();
+                control?.WaitIfPaused(ct);
                 var path = paths[i];
                 progress?.Report(new FileOperationProgress(i, total, path, FileOperationKind.Delete));
 
@@ -126,8 +130,9 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
         FileOperationKind kind,
         IProgress<FileOperationProgress>? progress,
         CancellationToken ct,
+        IFileOperationControl? control,
         IFileConflictResolver? conflicts,
-        Action<string, string, CancellationToken, FileOperationRunState, IFileConflictResolver?> operation)
+        Action<string, string, CancellationToken, FileOperationRunState, IFileConflictResolver?, IFileOperationControl?> operation)
     {
         var total = sources.Count;
         var succeeded = 0;
@@ -137,13 +142,14 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
         for (var i = 0; i < total; i++)
         {
             ct.ThrowIfCancellationRequested();
+            control?.WaitIfPaused(ct);
             var source = sources[i];
             progress?.Report(new FileOperationProgress(i, total, source, kind));
 
             var state = new FileOperationRunState();
             try
             {
-                operation(source, destination, ct, state, conflicts);
+                operation(source, destination, ct, state, conflicts, control);
                 if (state.WasCancelled)
                     break;
 
@@ -179,7 +185,8 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
         string destination,
         CancellationToken ct,
         FileOperationRunState state,
-        IFileConflictResolver? conflicts)
+        IFileConflictResolver? conflicts,
+        IFileOperationControl? control)
     {
         var destPath = Path.Combine(destination, Path.GetFileName(source));
 
@@ -192,10 +199,10 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
         }
         else if (Directory.Exists(source))
         {
-            if (Directory.Exists(destPath) && !TryResolveDirectoryConflict(source, destPath, ct, conflicts, state, out destPath, merge: true))
+            if (Directory.Exists(destPath) && !TryResolveDirectoryConflict(source, destPath, ct, conflicts, control, state, out destPath, merge: true))
                 return;
 
-            CopyDirectory(source, destPath, ct, conflicts, state);
+            CopyDirectory(source, destPath, ct, conflicts, state, control);
         }
     }
 
@@ -204,7 +211,8 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
         string destination,
         CancellationToken ct,
         FileOperationRunState state,
-        IFileConflictResolver? conflicts)
+        IFileConflictResolver? conflicts,
+        IFileOperationControl? control)
     {
         var destPath = Path.Combine(destination, Path.GetFileName(source));
 
@@ -217,7 +225,7 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
         }
         else if (Directory.Exists(source))
         {
-            if (Directory.Exists(destPath) && !TryResolveDirectoryConflict(source, destPath, ct, conflicts, state, out destPath, merge: false))
+            if (Directory.Exists(destPath) && !TryResolveDirectoryConflict(source, destPath, ct, conflicts, control, state, out destPath, merge: false))
                 return;
 
             Directory.Move(source, destPath);
@@ -275,6 +283,7 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
         string destPath,
         CancellationToken ct,
         IFileConflictResolver? conflicts,
+        IFileOperationControl? control,
         FileOperationRunState state,
         out string resolvedDestPath,
         bool merge)
@@ -303,7 +312,7 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
         {
             if (merge)
             {
-                CopyDirectory(source, destPath, ct, conflicts, state);
+                CopyDirectory(source, destPath, ct, conflicts, state, control);
                 state.WasSkipped = false;
                 return false;
             }
@@ -333,13 +342,15 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
         string destination,
         CancellationToken ct,
         IFileConflictResolver? conflicts,
-        FileOperationRunState state)
+        FileOperationRunState state,
+        IFileOperationControl? control)
     {
         Directory.CreateDirectory(destination);
 
         foreach (var file in Directory.EnumerateFiles(source))
         {
             ct.ThrowIfCancellationRequested();
+            control?.WaitIfPaused(ct);
             var destFile = Path.Combine(destination, Path.GetFileName(file));
             if (File.Exists(destFile))
             {
@@ -362,11 +373,12 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
         foreach (var dir in Directory.EnumerateDirectories(source))
         {
             ct.ThrowIfCancellationRequested();
+            control?.WaitIfPaused(ct);
             var destDir = Path.Combine(destination, Path.GetFileName(dir));
             if (Directory.Exists(destDir))
             {
                 var localState = new FileOperationRunState();
-                if (!TryResolveDirectoryConflict(dir, destDir, ct, conflicts, localState, out destDir, merge: true))
+                if (!TryResolveDirectoryConflict(dir, destDir, ct, conflicts, control, localState, out destDir, merge: true))
                 {
                     if (localState.WasCancelled)
                     {
@@ -378,7 +390,7 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
                 }
             }
 
-            CopyDirectory(dir, destDir, ct, conflicts, state);
+            CopyDirectory(dir, destDir, ct, conflicts, state, control);
             if (state.WasCancelled)
                 return;
         }

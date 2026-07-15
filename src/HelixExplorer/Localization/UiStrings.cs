@@ -14,6 +14,8 @@ public static class UiStrings
 
     public static string DeleteFailed => "Delete failed";
 
+    public static string OperationCancelled => "Operation cancelled";
+
     public static string RenameFailed => "Rename failed";
 
     public static string NewFolderFailed => "Could not create folder";

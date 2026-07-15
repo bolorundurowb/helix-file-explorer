@@ -45,6 +45,35 @@
                                Opacity="0.65"
                                TextTrimming="CharacterEllipsis"
                                IsVisible="{Binding HasActiveDetail}" />
+                    <StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Right"
+                                Spacing="6">
+                        <Button Command="{Binding PauseOperationCommand}"
+                                IsVisible="{Binding CanPauseOperation}"
+                                Classes="toolButton"
+                                Padding="6,4"
+                                ToolTip.Tip="Pause operation">
+                            <PathIcon Data="{DynamicResource HelixIconPauseGeometry}"
+                                      Width="14" Height="14" />
+                        </Button>
+                        <Button Command="{Binding ResumeOperationCommand}"
+                                IsVisible="{Binding CanResumeOperation}"
+                                Classes="toolButton"
+                                Padding="6,4"
+                                ToolTip.Tip="Resume operation">
+                            <PathIcon Data="{DynamicResource HelixIconPlayGeometry}"
+                                      Width="14" Height="14" />
+                        </Button>
+                        <Button Command="{Binding CancelOperationCommand}"
+                                IsVisible="{Binding CanCancelOperation}"
+                                Classes="toolButton"
+                                Padding="6,4"
+                                ToolTip.Tip="Cancel operation">
+                            <PathIcon Data="{DynamicResource HelixIconDismissGeometry}"
+                                      Width="14" Height="14"
+                                      Foreground="{DynamicResource HelixIconDeleteBrush}" />
+                        </Button>
+                    </StackPanel>
                 </StackPanel>
             </Border>
 
@@ -71,6 +100,13 @@
                                           Data="{DynamicResource HelixIconInfoGeometry}"
                                           Foreground="#D13438"
                                           IsVisible="{Binding Failed}" />
+                                <PathIcon Grid.Column="0"
+                                          Width="16" Height="16"
+                                          Margin="0,0,8,0"
+                                          VerticalAlignment="Center"
+                                          Data="{DynamicResource HelixIconInfoGeometry}"
+                                          Foreground="{DynamicResource HelixAccentBrush}"
+                                          IsVisible="{Binding Cancelled}" />
                                 <TextBlock Grid.Column="1"
                                            Text="{Binding Message}"
                                            FontSize="12"
@@ -88,14 +124,21 @@
                         HorizontalAlignment="Right"
                         Spacing="8"
                         Margin="0,12,0,0">
-                <Button Content="Clear"
-                        Command="{Binding ClearCompletedCommand}"
+                <Button Command="{Binding ClearCompletedCommand}"
                         Classes="toolButton"
-                        Padding="10,6" />
-                <Button Content="Close"
-                        Click="OnCloseClick"
+                        Padding="6,4"
+                        ToolTip.Tip="Clear completed operations">
+                    <PathIcon Data="{DynamicResource HelixIconDeleteGeometry}"
+                              Width="14" Height="14"
+                              Foreground="{DynamicResource HelixIconDeleteBrush}" />
+                </Button>
+                <Button Click="OnCloseClick"
                         Classes="toolButton"
-                        Padding="10,6" />
+                        Padding="6,4"
+                        ToolTip.Tip="Close status centre">
+                    <PathIcon Data="{DynamicResource HelixIconDismissGeometry}"
+                              Width="14" Height="14" />
+                </Button>
             </StackPanel>
         </Grid>
     </Border>

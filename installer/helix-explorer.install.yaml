@@ -12,7 +12,7 @@ build:
   targets:
     - windows-x64
   windows:
-    install_scope: user
+    install_scope: machine
     register_arp: true
 
 ui:

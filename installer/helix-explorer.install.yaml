@@ -43,6 +43,7 @@ files:
     include:
       - assets/**/*.svg
       - assets/**/*.png
+      - assets/**/*.ico
       - LICENSE
 
 tasks:

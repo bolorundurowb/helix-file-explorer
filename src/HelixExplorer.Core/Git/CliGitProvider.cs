@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
 using Microsoft.Extensions.Logging;
@@ -5,25 +6,39 @@ using Microsoft.Extensions.Logging;
 namespace HelixExplorer.Core.Git;
 
 /// <summary>
-/// Git status via the CLI. One <c>status --porcelain=v2 --branch</c> call per navigation.
+/// Git status via the CLI. Repository-root lookups and recent status snapshots are cached so rapid,
+/// repeated refreshes for the same repo coalesce instead of spawning a git process each time.
 /// </summary>
 public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvider
 {
     private const string GitExe = "git";
 
-    public bool IsInsideRepository(string path) => FindRepoRoot(path) is not null;
+    /// <summary>Window during which a repeated status request for the same root reuses the last snapshot.</summary>
+    private static readonly TimeSpan StatusCacheTtl = TimeSpan.FromMilliseconds(750);
+
+    private readonly GitStatusCache _statusCache = new(StatusCacheTtl);
+
+    /// <summary>Cache of directory → repository root (null sentinel stored as empty string).</summary>
+    private readonly ConcurrentDictionary<string, string?> _rootCache = new(StringComparer.OrdinalIgnoreCase);
+
+    public bool IsInsideRepository(string path) => ResolveRepoRoot(path) is not null;
 
     public async ValueTask<GitStatusSnapshot> GetStatusAsync(string path, CancellationToken cancellationToken = default)
     {
-        var root = FindRepoRoot(path);
+        var root = ResolveRepoRoot(path);
         if (root is null)
             return GitStatusSnapshot.Empty;
+
+        if (_statusCache.TryGet(root, out var cached))
+            return cached;
 
         try
         {
             var output = await RunGitAsync(root, "status --porcelain=v2 -z --branch", cancellationToken)
                 .ConfigureAwait(false);
-            return GitPorcelainParser.Parse(output, root);
+            var snapshot = GitPorcelainParser.Parse(output, root);
+            _statusCache.Store(root, snapshot);
+            return snapshot;
         }
         catch (OperationCanceledException)
         {
@@ -36,9 +51,26 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
         }
     }
 
+    /// <summary>Repository-root lookup with per-directory caching to avoid repeated upward directory walks.</summary>
+    private string? ResolveRepoRoot(string? path)
+    {
+        if (string.IsNullOrEmpty(path))
+            return null;
+
+        var key = Directory.Exists(path) ? path : Path.GetDirectoryName(path) ?? path;
+
+        if (_rootCache.TryGetValue(key, out var cachedRoot))
+            return string.IsNullOrEmpty(cachedRoot) ? null : cachedRoot;
+
+        var root = FindRepoRoot(path);
+        // Store empty string as the "not a repo" sentinel so negative lookups are cached too.
+        _rootCache[key] = root ?? string.Empty;
+        return root;
+    }
+
     public async ValueTask<IReadOnlyList<string>> ListBranchesAsync(string path, CancellationToken cancellationToken = default)
     {
-        var root = FindRepoRoot(path);
+        var root = ResolveRepoRoot(path);
         if (root is null)
             return Array.Empty<string>();
 
@@ -69,13 +101,15 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
 
     public async ValueTask<bool> CheckoutBranchAsync(string path, string branch, CancellationToken cancellationToken = default)
     {
-        var root = FindRepoRoot(path);
+        var root = ResolveRepoRoot(path);
         if (root is null || string.IsNullOrWhiteSpace(branch))
             return false;
 
         try
         {
             await RunGitWithArgsAsync(root, ["checkout", branch], cancellationToken).ConfigureAwait(false);
+            // Working tree changed: drop any cached status so the next refresh reflects the new branch.
+            _statusCache.Invalidate(root);
             return true;
         }
         catch (OperationCanceledException)

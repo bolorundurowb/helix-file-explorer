@@ -16,6 +16,13 @@ public partial class App : Application
 {
     private IHost? _host;
 
+    /// <summary>
+    /// Application service provider, exposed so Avalonia-instantiated views (which have parameterless
+    /// constructors) can resolve services such as <see cref="IExternalFileDragPayloadBuilder"/>.
+    /// Null before the host is built.
+    /// </summary>
+    public static IServiceProvider? Services { get; private set; }
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
@@ -33,6 +40,8 @@ public partial class App : Application
             })
             .ConfigureServices((_, services) => services.AddHelixApplicationServices())
             .Build();
+
+        Services = _host.Services;
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
@@ -70,5 +79,6 @@ public partial class App : Application
         _host?.Services.GetService<IArchiveProvider>()?.CleanupExtractedFiles();
         _host?.Dispose();
         _host = null;
+        Services = null;
     }
 }

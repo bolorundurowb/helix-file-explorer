@@ -11,6 +11,12 @@ public sealed class AppSettings
     public SizeDisplayMode SizeDisplay { get; set; } = SizeDisplayMode.Binary;
     public bool ShowHiddenFiles { get; set; }
     public bool ShowFileExtensions { get; set; } = true;
+
+    /// <summary>
+    /// Whether directories are grouped ahead of files in listings. New installs default to
+    /// <see cref="DirectorySortMode.MixedWithFiles"/>; existing users can switch back to folders-first.
+    /// </summary>
+    public DirectorySortMode DirectorySort { get; set; } = DirectorySortMode.MixedWithFiles;
     public LayoutMode DefaultViewMode { get; set; } = LayoutMode.Details;
     public double DefaultThumbnailSize { get; set; } = 72;
     public bool DefaultDualPane { get; set; }

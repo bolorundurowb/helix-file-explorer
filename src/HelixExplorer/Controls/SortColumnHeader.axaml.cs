@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using HelixExplorer.Core.Models;
+using HelixExplorer.Core.Sorting;
 using HelixExplorer.ViewModels;
 
 namespace HelixExplorer.Controls;
@@ -38,13 +39,9 @@ public sealed partial class SortColumnHeader : UserControl
         if (e.InitialPressMouseButton != MouseButton.Left || DataContext is not PaneViewModel pane)
             return;
 
-        if (pane.SortColumn == Column)
-            pane.SortDescending = !pane.SortDescending;
-        else
-        {
-            pane.SortColumn = Column;
-            pane.SortDescending = false;
-        }
+        var (nextColumn, nextDescending) = SortSelection.Toggle(pane.SortColumn, pane.SortDescending, Column);
+        pane.SortColumn = nextColumn;
+        pane.SortDescending = nextDescending;
 
         e.Handled = true;
     }

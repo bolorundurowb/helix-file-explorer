@@ -31,6 +31,7 @@ public static class HelixServiceRegistration
         services.AddSingleton<IAccentBrushService, AvaloniaAccentBrushService>();
         services.AddSingleton<IClipboardService, InternalClipboardService>();
         services.AddSingleton<IOsFileClipboard, AvaloniaOsFileClipboard>();
+        services.AddSingleton<IExternalFileDragPayloadBuilder, AvaloniaExternalFileDragPayloadBuilder>();
         services.AddScoped<IWindowOwnerContext, WindowOwnerContext>();
         services.AddScoped<IUiHost, AvaloniaUiHost>();
         services.AddScoped<IUserDialogService, AvaloniaUserDialogService>();
@@ -57,10 +58,12 @@ public static class HelixServiceRegistration
         services.AddTransient<PaneFileOperationCoordinator>();
         services.AddScoped<IPaneCoordinatorFactory, PaneCoordinatorFactory>();
         services.AddSingleton<ApplicationStartupCoordinator>();
-        services.AddSingleton<HomePageViewModel>();
+        // Window-graph ViewModels are scoped per window (see WindowHostService), so each window gets its
+        // own MainWindowViewModel and a single HomePageViewModel shared across that window's tabs.
+        services.AddScoped<HomePageViewModel>();
         services.AddScoped<FileOperationReporter>();
         services.AddScoped<IFileOperationReporter>(sp => sp.GetRequiredService<FileOperationReporter>());
-        services.AddSingleton<MainWindowViewModel>();
+        services.AddScoped<MainWindowViewModel>();
         services.AddTransient<MainWindow>();
         return services;
     }

@@ -12,8 +12,12 @@ using Avalonia.VisualTree;
 using HelixExplorer.Controls;
 using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.Models;
+using HelixExplorer.Core.Sorting;
 using HelixExplorer.Input;
+using HelixExplorer.Services;
 using HelixExplorer.ViewModels;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace HelixExplorer.Views;
 
@@ -30,6 +34,7 @@ public sealed partial class PaneView : UserControl
     }
 
     private PaneViewModel? _pane;
+    private IExternalFileDragPayloadBuilder? _dragPayloadBuilder;
     private Point? _pressPoint;
     private PointerPressedEventArgs? _pressArgs;
     private bool _dragStarted;
@@ -191,13 +196,9 @@ public sealed partial class PaneView : UserControl
             _ => SortColumn.Name
         };
 
-        if (Pane.SortColumn == column)
-            Pane.SortDescending = !Pane.SortDescending;
-        else
-        {
-            Pane.SortColumn = column;
-            Pane.SortDescending = false;
-        }
+        var (nextColumn, nextDescending) = SortSelection.Toggle(Pane.SortColumn, Pane.SortDescending, column);
+        Pane.SortColumn = nextColumn;
+        Pane.SortDescending = nextDescending;
 
         e.Handled = true;
     }
@@ -239,15 +240,21 @@ public sealed partial class PaneView : UserControl
         if (Pane is null)
             return;
 
-        if (e.Key == Key.Enter)
+        switch (RenameKeyGesture.Resolve(e.Key, e.KeyModifiers))
         {
-            Pane.CommitRenameCommand.Execute(null);
-            e.Handled = true;
-        }
-        else if (e.Key == Key.Escape)
-        {
-            Pane.CancelRenameCommand.Execute(null);
-            e.Handled = true;
+            case RenameKeyAction.Commit:
+                Pane.CommitRenameCommand.Execute(null);
+                e.Handled = true;
+                break;
+            case RenameKeyAction.Cancel:
+                Pane.CancelRenameCommand.Execute(null);
+                e.Handled = true;
+                break;
+            case RenameKeyAction.Contain:
+                // The TextBox has already moved the caret via its own class handler; mark the event
+                // handled so it does not bubble to the list and change the item selection.
+                e.Handled = true;
+                break;
         }
     }
 
@@ -668,12 +675,20 @@ public sealed partial class PaneView : UserControl
         if (Pane is null)
             return;
 
+        // Resolve and materialize the payload BEFORE starting the OS drag. Building the transfer while
+        // the drag is already in flight risks the user releasing over the target (e.g. a browser upload
+        // field) before DoDragDropAsync has actually begun, which drops the operation silently.
         var virtualPaths = Pane.SelectedEntries.Select(x => x.FullPath).ToList();
+        if (virtualPaths.Count == 0)
+            return;
+
         var physicalPaths = await Pane.ResolvePhysicalPathsAsync(virtualPaths).ConfigureAwait(true);
         var transfer = await BuildFileTransferAsync(physicalPaths).ConfigureAwait(true);
         if (transfer is null)
             return;
 
+        // Copy is the default/preferred effect so browser upload fields treat the drop as an upload;
+        // Move stays available for internal Explorer targets that request it via modifier keys.
         var effects = DragDropEffects.Copy | DragDropEffects.Move;
         await DragDrop.DoDragDropAsync(pressArgs, transfer, effects).ConfigureAwait(true);
     }
@@ -713,30 +728,21 @@ public sealed partial class PaneView : UserControl
 
     private async Task<DataTransfer?> BuildFileTransferAsync(IReadOnlyList<string> paths)
     {
-        var topLevel = TopLevel.GetTopLevel(this);
-        var storage = topLevel?.StorageProvider;
+        var storage = TopLevel.GetTopLevel(this)?.StorageProvider;
         if (storage is null || paths.Count == 0)
             return null;
 
-        var transfer = new DataTransfer();
-        var added = 0;
-        foreach (var path in paths)
-        {
-            IStorageItem? item = null;
-            if (Directory.Exists(path))
-                item = await storage.TryGetFolderFromPathAsync(path).ConfigureAwait(true);
-            else if (File.Exists(path))
-                item = await storage.TryGetFileFromPathAsync(path).ConfigureAwait(true);
-
-            if (item is null)
-                continue;
-
-            transfer.Add(DataTransferItem.CreateFile(item));
-            added++;
-        }
-
-        return added == 0 ? null : transfer;
+        return await DragPayloadBuilder.BuildAsync(storage, paths).ConfigureAwait(true);
     }
+
+    /// <summary>
+    /// The external drag payload builder, resolved once from DI. Falls back to a directly-constructed
+    /// default when the app service provider is unavailable (e.g. in design-time previews).
+    /// </summary>
+    private IExternalFileDragPayloadBuilder DragPayloadBuilder =>
+        _dragPayloadBuilder ??= App.Services?.GetService<IExternalFileDragPayloadBuilder>()
+            ?? new AvaloniaExternalFileDragPayloadBuilder(
+                NullLogger<AvaloniaExternalFileDragPayloadBuilder>.Instance);
 
     // ── Drop target ──────────────────────────────────────────────────────────
 

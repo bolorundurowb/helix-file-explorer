@@ -53,6 +53,13 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     private IReadOnlyList<FileSystemEntry> _allEntries = Array.Empty<FileSystemEntry>();
     private IReadOnlyList<FileSystemEntry> _directoryEntries = Array.Empty<FileSystemEntry>();
     private CancellationTokenSource? _searchCts;
+    private bool _searchResultsCapped;
+
+    /// <summary>Delay before a keystroke starts a recursive search, so typing does not launch a scan per key.</summary>
+    private static readonly TimeSpan SearchDebounce = TimeSpan.FromMilliseconds(250);
+
+    private static readonly SearchOptions DefaultSearchOptions = SearchOptions.Default;
+
     private GitStatusSnapshot _gitSnapshot = GitStatusSnapshot.Empty;
     private bool _disposed;
     private bool _commandNotifyPending;
@@ -157,6 +164,11 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     private LayoutMode _viewMode = LayoutMode.Details;
     [ObservableProperty] private SortColumn _sortColumn = SortColumn.Name;
     [ObservableProperty] private bool _sortDescending;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsFoldersFirst))]
+    [NotifyPropertyChangedFor(nameof(IsFilesFirst))]
+    [NotifyPropertyChangedFor(nameof(IsMixedFolderSort))]
+    private DirectorySortMode _directorySort = DirectorySortMode.MixedWithFiles;
     [ObservableProperty] private int _itemCount;
     [ObservableProperty] private int _totalCount;
     [ObservableProperty] private int _selectedCount;
@@ -296,12 +308,22 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         SortChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    partial void OnDirectorySortChanged(DirectorySortMode value)
+    {
+        ApplySortAndPublish();
+        NotifySortOptionProperties();
+        SortChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     public bool IsSortByName => SortColumn == SortColumn.Name;
     public bool IsSortByDate => SortColumn == SortColumn.Modified;
     public bool IsSortByType => SortColumn == SortColumn.Type;
     public bool IsSortBySize => SortColumn == SortColumn.Size;
     public bool IsSortAscending => !SortDescending;
     public bool IsSortDescendingActive => SortDescending;
+    public bool IsFoldersFirst => DirectorySort == DirectorySortMode.FoldersFirst;
+    public bool IsFilesFirst => DirectorySort == DirectorySortMode.FilesFirst;
+    public bool IsMixedFolderSort => DirectorySort == DirectorySortMode.MixedWithFiles;
 
     [RelayCommand]
     private void SetSortColumn(SortColumn column) => SortColumn = column;
@@ -312,6 +334,9 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     [RelayCommand]
     private void SetSortDescending() => SortDescending = true;
 
+    [RelayCommand]
+    private void SetDirectorySort(DirectorySortMode mode) => DirectorySort = mode;
+
     private void NotifySortOptionProperties()
     {
         OnPropertyChanged(nameof(IsSortByName));
@@ -320,11 +345,15 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         OnPropertyChanged(nameof(IsSortBySize));
         OnPropertyChanged(nameof(IsSortAscending));
         OnPropertyChanged(nameof(IsSortDescendingActive));
+        OnPropertyChanged(nameof(IsFoldersFirst));
+        OnPropertyChanged(nameof(IsFilesFirst));
+        OnPropertyChanged(nameof(IsMixedFolderSort));
     }
 
     partial void OnFilterTextChanged(string value)
     {
         CancelSearch();
+        _searchResultsCapped = false;
 
         if (string.IsNullOrWhiteSpace(value) || !IsFileSystem)
         {
@@ -359,11 +388,18 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         var ct = cts.Token;
         try
         {
-            var results = await fileSystem.SearchRecursiveAsync(path, query, ct).ConfigureAwait(true);
+            // Debounce: wait out rapid keystrokes before scanning. A newer keystroke cancels this token.
+            await Task.Delay(SearchDebounce, ct).ConfigureAwait(true);
             if (ct.IsCancellationRequested || _disposed)
                 return;
 
-            _allEntries = results;
+            var options = DefaultSearchOptions with { IncludeHiddenAndSystem = ShowHiddenFiles };
+            var result = await fileSystem.SearchRecursiveAsync(path, query, options, ct).ConfigureAwait(true);
+            if (ct.IsCancellationRequested || _disposed)
+                return;
+
+            _searchResultsCapped = result.Capped;
+            _allEntries = result.Entries;
             ApplySortAndPublish();
         }
         catch (OperationCanceledException)
@@ -571,7 +607,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
             IsFilterVisible = IsFilterVisible,
             FilterText = FilterText,
             SortColumn = SortColumn,
-            SortDescending = SortDescending
+            SortDescending = SortDescending,
+            DirectorySort = DirectorySort
         });
 
     ListingPublishResult IPaneRefreshHost.ApplySortAndPublish(ListingPublishRequest request)
@@ -583,6 +620,12 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
                 _allEntries = request.AllEntries;
         }
 
+        // Capture selection by stable path so it survives sort/filter/refresh within the same folder.
+        HashSet<string>? previouslySelected = SelectedEntries.Count > 0
+            ? new HashSet<string>(SelectedEntries.Select(e => e.FullPath), StringComparer.OrdinalIgnoreCase)
+            : null;
+        var previousSelectedEntryPath = SelectedEntry?.FullPath;
+
         var result = _listing.ApplySortAndPublish(request);
 
         TotalCount = result.TotalCount;
@@ -591,42 +634,59 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         SyncEntriesCollection(result.Entries);
         RefreshCutState();
         ItemCount = result.ItemCount;
-        SelectedEntry = null;
-        SelectedEntries.Clear();
-        SelectedCount = 0;
+        RestoreSelection(result.Entries, previouslySelected, previousSelectedEntryPath);
         UpdateStatusText();
         _refreshCoordinator.RequestEntryVisuals(this, result.VisualTargets);
         return result;
     }
 
-    private void SyncEntriesCollection(IReadOnlyList<EntryItemViewModel> nextEntries)
+    /// <summary>Reselects entries whose <c>FullPath</c> survived the publish; clears when none remain.</summary>
+    private void RestoreSelection(
+        IReadOnlyList<EntryItemViewModel> entries,
+        HashSet<string>? selectedPaths,
+        string? selectedEntryPath)
     {
-        if (Entries.Count == nextEntries.Count)
+        SelectedEntries.Clear();
+
+        if (selectedPaths is null || selectedPaths.Count == 0)
         {
-            var sameOrder = true;
-            for (var i = 0; i < nextEntries.Count; i++)
-            {
-                if (ReferenceEquals(Entries[i], nextEntries[i]))
-                    continue;
-
-                sameOrder = false;
-                break;
-            }
-
-            if (sameOrder)
-                return;
+            SelectedEntry = null;
+            SelectedCount = 0;
+            return;
         }
 
-        Entries.Clear();
-        foreach (var item in nextEntries)
-            Entries.Add(item);
+        EntryItemViewModel? single = null;
+        foreach (var entry in entries)
+        {
+            if (!selectedPaths.Contains(entry.FullPath))
+                continue;
+
+            SelectedEntries.Add(entry);
+            if (selectedEntryPath is not null
+                && string.Equals(entry.FullPath, selectedEntryPath, StringComparison.OrdinalIgnoreCase))
+            {
+                single = entry;
+            }
+        }
+
+        SelectedCount = SelectedEntries.Count;
+        SelectedEntry = single ?? (SelectedEntries.Count == 1 ? SelectedEntries[0] : null);
     }
+
+    private void SyncEntriesCollection(IReadOnlyList<EntryItemViewModel> nextEntries)
+        => ObservableCollectionDiff.Apply(Entries, nextEntries);
 
     private void RequestEntryVisuals(IReadOnlyList<EntryItemViewModel>? targets = null)
         => _refreshCoordinator.RequestEntryVisuals(this, targets);
 
     private void UpdateStatusText()
     {
+        if (_searchResultsCapped)
+        {
+            StatusText = $"Showing first {DefaultSearchOptions.MaxResults} matches";
+            return;
+        }
+
         if (IsFilterActive)
         {
             StatusText = $"{ItemCount} of {TotalCount} items";
@@ -681,18 +741,23 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
             buffer.Add(entry);
         }
 
-        buffer.Sort(FileSystemEntryComparer.For(SortColumn, SortDescending));
+        buffer.Sort(FileSystemEntryComparer.For(SortColumn, SortDescending, DirectorySort));
         return buffer.ConvertAll(entry => new EntryItemViewModel(entry, ShowFileExtensions));
     }
 
-    public void ApplyViewSettings(bool showHiddenFiles, bool showFileExtensions)
+    public void ApplyViewSettings(bool showHiddenFiles, bool showFileExtensions, DirectorySortMode directorySort)
     {
         var hiddenChanged = ShowHiddenFiles != showHiddenFiles;
         var extensionsChanged = ShowFileExtensions != showFileExtensions;
+        var directorySortChanged = DirectorySort != directorySort;
         ShowHiddenFiles = showHiddenFiles;
         ShowFileExtensions = showFileExtensions;
 
-        if (hiddenChanged)
+        // Assigning DirectorySort raises OnDirectorySortChanged, which republishes on its own,
+        // so only publish explicitly for the other changes.
+        if (directorySortChanged)
+            DirectorySort = directorySort;
+        else if (hiddenChanged)
             ApplySortAndPublish();
         else if (extensionsChanged)
             RefreshDisplayNames();
@@ -729,8 +794,18 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     public void CommitEditablePath()
     {
         IsEditingPath = false;
-        if (!string.IsNullOrWhiteSpace(EditablePath))
-            NavigateTo(EditablePath.Trim());
+        if (string.IsNullOrWhiteSpace(EditablePath))
+            return;
+
+        var target = EditablePath.Trim();
+
+        // Make manual UNC entry first-class: canonicalize \\server, //server/share, trailing slashes,
+        // and duplicated separators so typed/pasted network paths navigate predictably even when
+        // discovery is unavailable.
+        if (NetworkPath.IsUnc(target))
+            target = NetworkPath.Normalize(target);
+
+        NavigateTo(target);
     }
 
     public void CancelEditablePath()
@@ -1495,6 +1570,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         ViewMode = ViewMode,
         SortColumn = SortColumn,
         SortDescending = SortDescending,
+        DirectorySort = DirectorySort,
         ThumbnailSize = ThumbnailSize
     };
 
@@ -1503,6 +1579,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         ViewMode = snapshot.ViewMode;
         SortColumn = snapshot.SortColumn;
         SortDescending = snapshot.SortDescending;
+        DirectorySort = snapshot.DirectorySort;
         ThumbnailSize = Math.Clamp(snapshot.ThumbnailSize, MinThumbnailSize, MaxThumbnailSize);
 
         if (!string.IsNullOrWhiteSpace(snapshot.Path))
@@ -1539,6 +1616,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     SortColumn IPaneRefreshHost.SortColumn => SortColumn;
 
     bool IPaneRefreshHost.SortDescending => SortDescending;
+
+    DirectorySortMode IPaneRefreshHost.DirectorySort => DirectorySort;
 
     bool IPaneRefreshHost.IsGridView => IsGridView;
 

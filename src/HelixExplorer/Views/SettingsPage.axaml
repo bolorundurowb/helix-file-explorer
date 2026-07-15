@@ -210,6 +210,21 @@
                     <Border Classes="settingsRow">
                         <Grid ColumnDefinitions="*,Auto">
                             <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock Text="Folder sort order" FontSize="14" />
+                                <TextBlock Text="Choose whether folders appear before files, after files, or inline with files."
+                                           FontSize="12" Opacity="0.6" />
+                            </StackPanel>
+                            <ComboBox Grid.Column="1" MinWidth="220"
+                                      SelectedItem="{Binding Main.DirectorySort, Mode=TwoWay}">
+                                <models:DirectorySortMode>FoldersFirst</models:DirectorySortMode>
+                                <models:DirectorySortMode>FilesFirst</models:DirectorySortMode>
+                                <models:DirectorySortMode>MixedWithFiles</models:DirectorySortMode>
+                            </ComboBox>
+                        </Grid>
+                    </Border>
+                    <Border Classes="settingsRow">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                 <TextBlock Text="File size units" FontSize="14" />
                                 <TextBlock Text="Binary uses KiB/MiB. Decimal uses KB/MB."
                                            FontSize="12" Opacity="0.6" />

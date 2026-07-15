@@ -27,6 +27,7 @@ public interface IPaneRefreshHost
     string FilterText { get; }
     SortColumn SortColumn { get; }
     bool SortDescending { get; }
+    DirectorySortMode DirectorySort { get; }
     bool IsGridView { get; }
     double ThumbnailSize { get; }
     LayoutMode ViewMode { get; }
@@ -58,6 +59,14 @@ public sealed class PaneRefreshCoordinator(
     private CancellationTokenSource? _refreshCts;
     private CancellationTokenSource? _gitCts;
     private CancellationTokenSource? _visualCts;
+
+    /// <summary>
+    /// Bounded concurrency for entry visual loading. Conservative starting point; adjust here after
+    /// measuring large photo folders (and consider a separate icon vs thumbnail cap).
+    /// </summary>
+    private const int MaxConcurrentVisuals = 4;
+
+    private readonly BoundedVisualLoader _visualLoader = new(MaxConcurrentVisuals);
     private int _refreshGeneration;
     private bool _watcherRefreshPending;
     private bool _refreshInFlight;
@@ -144,7 +153,8 @@ public sealed class PaneRefreshCoordinator(
                     IsFilterVisible = host.IsFilterVisible,
                     FilterText = host.FilterText,
                     SortColumn = host.SortColumn,
-                    SortDescending = host.SortDescending
+                    SortDescending = host.SortDescending,
+                    DirectorySort = host.DirectorySort
                 });
 
                 if (!string.IsNullOrEmpty(errorMessage))
@@ -208,10 +218,16 @@ public sealed class PaneRefreshCoordinator(
         _visualCts = new CancellationTokenSource();
         var ct = _visualCts.Token;
         var size = host.IsGridView ? (int)host.ThumbnailSize : 20;
+        var isGrid = host.IsGridView;
 
-        var entries = targets ?? host.Entries;
-        foreach (var entry in entries)
-            _ = entry.RefreshVisualAsync(visuals, size, host.IsGridView, ct);
+        // Snapshot the targets so the queue is stable even if the live collection changes.
+        var entries = (targets ?? host.Entries).ToList();
+
+        // Bound concurrency so opening a folder of photos does not spawn one decode task per entry.
+        _ = _visualLoader.RunAsync(
+            entries,
+            (entry, token) => entry.RefreshVisualAsync(visuals, size, isGrid, token),
+            ct);
     }
 
     public void CancelRefresh()

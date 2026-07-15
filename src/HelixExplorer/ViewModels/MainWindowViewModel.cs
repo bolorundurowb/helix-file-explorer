@@ -130,6 +130,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         SidebarWidth = Math.Clamp(settings.SidebarWidth, 200, 450);
         ShowHiddenFiles = settings.ShowHiddenFiles;
         ShowFileExtensions = settings.ShowFileExtensions;
+        DirectorySort = settings.DirectorySort;
         Theme = settings.Theme;
         UiFont = settings.UiFont;
         SizeDisplay = settings.SizeDisplay;
@@ -242,10 +243,18 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _commandPaletteQuery = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsNetworkBannerVisible))]
     private bool _isDiscoveringNetwork;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsNetworkBannerVisible))]
+    private bool _hasNetworkNotice;
+
+    [ObservableProperty]
     private string _networkBannerText = UiStrings.NetworkDiscoveryBanner;
+
+    /// <summary>Banner shows while discovering, or afterward when there is a notice to surface.</summary>
+    public bool IsNetworkBannerVisible => IsDiscoveringNetwork || HasNetworkNotice;
 
     private async Task RefreshNetworkLocationsAsync()
     {
@@ -254,13 +263,16 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         var ct = _networkCts.Token;
 
         IsDiscoveringNetwork = true;
+        HasNetworkNotice = false;
+        NetworkBannerText = UiStrings.NetworkDiscoveryBanner;
         try
         {
-            var locations = await _networkLocations.GetNetworkLocationsAsync(ct).ConfigureAwait(true);
+            var result = await _networkLocations.GetNetworkLocationsAsync(ct).ConfigureAwait(true);
             if (!ct.IsCancellationRequested)
             {
-                _lastNetworkLocations = locations;
-                RebuildSidebar(locations);
+                _lastNetworkLocations = result.Locations;
+                RebuildSidebar(result.Locations);
+                ApplyNetworkStatus(result.Status);
             }
         }
         catch (OperationCanceledException)
@@ -268,7 +280,9 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         }
         catch
         {
-            // Network discovery is opportunistic; keep the stable fallback item.
+            // Network discovery is opportunistic; surface a failure notice but keep the sidebar usable.
+            if (!ct.IsCancellationRequested)
+                ApplyNetworkStatus(NetworkDiscoveryStatus.DiscoveryFailed);
         }
         finally
         {
@@ -277,6 +291,24 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
                 IsDiscoveringNetwork = false;
                 RefreshHomeDashboard();
             }
+        }
+    }
+
+    private void ApplyNetworkStatus(NetworkDiscoveryStatus status)
+    {
+        switch (status)
+        {
+            case NetworkDiscoveryStatus.DiscoveryFailed:
+                NetworkBannerText = UiStrings.NetworkDiscoveryFailed;
+                HasNetworkNotice = true;
+                break;
+            case NetworkDiscoveryStatus.NoLocationsFound:
+                NetworkBannerText = UiStrings.NetworkNoSharesFound;
+                HasNetworkNotice = true;
+                break;
+            default:
+                HasNetworkNotice = false;
+                break;
         }
     }
 
@@ -372,6 +404,9 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private bool _showFileExtensions = true;
 
     [ObservableProperty]
+    private DirectorySortMode _directorySort = DirectorySortMode.MixedWithFiles;
+
+    [ObservableProperty]
     private ThemeMode _theme = ThemeMode.System;
 
     [ObservableProperty]
@@ -405,6 +440,20 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         PersistViewSettings();
         ApplyViewSettingsToTabs();
+    }
+
+    partial void OnDirectorySortChanged(DirectorySortMode value)
+    {
+        OnPropertyChanged(nameof(FoldersFirst));
+        PersistViewSettings();
+        ApplyViewSettingsToTabs();
+    }
+
+    /// <summary>Two-way friendly view of <see cref="DirectorySort"/> for a simple settings toggle.</summary>
+    public bool FoldersFirst
+    {
+        get => DirectorySort == DirectorySortMode.FoldersFirst;
+        set => DirectorySort = value ? DirectorySortMode.FoldersFirst : DirectorySortMode.MixedWithFiles;
     }
 
     partial void OnThemeChanged(ThemeMode value)
@@ -472,6 +521,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         var settings = GetSettings();
         settings.ShowHiddenFiles = ShowHiddenFiles;
         settings.ShowFileExtensions = ShowFileExtensions;
+        settings.DirectorySort = DirectorySort;
         _cachedSettings = settings;
         SchedulePersistSettings();
     }
@@ -540,7 +590,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private void ApplyViewSettingsToTabs()
     {
         foreach (var tab in Tabs)
-            tab.ApplyViewSettings(ShowHiddenFiles, ShowFileExtensions);
+            tab.ApplyViewSettings(ShowHiddenFiles, ShowFileExtensions, DirectorySort);
     }
 
     private void RefreshSizeDisplayOnAllPanes()
@@ -674,7 +724,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     private void AddTab(TabViewModel tab)
     {
-        tab.ApplyViewSettings(ShowHiddenFiles, ShowFileExtensions);
+        tab.ApplyViewSettings(ShowHiddenFiles, ShowFileExtensions, DirectorySort);
         Tabs.Add(tab);
         OnPropertyChanged(nameof(HasMultipleTabs));
     }
@@ -1027,6 +1077,9 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     public bool IsSortBySize => ActivePane?.IsSortBySize == true;
     public bool IsSortAscending => ActivePane?.IsSortAscending == true;
     public bool IsSortDescending => ActivePane?.IsSortDescendingActive == true;
+    public bool IsFoldersFirst => ActivePane?.IsFoldersFirst == true;
+    public bool IsFilesFirst => ActivePane?.IsFilesFirst == true;
+    public bool IsMixedFolderSort => ActivePane?.IsMixedFolderSort == true;
 
     private void NotifySortChrome()
     {
@@ -1036,6 +1089,9 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(IsSortBySize));
         OnPropertyChanged(nameof(IsSortAscending));
         OnPropertyChanged(nameof(IsSortDescending));
+        OnPropertyChanged(nameof(IsFoldersFirst));
+        OnPropertyChanged(nameof(IsFilesFirst));
+        OnPropertyChanged(nameof(IsMixedFolderSort));
     }
 
     private void NotifyLayoutChrome()
@@ -1058,6 +1114,10 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void SetSortDescending()
         => ActivePane?.SetSortDescendingCommand.Execute(null);
+
+    [RelayCommand]
+    private void SetDirectorySort(DirectorySortMode mode)
+        => ActivePane?.SetDirectorySortCommand.Execute(mode);
 
     private void RefreshHomeDashboard()
     {
@@ -1373,7 +1433,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _themeService.ThemeChanged -= OnThemeServiceChanged;
         _operationReporter.Dispose();
 
-        SaveSession();
+        // WindowHostService owns the session-save policy so secondary scoped windows do not
+        // overwrite the persisted session when their scopes are disposed.
         PersistChromeSettings();
         FlushSettings();
 

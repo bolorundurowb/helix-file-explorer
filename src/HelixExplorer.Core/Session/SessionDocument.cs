@@ -42,5 +42,6 @@ public sealed class PaneSnapshot
     public LayoutMode ViewMode { get; set; } = LayoutMode.Details;
     public SortColumn SortColumn { get; set; } = SortColumn.Name;
     public bool SortDescending { get; set; }
+    public DirectorySortMode DirectorySort { get; set; } = DirectorySortMode.MixedWithFiles;
     public double ThumbnailSize { get; set; } = 72;
 }

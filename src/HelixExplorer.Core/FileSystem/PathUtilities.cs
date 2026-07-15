@@ -119,25 +119,9 @@ public static class PathUtilities
                && normalized[1] == ':';
     }
 
-    /// <summary>True if the path is a UNC path such as <c>\\server\share</c>.</summary>
+    /// <summary>True if the path is a UNC path such as <c>\\</c>, <c>\\server</c>, or <c>\\server\share</c>.</summary>
     public static bool IsUncPath(string? path)
-    {
-        if (string.IsNullOrEmpty(path))
-            return false;
-
-        var normalized = path.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
-        if (!normalized.StartsWith(@"\\", StringComparison.Ordinal))
-            return false;
-
-        // A valid UNC path needs at least \server\share (two components after the leading \\).
-        var withoutPrefix = normalized[2..];
-        var firstSeparator = withoutPrefix.IndexOf(Path.DirectorySeparatorChar);
-        if (firstSeparator <= 0)
-            return false;
-
-        var afterServer = withoutPrefix[(firstSeparator + 1)..];
-        return !string.IsNullOrEmpty(afterServer) && afterServer[0] != Path.DirectorySeparatorChar;
-    }
+        => NetworkPath.IsUnc(path);
 
     private static bool IsSameOrChildPhysicalPath(string directory, string path)
     {

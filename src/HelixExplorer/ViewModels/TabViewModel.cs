@@ -39,6 +39,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     private readonly SettingsPageViewModel? _settings;
     private bool _showHiddenFiles;
     private bool _showFileExtensions = true;
+    private DirectorySortMode _directorySort = DirectorySortMode.MixedWithFiles;
     private bool _disposed;
 
     public TabViewModel(
@@ -181,16 +182,17 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         pane.OpenInOtherPaneRequested += OnOpenInOtherPaneRequested;
         pane.PinPathRequested += OnPanePinPathRequested;
         pane.SelectionChanged += OnPaneSelectionChanged;
-        pane.ApplyViewSettings(_showHiddenFiles, _showFileExtensions);
+        pane.ApplyViewSettings(_showHiddenFiles, _showFileExtensions, _directorySort);
         return pane;
     }
 
-    public void ApplyViewSettings(bool showHiddenFiles, bool showFileExtensions)
+    public void ApplyViewSettings(bool showHiddenFiles, bool showFileExtensions, DirectorySortMode directorySort)
     {
         _showHiddenFiles = showHiddenFiles;
         _showFileExtensions = showFileExtensions;
-        LeftPane.ApplyViewSettings(showHiddenFiles, showFileExtensions);
-        RightPane?.ApplyViewSettings(showHiddenFiles, showFileExtensions);
+        _directorySort = directorySort;
+        LeftPane.ApplyViewSettings(showHiddenFiles, showFileExtensions, directorySort);
+        RightPane?.ApplyViewSettings(showHiddenFiles, showFileExtensions, directorySort);
     }
 
     private async void OnEntryActivated(object? sender, FileSystemEntry entry)
@@ -304,6 +306,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
                 ViewMode = LeftPane.ViewMode,
                 SortColumn = LeftPane.SortColumn,
                 SortDescending = LeftPane.SortDescending,
+                DirectorySort = LeftPane.DirectorySort,
                 ThumbnailSize = LeftPane.ThumbnailSize
             });
             ActivePane = right;

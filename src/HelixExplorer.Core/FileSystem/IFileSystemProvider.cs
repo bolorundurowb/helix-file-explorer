@@ -7,7 +7,11 @@ public interface IFileSystemProvider
 {
     ValueTask<DirectoryListing> GetDirectoryContentsAsync(string path, CancellationToken cancellationToken = default);
 
-    ValueTask<IReadOnlyList<FileSystemEntry>> SearchRecursiveAsync(string path, string query, CancellationToken cancellationToken = default);
+    ValueTask<SearchResult> SearchRecursiveAsync(
+        string path,
+        string query,
+        SearchOptions options,
+        CancellationToken cancellationToken = default);
 
     string ResolvePath(string path);
 

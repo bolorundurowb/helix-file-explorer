@@ -477,6 +477,22 @@
                                           ToggleType="Radio"
                                           IsChecked="{Binding IsSortDescending}"
                                           Command="{Binding SetSortDescendingCommand}" />
+                                <Separator />
+                                <MenuItem Header="Sort folders first"
+                                          ToggleType="Radio"
+                                          IsChecked="{Binding IsFoldersFirst}"
+                                          Command="{Binding SetDirectorySortCommand}"
+                                          CommandParameter="{x:Static models:DirectorySortMode.FoldersFirst}" />
+                                <MenuItem Header="Sort files first"
+                                          ToggleType="Radio"
+                                          IsChecked="{Binding IsFilesFirst}"
+                                          Command="{Binding SetDirectorySortCommand}"
+                                          CommandParameter="{x:Static models:DirectorySortMode.FilesFirst}" />
+                                <MenuItem Header="Sort files and folders together"
+                                          ToggleType="Radio"
+                                          IsChecked="{Binding IsMixedFolderSort}"
+                                          Command="{Binding SetDirectorySortCommand}"
+                                          CommandParameter="{x:Static models:DirectorySortMode.MixedWithFiles}" />
                             </MenuFlyout>
                         </Button.Flyout>
                     </Button>
@@ -691,7 +707,7 @@
 
         <DockPanel>
                 <Border DockPanel.Dock="Top"
-                        IsVisible="{Binding IsDiscoveringNetwork}"
+                        IsVisible="{Binding IsNetworkBannerVisible}"
                         Background="{DynamicResource HelixToolbarBrush}"
                         BorderBrush="{DynamicResource HelixBorderColor}"
                         BorderThickness="0,0,0,1"

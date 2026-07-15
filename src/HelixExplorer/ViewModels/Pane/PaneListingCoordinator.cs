@@ -32,7 +32,7 @@ public sealed class PaneListingCoordinator
         var totalCount = _visibleBuffer.Count;
 
         FileNameFilter.Apply(_visibleBuffer, request.IsFilterVisible ? request.FilterText : null, _viewBuffer);
-        _viewBuffer.Sort(FileSystemEntryComparer.For(request.SortColumn, request.SortDescending));
+        _viewBuffer.Sort(FileSystemEntryComparer.For(request.SortColumn, request.SortDescending, request.DirectorySort));
 
         long listingSizeBytes = 0;
         foreach (var entry in _viewBuffer)
@@ -94,6 +94,9 @@ public sealed class ListingPublishRequest
     public required SortColumn SortColumn { get; init; }
 
     public required bool SortDescending { get; init; }
+
+    /// <summary>Whether directories are grouped ahead of files or interleaved with them.</summary>
+    public DirectorySortMode DirectorySort { get; init; } = DirectorySortMode.FoldersFirst;
 }
 
 public readonly record struct ListingPublishResult(

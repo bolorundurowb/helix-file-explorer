@@ -11,6 +11,8 @@ public sealed class PathUtilitiesTests
     [InlineData(@"C:\Users", PathKind.Physical)]
     [InlineData(@"C:\Users\", PathKind.Physical)]
     [InlineData(@"C:/Users", PathKind.Physical)]
+    [InlineData(@"\\", PathKind.Unc)]
+    [InlineData(@"\\server", PathKind.Unc)]
     [InlineData(@"\\server\share", PathKind.Unc)]
     [InlineData(@"\\server\share\folder", PathKind.Unc)]
     [InlineData("shell:RecycleBinFolder", PathKind.RecycleBin)]
@@ -99,7 +101,8 @@ public sealed class PathUtilitiesTests
 
     [Theory]
     [InlineData(@"\\server\share", true)]
-    [InlineData(@"\\server", false)]
+    [InlineData(@"\\server", true)]
+    [InlineData(@"\\", true)]
     [InlineData(@"C:\folder", false)]
     public void IsUncPath_identifies_unc_paths(string path, bool expected)
         => Assert.Equal(expected, PathUtilities.IsUncPath(path));

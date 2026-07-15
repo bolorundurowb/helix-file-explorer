@@ -98,6 +98,9 @@ public sealed class PaneNavigationController(IFileSystemProvider fileSystem, IAr
             return breadcrumbs;
         }
 
+        if (NetworkPath.IsUnc(path))
+            return BuildNetworkBreadcrumbs(path);
+
         var parts = path.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
             StringSplitOptions.RemoveEmptyEntries);
         var accumulator = string.Empty;
@@ -119,10 +122,43 @@ public sealed class PaneNavigationController(IFileSystemProvider fileSystem, IAr
         return breadcrumbs;
     }
 
+    private static IReadOnlyList<BreadcrumbSegment> BuildNetworkBreadcrumbs(string path)
+    {
+        var normalized = NetworkPath.Normalize(path);
+        var breadcrumbs = new List<BreadcrumbSegment>
+        {
+            new("Network", NetworkPath.Root, NetworkPath.IsNetworkRoot(normalized))
+        };
+
+        var server = NetworkPath.GetServer(normalized);
+        if (server is null)
+            return breadcrumbs;
+
+        var serverPath = NetworkPath.ForServer(server);
+        var share = NetworkPath.GetShare(normalized);
+        breadcrumbs.Add(new BreadcrumbSegment(server, serverPath, share is null));
+
+        if (share is null)
+            return breadcrumbs;
+
+        var body = normalized[2..];
+        var parts = body.Split('\\', StringSplitOptions.RemoveEmptyEntries);
+        var accumulator = serverPath;
+        for (var i = 1; i < parts.Length; i++)
+        {
+            accumulator += "\\" + parts[i];
+            breadcrumbs.Add(new BreadcrumbSegment(parts[i], accumulator, i == parts.Length - 1));
+        }
+
+        return breadcrumbs;
+    }
+
     public static string EnsureTrailingSeparator(string path)
     {
         if (string.IsNullOrEmpty(path))
             return path;
+        if (NetworkPath.IsNetworkRoot(path) || NetworkPath.IsServerRoot(path))
+            return NetworkPath.Normalize(path);
         if (path.Length == 2 && path[1] == ':')
             return path + Path.DirectorySeparatorChar;
         if (!path.EndsWith(Path.DirectorySeparatorChar) && !path.EndsWith(Path.AltDirectorySeparatorChar))

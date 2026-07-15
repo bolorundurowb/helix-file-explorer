@@ -21,12 +21,38 @@ public class ScopedDiWiringTests
     {
         var services = CreateAppServices();
 
-        Assert.Equal(ServiceLifetime.Singleton, Descriptor<MainWindowViewModel>(services).Lifetime);
+        // Window-graph ViewModels are scoped per window so multi-window state does not collide.
+        Assert.Equal(ServiceLifetime.Scoped, Descriptor<MainWindowViewModel>(services).Lifetime);
+        Assert.Equal(ServiceLifetime.Scoped, Descriptor<HomePageViewModel>(services).Lifetime);
         Assert.Equal(ServiceLifetime.Scoped, Descriptor<FileOperationReporter>(services).Lifetime);
         Assert.Equal(ServiceLifetime.Scoped, Descriptor<IFileOperationReporter>(services).Lifetime);
         Assert.Equal(ServiceLifetime.Scoped, Descriptor<IPaneCoordinatorFactory>(services).Lifetime);
         Assert.Equal(ServiceLifetime.Transient, Descriptor<PaneFileOperationCoordinator>(services).Lifetime);
         Assert.Equal(ServiceLifetime.Singleton, Descriptor<IWindowHostService>(services).Lifetime);
+    }
+
+    [Fact]
+    public void RealScopes_HomePageViewModelDiffersAcrossWindows_ButSharedWithinWindow()
+    {
+        using var provider = CreateAppServices().BuildServiceProvider(validateScopes: true);
+
+        HomePageViewModel a1, a2, b1;
+        using (var windowA = provider.CreateScope())
+        {
+            a1 = windowA.ServiceProvider.GetRequiredService<HomePageViewModel>();
+            a2 = windowA.ServiceProvider.GetRequiredService<HomePageViewModel>();
+        }
+
+        using var windowB = provider.CreateScope();
+        b1 = windowB.ServiceProvider.GetRequiredService<HomePageViewModel>();
+
+        // Same instance within a window scope, different instance across window scopes.
+        Assert.Same(a1, a2);
+        Assert.NotSame(a1, b1);
+
+        // Scoped services must not resolve from the root when scope validation is on.
+        Assert.Throws<InvalidOperationException>(
+            () => provider.GetRequiredService<HomePageViewModel>());
     }
 
     [Fact]

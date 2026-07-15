@@ -4,6 +4,7 @@ namespace HelixExplorer.Core.FileSystem;
 public static class ShellPath
 {
     public const string RecycleBin = "shell:RecycleBinFolder";
+    public const string Network = "shell:NetworkPlacesFolder";
 
     public static bool IsShellPath(string? path)
         => !string.IsNullOrEmpty(path)

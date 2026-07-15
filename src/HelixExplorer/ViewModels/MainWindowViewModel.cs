@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
+using Avalonia.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HelixExplorer.Core.Archives;
@@ -122,6 +124,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _paneViewModelLogger = paneLogger;
         _settingsPage = new SettingsPageViewModel(this);
         _homePage.NavigateRequested += OnHomeNavigateRequested;
+        _operationReporter.PropertyChanged += OnOperationReporterPropertyChanged;
 
         _homePath = _quickAccess.GetPath(KnownFolderKind.Home)
                     ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -139,6 +142,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         DefaultDualPane = settings.DefaultDualPane;
         DefaultSplitOrientation = settings.DefaultSplitOrientation;
         AccentColorArgb = settings.AccentColorArgb;
+        ApplyOpenInTerminalGesture(settings.OpenInTerminalGesture);
 
         _accentBrushes.ApplyCustomAccent(AccentColorArgb);
         _themeService.ThemeChanged += OnThemeServiceChanged;
@@ -152,6 +156,73 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _ = RefreshNetworkLocationsAsync();
 
         _folderColors.ColorsChanged += OnFolderColorsChanged;
+    }
+
+    /// <summary>Default key gesture for the Open in Terminal shortcut.</summary>
+    public const string AppDefaultTerminalGesture = "Ctrl+OemTilde";
+
+    /// <summary>
+    /// The user-configurable key gesture used by the Open in Terminal command. Bound by
+    /// <see cref="Views.MainWindow"/> to a <see cref="KeyBinding"/> whose gesture is rebuilt when
+    /// this property changes. Falls back to <see cref="AppDefaultTerminalGesture"/> when empty or
+    /// invalid.
+    /// </summary>
+    [ObservableProperty]
+    private string _openInTerminalGesture = AppDefaultTerminalGesture;
+
+    partial void OnOpenInTerminalGestureChanged(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || !IsValidKeyGesture(value))
+            OpenInTerminalGesture = AppDefaultTerminalGesture;
+
+        PersistChromeSettings();
+    }
+
+    private static bool IsValidKeyGesture(string gesture)
+    {
+        if (string.IsNullOrWhiteSpace(gesture))
+            return false;
+
+        try
+        {
+            return KeyGesture.Parse(gesture) is not null;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Loads a persisted gesture string, falling back to the default if it is empty/invalid. Used
+    /// at construction time before the property setter runs (which itself triggers persistence).
+    /// </summary>
+    private void ApplyOpenInTerminalGesture(string? persisted)
+    {
+        OpenInTerminalGesture = string.IsNullOrWhiteSpace(persisted) || !IsValidKeyGesture(persisted)
+            ? AppDefaultTerminalGesture
+            : persisted!;
+    }
+
+    /// <summary>
+    /// Window-level proxy for the active pane's Open in Terminal command, so the configurable
+    /// shortcut can be bound to a single <see cref="KeyBinding"/> regardless of which pane is
+    /// active. Re-validates CanExecute against the active pane on each invocation.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanOpenInTerminalFromActivePane))]
+    private void OpenInTerminal()
+    {
+        if (ActivePane is { } pane && pane.OpenInTerminalCommand.CanExecute(null))
+            pane.OpenInTerminalCommand.Execute(null);
+    }
+
+    private bool CanOpenInTerminalFromActivePane()
+    {
+        if (IsCommandPaletteOpen)
+            return false;
+
+        return ActivePane is { } pane
+            && pane.OpenInTerminalCommand.CanExecute(null);
     }
 
     public void InitializeWindow(bool restoreSession, string? initialPath = null)
@@ -538,6 +609,9 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         settings.DefaultDualPane = DefaultDualPane;
         settings.DefaultSplitOrientation = DefaultSplitOrientation;
         settings.AccentColorArgb = AccentColorArgb;
+        settings.OpenInTerminalGesture = string.IsNullOrWhiteSpace(OpenInTerminalGesture)
+            ? AppDefaultTerminalGesture
+            : OpenInTerminalGesture;
         _cachedSettings = settings;
         SchedulePersistSettings();
     }
@@ -865,6 +939,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _allCommands.Add(new CommandItem("Next Tab", "View", vm => vm.SelectNextTabCommand.Execute(null), "Ctrl+Tab"));
         _allCommands.Add(new CommandItem("Previous Tab", "View", vm => vm.SelectPreviousTabCommand.Execute(null), "Ctrl+Shift+Tab"));
         _allCommands.Add(new CommandItem("Rename", "File", vm => vm.RenameCommand.Execute(null), "F2"));
+        _allCommands.Add(new CommandItem("Open in Terminal", "File", vm => vm.OpenInTerminalCommand.Execute(null), AppDefaultTerminalGesture));
         _allCommands.Add(new CommandItem("Git: Switch Branch", "Git", vm => _ = vm.ActivePane?.OpenBranchFlyoutCommand.ExecuteAsync(null)));
     }
 
@@ -989,6 +1064,22 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     [RelayCommand]
     private void ToggleStatusCentre() => IsStatusCentreOpen = !IsStatusCentreOpen;
+
+    private void OnOperationReporterPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (_disposed)
+            return;
+
+        // Auto-open the status centre the moment an operation starts, so the user sees progress
+        // without having to click the status button. Keep it open after completion so the green
+        // check / failure row is visible; the user dismisses it via the Close/Clear buttons.
+        if (e.PropertyName == nameof(FileOperationReporter.HasActive)
+            && _operationReporter.HasActive
+            && !IsCommandPaletteOpen)
+        {
+            IsStatusCentreOpen = true;
+        }
+    }
 
     [RelayCommand]
     private void ExecuteCommand(CommandItem? command)
@@ -1153,6 +1244,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         SelectAllCommand.NotifyCanExecuteChanged();
         CopyPathCommand.NotifyCanExecuteChanged();
         PinCurrentFolderCommand.NotifyCanExecuteChanged();
+        OpenInTerminalCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand]
@@ -1431,6 +1523,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
         _folderColors.ColorsChanged -= OnFolderColorsChanged;
         _themeService.ThemeChanged -= OnThemeServiceChanged;
+        _operationReporter.PropertyChanged -= OnOperationReporterPropertyChanged;
         _operationReporter.Dispose();
 
         // WindowHostService owns the session-save policy so secondary scoped windows do not

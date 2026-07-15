@@ -31,6 +31,7 @@ public class AppSettingsTests
         Assert.False(settings.DefaultDualPane);
         Assert.Null(settings.AccentColorArgb);
         Assert.Empty(settings.PinnedPaths);
+        Assert.Equal("Ctrl+OemTilde", settings.OpenInTerminalGesture);
     }
 
     [Fact]
@@ -52,7 +53,8 @@ public class AppSettingsTests
             WindowHeight = 900,
             WindowX = 120,
             WindowY = 80,
-            WindowMaximized = true
+            WindowMaximized = true,
+            OpenInTerminalGesture = "Ctrl+Shift+T"
         };
 
         var json = JsonSerializer.Serialize(original, Options);
@@ -74,6 +76,7 @@ public class AppSettingsTests
         Assert.Equal(120, loaded.WindowX);
         Assert.Equal(80, loaded.WindowY);
         Assert.True(loaded.WindowMaximized);
+        Assert.Equal("Ctrl+Shift+T", loaded.OpenInTerminalGesture);
     }
 
     [Fact]

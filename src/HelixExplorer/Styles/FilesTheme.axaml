@@ -139,6 +139,11 @@
         <Thickness x:Key="HelixTabStripPadding">8,0,138,0</Thickness>
     </Styles.Resources>
 
+    <Style Selector="WindowDrawnDecorations">
+        <Setter Property="DefaultTitleBarHeight" Value="{DynamicResource HelixTitleBarHeight}" />
+        <Setter Property="DefaultFrameThickness" Value="0" />
+        <Setter Property="DefaultShadowThickness" Value="0" />
+    </Style>
     <Style Selector="WindowDrawnDecorations /template/ DockPanel">
         <Setter Property="VerticalAlignment" Value="Top" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />

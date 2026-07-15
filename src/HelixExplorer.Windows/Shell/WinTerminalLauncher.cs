@@ -1,9 +1,15 @@
 using System.Diagnostics;
-using System.Text.Json;
 using HelixExplorer.Core.Infrastructure;
 
 namespace HelixExplorer.Windows.Shell;
 
+/// <summary>
+/// Launches Windows Terminal (preferred) at a directory, opening a new tab in an existing window
+/// so it matches the "Open in Terminal" behaviour users expect. Windows Terminal is invoked with
+/// <c>wt -w 0 new-tab -d "&lt;dir&gt;"</c> (no <c>-p</c>) so the user's selected default profile is
+/// used. Git Bash / pwsh / cmd remain only as final fallbacks when Windows Terminal cannot be found
+/// or fails to launch.
+/// </summary>
 public sealed class WinTerminalLauncher : ITerminalLauncher
 {
     public bool TryOpenInDirectory(string directoryPath)
@@ -12,37 +18,43 @@ public sealed class WinTerminalLauncher : ITerminalLauncher
             return false;
 
         var fullPath = Path.GetFullPath(directoryPath);
-        var defaultProfile = WindowsTerminalSettingsReader.TryGetDefaultProfile();
         var wtPath = ResolveWindowsTerminalPath();
 
         if (wtPath is not null)
         {
-            if (TryOpenWindowsTerminal(fullPath, wtPath, defaultProfile?.Name))
+            if (TryOpenWindowsTerminalNewTab(fullPath, wtPath))
                 return true;
 
-            if (TryOpenWindowsTerminal(fullPath, wtPath, profileName: null))
+            // The first attempt may fail on the app-execution-alias reparse point if the OS
+            // proxy fails to resolve it; try the resolved target of the alias next.
+            var resolved = TryResolveAliasTarget(wtPath);
+            if (!string.IsNullOrEmpty(resolved)
+                && !string.Equals(resolved, wtPath, StringComparison.OrdinalIgnoreCase)
+                && TryOpenWindowsTerminalNewTab(fullPath, resolved))
+            {
                 return true;
-
-            return TryOpenFallbackShell(fullPath, includeGitBash: false);
+            }
         }
 
-        if (defaultProfile is not null && TryLaunchProfile(defaultProfile, fullPath))
-            return true;
-
-        return TryOpenFallbackShell(fullPath, includeGitBash: true);
+        // Windows Terminal is genuinely unavailable — fall back to a registered shell. Only use
+        // Git Bash as a *last* resort; we do not want to override the user's Windows Terminal
+        // default profile (which may legitimately be Git Bash but should still open in WT).
+        return TryOpenFallbackShell(fullPath);
     }
 
-    private static bool TryOpenWindowsTerminal(string directoryPath, string wtPath, string? profileName)
+    private static bool TryOpenWindowsTerminalNewTab(string directoryPath, string wtPath)
     {
-        var args = string.IsNullOrWhiteSpace(profileName)
-            ? $"-d \"{directoryPath}\""
-            : $"-d \"{directoryPath}\" -p \"{profileName}\"";
+        // -w 0 targets the most recently used window; "new-tab" opens a tab inside it without
+        // spawning a second window. Omitting -p lets Windows Terminal use the default profile
+        // the user has set in settings.json.
+        var args = $"-w 0 new-tab -d \"{directoryPath}\"";
 
         return TryStart(new ProcessStartInfo
         {
             FileName = wtPath,
             Arguments = args,
-            UseShellExecute = true
+            UseShellExecute = true,
+            CreateNoWindow = false
         });
     }
 
@@ -64,58 +76,50 @@ public sealed class WinTerminalLauncher : ITerminalLauncher
         return ResolveExecutableOnPath("wt.exe");
     }
 
-    private static bool TryLaunchProfile(TerminalProfile profile, string directoryPath)
+    /// <summary>
+    /// The <c>wt.exe</c> under <c>Microsoft\WindowsApps</c> is a reparse point / execution alias.
+    /// If launching it directly fails, resolve the underlying <c>WindowTerminal.exe</c> in the
+    /// MSIX package install location and try again.
+    /// </summary>
+    private static string? TryResolveAliasTarget(string wtPath)
     {
-        var commandLine = ExpandEnvironment(profile.CommandLine);
-        if (string.IsNullOrWhiteSpace(commandLine))
-            return false;
-
-        if (IsGitShell(commandLine))
-            return TryOpenGitBash(directoryPath);
-
-        if (!TrySplitCommandLine(commandLine, out var executable, out var arguments))
-            return false;
-
-        executable = ExpandEnvironment(executable);
-        if (!Path.IsPathRooted(executable))
-            executable = ResolveExecutableOnPath(executable) ?? executable;
-
-        if (executable.EndsWith("cmd.exe", StringComparison.OrdinalIgnoreCase))
+        try
         {
-            return TryStart(new ProcessStartInfo
-            {
-                FileName = executable,
-                WorkingDirectory = directoryPath,
-                UseShellExecute = true
-            });
+            // Resolve any reparse points (true) — this returns the real wt.exe/WindowsTerminal.exe.
+            var resolved = Path.GetFullPath(wtPath);
+            if (!string.IsNullOrEmpty(resolved) && File.Exists(resolved))
+                return resolved;
+        }
+        catch
+        {
         }
 
-        if (executable.Contains("powershell", StringComparison.OrdinalIgnoreCase)
-            || executable.Contains("pwsh", StringComparison.OrdinalIgnoreCase))
+        // Last-resort: probe Program Files\WindowsApps for Microsoft.WindowsTerminal*\WindowsTerminal.exe
+        try
         {
-            var escapedPath = directoryPath.Replace("'", "''");
-            return TryStart(new ProcessStartInfo
+            var windowsApps = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                "WindowsApps");
+
+            if (Directory.Exists(windowsApps))
             {
-                FileName = executable,
-                Arguments = $"-NoExit -Command \"Set-Location -LiteralPath '{escapedPath}'\"",
-                UseShellExecute = true
-            });
+                foreach (var dir in Directory.EnumerateDirectories(windowsApps, "Microsoft.WindowsTerminal*"))
+                {
+                    var exe = Path.Combine(dir, "WindowsTerminal.exe");
+                    if (File.Exists(exe))
+                        return exe;
+                }
+            }
+        }
+        catch
+        {
         }
 
-        return TryStart(new ProcessStartInfo
-        {
-            FileName = executable,
-            Arguments = arguments,
-            WorkingDirectory = directoryPath,
-            UseShellExecute = true
-        });
+        return null;
     }
 
-    private static bool TryOpenFallbackShell(string directoryPath, bool includeGitBash = true)
+    private static bool TryOpenFallbackShell(string directoryPath)
     {
-        if (includeGitBash && TryOpenGitBash(directoryPath))
-            return true;
-
         var pwsh = ResolveExecutableOnPath("pwsh.exe");
         if (pwsh is not null
             && TryStart(new ProcessStartInfo
@@ -140,6 +144,9 @@ public sealed class WinTerminalLauncher : ITerminalLauncher
             return true;
         }
 
+        if (TryOpenGitBash(directoryPath))
+            return true;
+
         var cmd = ResolveExecutableOnPath("cmd.exe") ?? "cmd.exe";
         return TryStart(new ProcessStartInfo
         {
@@ -162,12 +169,6 @@ public sealed class WinTerminalLauncher : ITerminalLauncher
             UseShellExecute = true
         });
     }
-
-    private static bool IsGitShell(string commandLine) =>
-        commandLine.Contains("git-bash", StringComparison.OrdinalIgnoreCase)
-        || commandLine.Contains(@"Git\bin\bash.exe", StringComparison.OrdinalIgnoreCase)
-        || commandLine.Contains(@"Git\\bin\\bash.exe", StringComparison.OrdinalIgnoreCase)
-        || commandLine.Contains("bash.exe", StringComparison.OrdinalIgnoreCase);
 
     private static string? ResolveGitBashPath()
     {
@@ -207,52 +208,6 @@ public sealed class WinTerminalLauncher : ITerminalLauncher
         return null;
     }
 
-    private static bool TrySplitCommandLine(string commandLine, out string executable, out string arguments)
-    {
-        commandLine = commandLine.Trim();
-        if (commandLine.Length == 0)
-        {
-            executable = string.Empty;
-            arguments = string.Empty;
-            return false;
-        }
-
-        if (commandLine[0] == '"')
-        {
-            var endQuote = commandLine.IndexOf('"', 1);
-            if (endQuote < 0)
-            {
-                executable = commandLine.Trim('"');
-                arguments = string.Empty;
-                return true;
-            }
-
-            executable = commandLine[1..endQuote];
-            arguments = commandLine[(endQuote + 1)..].TrimStart();
-            return true;
-        }
-
-        var splitIndex = commandLine.IndexOf(' ');
-        if (splitIndex < 0)
-        {
-            executable = commandLine;
-            arguments = string.Empty;
-            return true;
-        }
-
-        executable = commandLine[..splitIndex];
-        arguments = commandLine[(splitIndex + 1)..].TrimStart();
-        return true;
-    }
-
-    private static string ExpandEnvironment(string value)
-    {
-        if (string.IsNullOrEmpty(value))
-            return value;
-
-        return Environment.ExpandEnvironmentVariables(value.Replace('/', '\\'));
-    }
-
     private static bool TryStart(ProcessStartInfo startInfo)
     {
         try
@@ -263,104 +218,6 @@ public sealed class WinTerminalLauncher : ITerminalLauncher
         catch
         {
             return false;
-        }
-    }
-
-    private sealed record TerminalProfile(string CommandLine, string? Name);
-
-    private static class WindowsTerminalSettingsReader
-    {
-        public static TerminalProfile? TryGetDefaultProfile()
-        {
-            foreach (var path in GetSettingsPaths())
-            {
-                if (!File.Exists(path))
-                    continue;
-
-                try
-                {
-                    var profile = ParseDefaultProfile(File.ReadAllText(path));
-                    if (profile is not null)
-                        return profile;
-                }
-                catch
-                {
-                }
-            }
-
-            return null;
-        }
-
-        private static IEnumerable<string> GetSettingsPaths()
-        {
-            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            yield return Path.Combine(localAppData, @"Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json");
-            yield return Path.Combine(localAppData, @"Packages\Microsoft.WindowsTerminalPreview_8wekyb3d8bbwe\LocalState\settings.json");
-            yield return Path.Combine(localAppData, @"Microsoft\Windows Terminal\settings.json");
-        }
-
-        private static TerminalProfile? ParseDefaultProfile(string json)
-        {
-            using var document = JsonDocument.Parse(json);
-            var root = document.RootElement;
-
-            if (!root.TryGetProperty("defaultProfile", out var defaultProfileElement))
-                return null;
-
-            var defaultProfile = defaultProfileElement.GetString();
-            if (string.IsNullOrWhiteSpace(defaultProfile))
-                return null;
-
-            if (!root.TryGetProperty("profiles", out var profilesElement))
-                return null;
-
-            if (profilesElement.TryGetProperty("list", out var listElement)
-                && listElement.ValueKind == JsonValueKind.Array)
-            {
-                var profile = FindProfile(listElement, defaultProfile);
-                if (profile is not null)
-                    return profile;
-            }
-
-            return null;
-        }
-
-        private static TerminalProfile? FindProfile(JsonElement profiles, string defaultProfile)
-        {
-            var normalizedDefault = NormalizeProfileKey(defaultProfile);
-
-            foreach (var profile in profiles.EnumerateArray())
-            {
-                if (!profile.TryGetProperty("commandline", out var commandLineElement))
-                    continue;
-
-                var commandLine = commandLineElement.GetString();
-                if (string.IsNullOrWhiteSpace(commandLine))
-                    continue;
-
-                var name = profile.TryGetProperty("name", out var nameElement)
-                    ? nameElement.GetString()
-                    : null;
-                var guid = profile.TryGetProperty("guid", out var guidElement)
-                    ? guidElement.GetString()
-                    : null;
-
-                if (NormalizeProfileKey(guid) == normalizedDefault
-                    || string.Equals(name, defaultProfile, StringComparison.OrdinalIgnoreCase))
-                {
-                    return new TerminalProfile(commandLine, name);
-                }
-            }
-
-            return null;
-        }
-
-        private static string NormalizeProfileKey(string? value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                return string.Empty;
-
-            return value.Trim().Trim('{', '}').ToUpperInvariant();
         }
     }
 }

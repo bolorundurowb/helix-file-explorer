@@ -40,6 +40,13 @@ public sealed class AppSettings
 
     /// <summary>Whether the main window was maximized when last closed.</summary>
     public bool WindowMaximized { get; set; }
+
+    /// <summary>
+    /// Key gesture string (Avalonia <see cref="Avalonia.Input.KeyGesture"/> syntax) used by the
+    /// "Open in Terminal" command. Defaults to <c>Ctrl+OemTilde</c> (the backtick/tilde key).
+    /// Empty or invalid values fall back to the default at load time.
+    /// </summary>
+    public string OpenInTerminalGesture { get; set; } = "Ctrl+OemTilde";
 }
 
 public enum SizeDisplayMode

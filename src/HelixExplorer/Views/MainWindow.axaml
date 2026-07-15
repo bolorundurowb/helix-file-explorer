@@ -45,6 +45,8 @@
         <KeyBinding Gesture="Ctrl+Shift+N" Command="{Binding NewFolderCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+C" Command="{Binding CopyPathCommand}" />
         <KeyBinding Gesture="Ctrl+A" Command="{Binding SelectAllCommand}" />
+        <KeyBinding Gesture="Ctrl+OemTilde"
+                    Command="{Binding OpenInTerminalCommand}" />
     </Window.KeyBindings>
 
     <Grid>

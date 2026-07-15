@@ -90,6 +90,23 @@
                             </ComboBox>
                         </Grid>
                     </Border>
+                    <Border Classes="settingsRow">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Text="Open in Terminal shortcut" FontSize="14" />
+                                <TextBlock Text="Avalonia key gesture syntax, e.g. Ctrl+OemTilde. Empty resets to default."
+                                           FontSize="12" Opacity="0.6" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <TextBox Text="{Binding Main.OpenInTerminalGesture, Mode=TwoWay}"
+                                         MinWidth="180" />
+                                <Button Content="Reset"
+                                        Click="OnResetTerminalGestureClick"
+                                        Padding="10,4"
+                                        ToolTip.Tip="Reset to default (Ctrl+`)" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
                 </StackPanel>
 
                 <!-- Appearance -->

@@ -106,7 +106,10 @@ public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuServic
             var iidShellFolder = ShellIID.IID_IShellFolder;
             var hrBind = desktop.BindToObject(pidlFull, IntPtr.Zero, ref iidShellFolder, out folderPtr);
             if (hrBind != 0 || folderPtr == IntPtr.Zero)
+            {
+                logger.LogError("BindToObject failed for '{FolderPath}': 0x{HrBind:X8}", folderPath, hrBind);
                 return;
+            }
 
             folder = (IShellFolder)Marshal.GetObjectForIUnknown(folderPtr);
 
@@ -132,17 +135,37 @@ public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuServic
                         ref fileAttr);
                     if (hrFile == 0 && childPidl != IntPtr.Zero)
                         childPidls[cidl++] = childPidl;
+                    else
+                        logger.LogDebug("ParseDisplayName failed for child '{Path}': 0x{HrFile:X8}", path, hrFile);
                 }
             }
 
-            var apidl = cidl > 0 && childPidls is not null ? childPidls[..cidl] : null;
-            var iidCm = ShellIID.IID_IContextMenu;
-            uint reserved = 0;
-            var hrCm = folder.GetUIObjectOf(IntPtr.Zero, (uint)cidl, apidl, ref iidCm, ref reserved, out cmPtr);
-            if (hrCm != 0 || cmPtr == IntPtr.Zero)
+            if (cidl > 0)
             {
-                logger.LogError("GetUIObjectOf failed: 0x{HrCm:X8}", hrCm);
-                return;
+                // Selected items: get the IContextMenu for the children from the parent folder.
+                var apidl = childPidls![..cidl];
+                var iidCm = ShellIID.IID_IContextMenu;
+                uint reserved = 0;
+                var hrCm = folder.GetUIObjectOf(hwnd, (uint)cidl, apidl, ref iidCm, ref reserved, out cmPtr);
+                if (hrCm != 0 || cmPtr == IntPtr.Zero)
+                {
+                    logger.LogError("GetUIObjectOf failed for {Count} item(s): 0x{HrCm:X8}", cidl, hrCm);
+                    return;
+                }
+            }
+            else
+            {
+                // Folder background: acquire IContextMenu from the folder itself via
+                // CreateViewObject. GetUIObjectOf with cidl=0 does NOT yield the background menu
+                // on most shell namespaces; CreateViewObject is the documented pattern for the
+                // folder's own (Defender/7-Zip/etc.) background verbs.
+                var iidCm = ShellIID.IID_IContextMenu;
+                var hrCv = folder.CreateViewObject(hwnd, ref iidCm, out cmPtr);
+                if (hrCv != 0 || cmPtr == IntPtr.Zero)
+                {
+                    logger.LogError("CreateViewObject failed for '{FolderPath}': 0x{HrCv:X8}", folderPath, hrCv);
+                    return;
+                }
             }
 
             cm = (IContextMenu)Marshal.GetObjectForIUnknown(cmPtr);

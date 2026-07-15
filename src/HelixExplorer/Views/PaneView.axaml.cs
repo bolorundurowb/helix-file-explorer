@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -35,6 +36,7 @@ public sealed partial class PaneView : UserControl
 
     private PaneViewModel? _pane;
     private IExternalFileDragPayloadBuilder? _dragPayloadBuilder;
+    private HelixExplorer.Core.Infrastructure.IExternalFileDragService? _externalFileDragService;
     private Point? _pressPoint;
     private PointerPressedEventArgs? _pressArgs;
     private bool _dragStarted;
@@ -63,6 +65,7 @@ public sealed partial class PaneView : UserControl
     private void AttachDragGestureHandlers(Control control)
     {
         control.AddHandler(PointerPressedEvent, OnItemDragArmPointerPressed, RoutingStrategies.Bubble, handledEventsToo: true);
+        control.AddHandler(PointerPressedEvent, OnBlankAreaPointerPressed, RoutingStrategies.Bubble, handledEventsToo: true);
         control.AddHandler(PointerMovedEvent, OnListPointerMoved, RoutingStrategies.Bubble, handledEventsToo: true);
         control.AddHandler(PointerReleasedEvent, OnListPointerReleased, RoutingStrategies.Bubble, handledEventsToo: true);
     }
@@ -585,6 +588,70 @@ public sealed partial class PaneView : UserControl
             : PointerInteractionMode.None;
     }
 
+    /// <summary>
+    /// Clears selection when the user left-clicks blank space inside the list/grid/details area.
+    /// Attached with handledEventsToo:true because the underlying DataGrid/ListBox/VirtualizingFileGrid
+    /// class handlers mark the press handled for their own selection management — without that, the
+    /// normally attached <see cref="OnListPointerPressed"/> never sees the blank-area press and the
+    /// previous selection survives. Skips text boxes, headers, scrollbars, and any press on an entry.
+    /// </summary>
+    private void OnBlankAreaPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (Pane is null
+            || Pane.IsHome
+            || IsTextBoxSource(e.Source)
+            || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed
+            || TryGetEntryFromSource(e.Source) is not null)
+            return;
+
+        // Ctrl-click on blank space extends the existing selection rather than clearing it,
+        // matching Explorer's behaviour.
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            return;
+
+        if (Pane.SelectedEntries.Count == 0)
+            return;
+
+        // The grid's tile container handles its own press for selection; we still want blank-area
+        // clicks (between tiles, after the last row) to clear. The grid ListBox class handler
+        // fires before this handler and marks the event handled, but handledEventsToo:true lets
+        // us run afterwards.
+        var grid = GetVisibleControl();
+        if (grid is null)
+            return;
+
+        var positionInControl = e.GetPosition(grid);
+        if (IsPointOnHeaderOrScrollbar(grid, positionInControl))
+            return;
+
+        Pane.UpdateSelection(Array.Empty<EntryItemViewModel>());
+        // Arm marquee after clearing so dragging from blank space still rubber-bands.
+        _pressPoint = e.GetPosition(this);
+        _pressArgs = e;
+        _dragStarted = false;
+        _interactionMode = PointerInteractionMode.MarqueePending;
+    }
+
+    /// <summary>Detects clicks on column headers, scrollbars, or other non-list chrome that should not clear the selection.</summary>
+    private static bool IsPointOnHeaderOrScrollbar(Control host, Point position)
+    {
+        foreach (var descendant in host.GetVisualDescendants())
+        {
+            if (descendant is not Control c || !c.IsVisible)
+                continue;
+
+            // Scrollbars and column headers must not trigger deselection.
+            if (c is ScrollBar or DataGridColumnHeader)
+            {
+                var topLeft = c.TranslatePoint(new Point(0, 0), host);
+                if (topLeft is { } origin && new Rect(origin, c.Bounds.Size).Contains(position))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
     private void OnListPointerMoved(object? sender, PointerEventArgs e)
     {
         if (_pressPoint is null || Pane is null)
@@ -683,6 +750,16 @@ public sealed partial class PaneView : UserControl
             return;
 
         var physicalPaths = await Pane.ResolvePhysicalPathsAsync(virtualPaths).ConfigureAwait(true);
+
+        if (ExternalFileDragService is { } nativeDrag)
+        {
+            nativeDrag.DoDragDrop(
+                physicalPaths,
+                HelixExplorer.Core.Infrastructure.DragDropEffects.Copy
+                | HelixExplorer.Core.Infrastructure.DragDropEffects.Move);
+            return;
+        }
+
         var transfer = await BuildFileTransferAsync(physicalPaths).ConfigureAwait(true);
         if (transfer is null)
             return;
@@ -743,6 +820,9 @@ public sealed partial class PaneView : UserControl
         _dragPayloadBuilder ??= App.Services?.GetService<IExternalFileDragPayloadBuilder>()
             ?? new AvaloniaExternalFileDragPayloadBuilder(
                 NullLogger<AvaloniaExternalFileDragPayloadBuilder>.Instance);
+
+    private HelixExplorer.Core.Infrastructure.IExternalFileDragService? ExternalFileDragService =>
+        _externalFileDragService ??= App.Services?.GetService<HelixExplorer.Core.Infrastructure.IExternalFileDragService>();
 
     // ── Drop target ──────────────────────────────────────────────────────────
 

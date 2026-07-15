@@ -30,16 +30,23 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
             (s, d, t, r, c) => MoveOne(s, d, t, r, c)), ct).ConfigureAwait(false);
     }
 
-    public async ValueTask<FileOperationResult> DeleteAsync(IReadOnlyList<string> paths, bool permanently, CancellationToken ct = default)
+    public async ValueTask<FileOperationResult> DeleteAsync(
+        IReadOnlyList<string> paths,
+        bool permanently,
+        IProgress<FileOperationProgress>? progress = null,
+        CancellationToken ct = default)
     {
+        var total = paths.Count;
         var succeeded = 0;
         var failures = new List<FileOperationFailure>();
 
         await Task.Run(() =>
         {
-            foreach (var path in paths)
+            for (var i = 0; i < total; i++)
             {
                 ct.ThrowIfCancellationRequested();
+                var path = paths[i];
+                progress?.Report(new FileOperationProgress(i, total, path, FileOperationKind.Delete));
 
                 try
                 {
@@ -64,6 +71,8 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
                     logger.LogError(ex, "Delete failed for '{Path}'", path);
                     failures.Add(new FileOperationFailure(path, ex.Message));
                 }
+
+                progress?.Report(new FileOperationProgress(i + 1, total, path, FileOperationKind.Delete));
             }
         }, ct).ConfigureAwait(false);
 

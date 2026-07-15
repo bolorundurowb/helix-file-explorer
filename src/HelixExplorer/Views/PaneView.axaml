@@ -382,6 +382,12 @@
                     </MenuItem.Icon>
                 </MenuItem>
             </MenuItem>
+            <Separator />
+            <MenuItem Header="Show more options" Command="{Binding ShowMoreOptionsCommand}">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconOptionsGeometry}" />
+                </MenuItem.Icon>
+            </MenuItem>
         </ContextMenu>
     </UserControl.Resources>
 

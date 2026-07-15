@@ -24,4 +24,10 @@ public sealed partial class SettingsPage : UserControl
         if (sender is Control { Tag: string hex })
             ViewModel?.Main.SetAccentColorCommand.Execute(hex);
     }
+
+    private void OnResetTerminalGestureClick(object? sender, RoutedEventArgs e)
+    {
+        if (ViewModel is { } vm)
+            vm.Main.OpenInTerminalGesture = MainWindowViewModel.AppDefaultTerminalGesture;
+    }
 }

@@ -18,7 +18,11 @@ public interface IFileOperationService
         IFileConflictResolver? conflicts = null,
         CancellationToken ct = default);
 
-    ValueTask<FileOperationResult> DeleteAsync(IReadOnlyList<string> paths, bool permanently, CancellationToken ct = default);
+    ValueTask<FileOperationResult> DeleteAsync(
+        IReadOnlyList<string> paths,
+        bool permanently,
+        IProgress<FileOperationProgress>? progress = null,
+        CancellationToken ct = default);
 
     ValueTask<FileOperationResult> RenameAsync(string path, string newName, CancellationToken ct = default);
 

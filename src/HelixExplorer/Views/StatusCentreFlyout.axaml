@@ -54,9 +54,30 @@
                 <ItemsControl ItemsSource="{Binding Completed}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="services:OperationEntry">
-                            <TextBlock Text="{Binding Message}"
-                                       FontSize="12"
-                                       Margin="0,4" />
+                            <Grid ColumnDefinitions="Auto,*,Auto"
+                                  Margin="0,4">
+                                <!-- Success: green check / Failure: warning glyph -->
+                                <PathIcon Grid.Column="0"
+                                          Width="16" Height="16"
+                                          Margin="0,0,8,0"
+                                          VerticalAlignment="Center"
+                                          Data="{DynamicResource HelixIconCheckmarkGeometry}"
+                                          Foreground="#107C10"
+                                          IsVisible="{Binding Succeeded}" />
+                                <PathIcon Grid.Column="0"
+                                          Width="16" Height="16"
+                                          Margin="0,0,8,0"
+                                          VerticalAlignment="Center"
+                                          Data="{DynamicResource HelixIconInfoGeometry}"
+                                          Foreground="#D13438"
+                                          IsVisible="{Binding Failed}" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding Message}"
+                                           FontSize="12"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"
+                                           Foreground="{Binding Failed, Converter={StaticResource BoolToFailureBrushConverter}, FallbackValue=#D13438}" />
+                            </Grid>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>

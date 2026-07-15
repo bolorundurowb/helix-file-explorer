@@ -30,7 +30,38 @@ public partial class MainWindow : Window
     private void OnOpened(object? sender, EventArgs e)
     {
         if (DataContext is MainWindowViewModel vm)
+        {
             vm.ApplyWindowLayout(this);
+            ApplyOpenInTerminalKeyBinding(vm.OpenInTerminalGesture);
+            vm.PropertyChanged += OnViewModelPropertyChanged;
+        }
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainWindowViewModel.OpenInTerminalGesture)
+            && DataContext is MainWindowViewModel vm)
+        {
+            ApplyOpenInTerminalKeyBinding(vm.OpenInTerminalGesture);
+        }
+    }
+
+    private void ApplyOpenInTerminalKeyBinding(string gesture)
+    {
+        var binding = KeyBindings.OfType<KeyBinding>().FirstOrDefault(b => b.Command is { } cmd
+            && cmd == (DataContext as MainWindowViewModel)?.OpenInTerminalCommand);
+
+        if (binding is null)
+            return;
+
+        try
+        {
+            binding.Gesture = KeyGesture.Parse(gesture);
+        }
+        catch
+        {
+            binding.Gesture = KeyGesture.Parse(MainWindowViewModel.AppDefaultTerminalGesture);
+        }
     }
 
     private void OnClosing(object? sender, CancelEventArgs e)

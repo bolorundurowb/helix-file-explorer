@@ -52,6 +52,7 @@ public sealed partial class FileOperationReporter : ObservableObject, IFileOpera
             {
                 FileOperationKind.Copy => $"Copying {progress.CompletedItems} of {progress.TotalItems} items…",
                 FileOperationKind.Move => $"Moving {progress.CompletedItems} of {progress.TotalItems} items…",
+                FileOperationKind.Delete => $"Deleting {progress.CompletedItems} of {progress.TotalItems} items…",
                 _ => ActiveTitle
             };
         }
@@ -65,14 +66,14 @@ public sealed partial class FileOperationReporter : ObservableObject, IFileOpera
         HasActive = false;
         Progress = 1;
         ActiveDetail = string.Empty;
-        AddCompleted(new OperationEntry(message, Failed: false));
+        AddCompleted(new OperationEntry(message, Failed: false, Succeeded: true, Kind: kind, ItemCount: itemCount));
     }
 
     public void Fail(string message)
     {
         HasActive = false;
         ActiveDetail = string.Empty;
-        AddCompleted(new OperationEntry(message, Failed: true));
+        AddCompleted(new OperationEntry(message, Failed: true, Succeeded: false, Kind: null, ItemCount: 0));
     }
 
     private void AddCompleted(OperationEntry entry)
@@ -97,4 +98,17 @@ public sealed partial class FileOperationReporter : ObservableObject, IFileOpera
     }
 }
 
-public sealed record OperationEntry(string Message, bool Failed);
+/// <summary>
+/// Represents a completed file-operation entry surfaced in the status centre.
+/// </summary>
+/// <param name="Message">Human-readable summary of the operation result.</param>
+/// <param name="Failed">True if the operation failed (legacy flag kept for bindings/tests).</param>
+/// <param name="Succeeded">True if the operation completed successfully. Explicit so the UI can bind a green check vs error glyph.</param>
+/// <param name="Kind">The operation kind, or null for generic failures.</param>
+/// <param name="ItemCount">Number of items processed by the operation.</param>
+public sealed record OperationEntry(
+    string Message,
+    bool Failed,
+    bool Succeeded = true,
+    FileOperationKind? Kind = null,
+    int ItemCount = 0);

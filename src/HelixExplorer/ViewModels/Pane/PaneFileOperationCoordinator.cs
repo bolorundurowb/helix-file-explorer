@@ -144,7 +144,8 @@ public sealed class PaneFileOperationCoordinator(
             var title = permanently ? UiStrings.PermanentlyDeleteTitle : UiStrings.DeletingItems;
             operationReporter.Begin(kind, paths.Count, title);
 
-            var result = await fileOps.DeleteAsync(paths, permanently).ConfigureAwait(true);
+            var progress = new Progress<FileOperationProgress>(p => operationReporter.Report(p));
+            var result = await fileOps.DeleteAsync(paths, permanently, progress).ConfigureAwait(true);
 
             await refreshAsync().ConfigureAwait(true);
             operationReporter.Complete(

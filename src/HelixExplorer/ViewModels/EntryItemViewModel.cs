@@ -96,6 +96,9 @@ public sealed partial class EntryItemViewModel : ObservableObject
     private string _renameText = string.Empty;
 
     [ObservableProperty]
+    private bool _isDropTarget;
+
+    [ObservableProperty]
     private Bitmap? _entryImage;
 
     private int _visualGeneration;

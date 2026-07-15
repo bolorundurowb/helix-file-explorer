@@ -1335,6 +1335,31 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         };
     }
 
+    public async Task HandleSidebarDropAsync(IReadOnlyList<string> paths, string destinationPath, bool isCopy)
+    {
+        var pane = GetOrCreateBrowserTab().ActivePane;
+        if (pane is null || !pane.CanAcceptFileDrop)
+            return;
+
+        await pane.HandleDropAsync(paths, destinationPath, isCopy);
+    }
+
+    public void OpenUrl(string url)
+    {
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true
+            };
+            System.Diagnostics.Process.Start(psi);
+        }
+        catch
+        {
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed)

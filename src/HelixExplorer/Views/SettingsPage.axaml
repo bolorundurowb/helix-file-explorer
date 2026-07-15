@@ -239,6 +239,26 @@
                                        Opacity="0.7" />
                         </StackPanel>
                     </Border>
+                    <Border Classes="settingsRow">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="Updates"
+                                       FontSize="14"
+                                       FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding UpdateStatus}"
+                                       FontSize="13"
+                                       Opacity="0.85" />
+                            <Button Content="Check for Updates"
+                                    Command="{Binding CheckForUpdatesCommand}"
+                                    HorizontalAlignment="Left"
+                                    IsEnabled="{Binding !IsCheckingForUpdates}"
+                                    Padding="16,8" />
+                            <Button Content="Download Update"
+                                    Command="{Binding OpenReleaseUrlCommand}"
+                                    HorizontalAlignment="Left"
+                                    IsVisible="{Binding HasUpdate}"
+                                    Padding="16,8" />
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
 
             </StackPanel>

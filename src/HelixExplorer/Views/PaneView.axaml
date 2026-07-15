@@ -8,9 +8,10 @@
              x:DataType="vm:PaneViewModel"
              Focusable="True"
              KeyDown="OnPaneKeyDown"
-             DragDrop.AllowDrop="True"
-             DragDrop.Drop="OnDrop"
-             DragDrop.DragOver="OnDragOver">
+              DragDrop.AllowDrop="True"
+              DragDrop.Drop="OnDrop"
+              DragDrop.DragOver="OnDragOver"
+              DragDrop.DragLeave="OnDragLeave">
 
     <UserControl.Styles>
         <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
@@ -370,8 +371,6 @@
                   SelectionChanged="OnSelectionChanged"
                   Sorting="OnDetailsSorting"
                   PointerPressed="OnListPointerPressed"
-                  PointerMoved="OnListPointerMoved"
-                  PointerReleased="OnListPointerReleased"
                   Background="Transparent"
                   BorderThickness="0">
             <DataGrid.ContextMenu>
@@ -395,6 +394,14 @@
                                   VerticalAlignment="Center"
                                   Opacity="{Binding IsCut, Converter={StaticResource CutOpacityConverter}}"
                                   ToolTip.Tip="{Binding Name}">
+                                <Border IsVisible="{Binding IsDropTarget}"
+                                        BorderBrush="{DynamicResource HelixAccentBrush}"
+                                        BorderThickness="2"
+                                        CornerRadius="2"
+                                        Background="{DynamicResource HelixAccentBrush}"
+                                        Opacity="0.15"
+                                        IsHitTestVisible="False"
+                                        Grid.ColumnSpan="2" />
                                 <controls:EntryVisualView Grid.Column="0"
                                                           Width="16" Height="16" Margin="0,0,6,0"
                                                           Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}" />
@@ -484,8 +491,6 @@
                  DoubleTapped="OnItemActivated"
                  SelectionChanged="OnSelectionChanged"
                  PointerPressed="OnListPointerPressed"
-                 PointerMoved="OnListPointerMoved"
-                 PointerReleased="OnListPointerReleased"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
             <ListBox.ContextMenu>
                 <StaticResource ResourceKey="EntryContextMenu" />
@@ -495,6 +500,13 @@
                     <Grid ColumnDefinitions="Auto,*"
                           Opacity="{Binding IsCut, Converter={StaticResource CutOpacityConverter}}"
                           ToolTip.Tip="{Binding Name}">
+                        <Border IsVisible="{Binding IsDropTarget}"
+                                BorderBrush="{DynamicResource HelixAccentBrush}"
+                                BorderThickness="1"
+                                Background="{DynamicResource HelixAccentBrush}"
+                                Opacity="0.15"
+                                IsHitTestVisible="False"
+                                Grid.ColumnSpan="2" />
                         <controls:EntryVisualView Grid.Column="0"
                                                   Width="16" Height="16" Margin="0,0,6,0"
                                                   Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}" />
@@ -537,8 +549,6 @@
                  BorderThickness="0"
                  PointerWheelChanged="OnGridPointerWheel"
                  PointerPressed="OnListPointerPressed"
-                 PointerMoved="OnListPointerMoved"
-                 PointerReleased="OnListPointerReleased"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <controls:VirtualizingFileGrid.ContextMenu>
                     <StaticResource ResourceKey="EntryContextMenu" />
@@ -552,7 +562,7 @@
                                 ClipToBounds="True"
                                 PointerPressed="OnGridItemPointerPressed"
                                 DoubleTapped="OnGridItemDoubleTapped">
-                            <Panel>
+                             <Panel>
                                 <Border CornerRadius="6"
                                         Background="{Binding FullPath, Converter={StaticResource FolderColorConverter}}" />
                                 <Border CornerRadius="6"
@@ -564,6 +574,18 @@
                                         BorderBrush="{DynamicResource HelixAccentBrush}"
                                         BorderThickness="2"
                                         IsVisible="{Binding IsSelected}"
+                                        IsHitTestVisible="False" />
+                                <Border CornerRadius="6"
+                                        BorderBrush="{DynamicResource HelixAccentBrush}"
+                                        BorderThickness="2"
+                                        Background="{DynamicResource HelixAccentBrush}"
+                                        Opacity="0.2"
+                                        IsVisible="{Binding IsDropTarget}"
+                                        IsHitTestVisible="False" />
+                                <Border CornerRadius="6"
+                                        BorderBrush="{DynamicResource HelixAccentBrush}"
+                                        BorderThickness="2"
+                                        IsVisible="{Binding IsDropTarget}"
                                         IsHitTestVisible="False" />
                                 <PathIcon Data="{DynamicResource HelixIconCheckmarkGeometry}"
                                           Width="14" Height="14"

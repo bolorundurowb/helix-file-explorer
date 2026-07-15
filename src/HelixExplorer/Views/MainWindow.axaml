@@ -110,9 +110,15 @@
                                                 Padding="0"
                                                 Cursor="Hand"
                                                 ToolTip.Tip="{Binding ToolTip}"
-                                                PointerPressed="OnSidebarItemPressed">
+                                                PointerPressed="OnSidebarItemPressed"
+                                                DragDrop.AllowDrop="True"
+                                                DragDrop.DragOver="OnSidebarDragOver"
+                                                DragDrop.DragLeave="OnSidebarDragLeave"
+                                                DragDrop.Drop="OnSidebarDrop">
                                             <Border.ContextMenu>
-                                                <ContextMenu Opening="OnSidebarContextMenuOpening">
+                                                <ContextMenu Opening="OnSidebarContextMenuOpening"
+                                                             x:CompileBindings="False"
+                                                             Tag="{Binding}">
                                                     <MenuItem Header="Pin to sidebar" Click="OnSidebarPinClick" />
                                                     <MenuItem Header="Unpin from sidebar" Click="OnSidebarUnpinClick" />
                                                     <Separator />
@@ -131,6 +137,13 @@
                                                         Background="{DynamicResource HelixSelectionBarBrush}"
                                                         IsVisible="{Binding IsSelected}"
                                                         CornerRadius="0,2,2,0" />
+                                                <Border Grid.ColumnSpan="3"
+                                                        BorderBrush="{DynamicResource HelixAccentBrush}"
+                                                        BorderThickness="1"
+                                                        CornerRadius="4"
+                                                        Margin="2,1"
+                                                        IsVisible="{Binding IsDropTarget}"
+                                                        IsHitTestVisible="False" />
                                                 <PathIcon Grid.Column="1"
                                                           Width="16"
                                                           Height="16"
@@ -548,12 +561,14 @@
                                         <TextBlock Text="Size"
                                                    FontSize="12"
                                                    FontWeight="SemiBold"
+                                                   Padding="0, 10, 0, 0"
                                                    Opacity="0.9" />
                                         <Slider Minimum="32"
                                                 Maximum="256"
+                                                Padding="0, -10, 0, 0"
                                                 Value="{Binding ActiveThumbnailSize, Mode=TwoWay}"
                                                 ToolTip.Tip="Thumbnail size (Ctrl+Scroll in grid view)" />
-                                        <Grid ColumnDefinitions="*,*,*,*">
+                                        <Grid ColumnDefinitions="*,*,*,*" Margin="0, -15, 0, 10">
                                             <PathIcon Grid.Column="0"
                                                       Data="{DynamicResource HelixIconListGeometry}"
                                                       Width="14" Height="14"

@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using HelixExplorer.ViewModels;
 
@@ -96,6 +97,9 @@ public partial class MainWindow : Window
 
     private void OnSidebarItemPressed(object? sender, PointerPressedEventArgs e)
     {
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            return;
+
         if (sender is not Border border)
             return;
 
@@ -107,6 +111,75 @@ public partial class MainWindow : Window
         if (DataContext is MainWindowViewModel vm)
             vm.NavigateSidebarCommand.Execute(item);
     }
+
+    private void OnSidebarDragOver(object? sender, DragEventArgs e)
+    {
+        if (sender is not Border { DataContext: SidebarItemViewModel item } || !item.IsNavigable)
+            return;
+
+        if (!e.DataTransfer.Contains(DataFormat.File))
+            return;
+
+        ClearSidebarDropTarget();
+        item.IsDropTarget = true;
+        _sidebarDropTarget = item;
+
+        e.DragEffects = e.KeyModifiers.HasFlag(KeyModifiers.Control)
+            ? DragDropEffects.Copy
+            : DragDropEffects.Move;
+        e.Handled = true;
+    }
+
+    private void OnSidebarDragLeave(object? sender, DragEventArgs e)
+        => ClearSidebarDropTarget();
+
+    private void ClearSidebarDropTarget()
+    {
+        if (_sidebarDropTarget is not null)
+        {
+            _sidebarDropTarget.IsDropTarget = false;
+            _sidebarDropTarget = null;
+        }
+    }
+
+    private async void OnSidebarDrop(object? sender, DragEventArgs e)
+    {
+        if (sender is not Border { DataContext: SidebarItemViewModel item }
+            || !item.IsNavigable
+            || string.IsNullOrEmpty(item.Path))
+            return;
+
+        if (DataContext is not MainWindowViewModel vm)
+            return;
+
+        if (!e.DataTransfer.Contains(DataFormat.File))
+            return;
+
+        ClearSidebarDropTarget();
+
+        var files = e.DataTransfer.TryGetFiles();
+        if (files is null || files.Length == 0)
+            return;
+
+        var paths = new List<string>(files.Length);
+        foreach (var file in files)
+        {
+            var local = file.TryGetLocalPath();
+            if (!string.IsNullOrEmpty(local))
+                paths.Add(local);
+        }
+
+        if (paths.Count == 0)
+            return;
+
+        var isCopy = e.KeyModifiers.HasFlag(KeyModifiers.Control)
+                     || e.DragEffects == DragDropEffects.Copy;
+        await vm.HandleSidebarDropAsync(paths, item.Path, isCopy);
+
+        e.Handled = true;
+    }
+
+    private SidebarItemViewModel? _sidebarDropTarget;
 
     private void OnTabStripWheel(object? sender, PointerWheelEventArgs e)
     {
@@ -221,18 +294,22 @@ public partial class MainWindow : Window
 
     private static SidebarItemViewModel? GetSidebarItemFromMenu(object? sender)
     {
-        for (var current = sender as Control; current is not null; current = current.Parent as Control)
-        {
-            if (current is not ContextMenu { PlacementTarget: { } target })
-                continue;
+        if (sender is not ContextMenu menu)
+            return null;
 
+        if (menu.Tag is SidebarItemViewModel tagItem)
+            return tagItem;
+
+        if (menu.DataContext is SidebarItemViewModel dcItem)
+            return dcItem;
+
+        if (menu.PlacementTarget is { } target)
+        {
             for (var t = target as Control; t is not null; t = t.Parent as Control)
             {
-                if (t.DataContext is SidebarItemViewModel item)
-                    return item;
+                if (t is Control { DataContext: SidebarItemViewModel targetItem })
+                    return targetItem;
             }
-
-            return null;
         }
 
         return null;

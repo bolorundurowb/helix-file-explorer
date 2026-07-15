@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
+using System.Net.Http;
 using System.Reflection;
+using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HelixExplorer.Core.Theming;
@@ -9,6 +11,12 @@ namespace HelixExplorer.ViewModels;
 public sealed partial class SettingsPageViewModel : ObservableObject
 {
     private static readonly Assembly AppAssembly = typeof(SettingsPageViewModel).Assembly;
+    private static readonly HttpClient _httpClient = new()
+    {
+        DefaultRequestHeaders = { { "User-Agent", "HelixExplorer" } }
+    };
+    private const string ReleasesUrl =
+        "https://api.github.com/repos/bolorundurowb/helix-file-explorer/releases/latest";
 
     public SettingsPageViewModel(MainWindowViewModel main)
     {
@@ -18,6 +26,12 @@ public sealed partial class SettingsPageViewModel : ObservableObject
                      ?? "0.0.0";
         CopyrightNotice = AppAssembly.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright
                           ?? "Copyright © 2026";
+
+        // Strip any pre-release suffix for comparison (e.g., "1.2.3-beta" -> "1.2.3")
+        _currentVersion = AppVersion;
+        var plusIndex = _currentVersion.IndexOf('+');
+        if (plusIndex >= 0)
+            _currentVersion = _currentVersion[..plusIndex];
 
         Sections = new ObservableCollection<SettingsSection>
         {
@@ -40,6 +54,20 @@ public sealed partial class SettingsPageViewModel : ObservableObject
     public ObservableCollection<SettingsSection> Sections { get; }
 
     public IReadOnlyList<UiFontOption> UiFontOptions => UiFontCatalog.Options;
+
+    [ObservableProperty]
+    private bool _isCheckingForUpdates;
+
+    [ObservableProperty]
+    private string _updateStatus = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasUpdate))]
+    private string? _updateReleaseUrl;
+
+    public bool HasUpdate => !string.IsNullOrEmpty(UpdateReleaseUrl);
+
+    private readonly string _currentVersion;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SelectedTitle))]
@@ -67,6 +95,73 @@ public sealed partial class SettingsPageViewModel : ObservableObject
             item.IsSelected = ReferenceEquals(item, section);
 
         SelectedSection = section;
+    }
+
+    [RelayCommand]
+    private async Task CheckForUpdates()
+    {
+        if (IsCheckingForUpdates)
+            return;
+
+        IsCheckingForUpdates = true;
+        UpdateStatus = "Checking for updates...";
+        UpdateReleaseUrl = null;
+
+        try
+        {
+            var response = await _httpClient.GetAsync(ReleasesUrl).ConfigureAwait(true);
+            if (!response.IsSuccessStatusCode)
+            {
+                UpdateStatus = "Could not check for updates. Try again later.";
+                return;
+            }
+
+            var json = await response.Content.ReadAsStringAsync().ConfigureAwait(true);
+            using var doc = JsonDocument.Parse(json);
+            var tagName = doc.RootElement.GetProperty("tag_name").GetString();
+            var htmlUrl = doc.RootElement.GetProperty("html_url").GetString();
+
+            if (string.IsNullOrEmpty(tagName))
+            {
+                UpdateStatus = "No release information found.";
+                return;
+            }
+
+            var latestVersion = tagName.TrimStart('v', 'V');
+            if (IsNewerVersion(latestVersion, _currentVersion))
+            {
+                UpdateStatus = $"Update available: v{latestVersion} (current: v{_currentVersion})";
+                UpdateReleaseUrl = htmlUrl;
+            }
+            else
+            {
+                UpdateStatus = $"You are up to date (v{_currentVersion})";
+            }
+        }
+        catch (Exception)
+        {
+            UpdateStatus = "Could not check for updates. Try again later.";
+        }
+        finally
+        {
+            IsCheckingForUpdates = false;
+        }
+    }
+
+    [RelayCommand]
+    private void OpenReleaseUrl()
+    {
+        if (UpdateReleaseUrl is { Length: > 0 } url)
+            Main.OpenUrl(url);
+    }
+
+    private static bool IsNewerVersion(string latest, string current)
+    {
+        if (!Version.TryParse(latest, out var latestVer))
+            return false;
+        if (!Version.TryParse(current, out var currentVer))
+            return false;
+        return latestVer > currentVer;
     }
 }
 

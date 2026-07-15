@@ -45,6 +45,9 @@ public sealed partial class SidebarItemViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasIcon))]
     private Bitmap? _icon;
 
+    [ObservableProperty]
+    private bool _isDropTarget;
+
     public bool HasIcon => Icon is not null;
 }
 

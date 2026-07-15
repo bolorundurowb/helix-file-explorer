@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using HelixExplorer.Controls;
 using HelixExplorer.ViewModels;
@@ -46,6 +47,10 @@ public sealed partial class Omnibar : UserControl
         {
             var item = BreadcrumbItem.FromSegment(segment);
             item.Click += OnBreadcrumbClick;
+            DragDrop.SetAllowDrop(item, true);
+            item.AddHandler(DragDrop.DragOverEvent, OnBreadcrumbDragOver);
+            item.AddHandler(DragDrop.DragLeaveEvent, OnBreadcrumbDragLeave);
+            item.AddHandler(DragDrop.DropEvent, OnBreadcrumbDrop);
             BreadcrumbHost.Children.Add(item);
         }
     }
@@ -101,5 +106,53 @@ public sealed partial class Omnibar : UserControl
     {
         if (_pane is { IsSearchMode: true, IsFilterActive: false })
             _pane.ExitSearchModeCommand.Execute(null);
+    }
+
+    private void OnBreadcrumbDragOver(object? sender, DragEventArgs e)
+    {
+        if (_pane is null || sender is not BreadcrumbItem { SegmentPath: var path })
+            return;
+
+        if (!e.DataTransfer.Contains(DataFormat.File) || string.IsNullOrEmpty(path))
+            return;
+
+        e.DragEffects = e.KeyModifiers.HasFlag(KeyModifiers.Control)
+            ? DragDropEffects.Copy
+            : DragDropEffects.Move;
+        e.Handled = true;
+    }
+
+    private void OnBreadcrumbDragLeave(object? sender, DragEventArgs e)
+        => e.Handled = true;
+
+    private async void OnBreadcrumbDrop(object? sender, DragEventArgs e)
+    {
+        if (_pane is null || sender is not BreadcrumbItem { SegmentPath: var path }
+            || string.IsNullOrEmpty(path))
+            return;
+
+        if (!e.DataTransfer.Contains(DataFormat.File))
+            return;
+
+        var files = e.DataTransfer.TryGetFiles();
+        if (files is null || files.Length == 0)
+            return;
+
+        var paths = new List<string>(files.Length);
+        foreach (var file in files)
+        {
+            var local = file.TryGetLocalPath();
+            if (!string.IsNullOrEmpty(local))
+                paths.Add(local);
+        }
+
+        if (paths.Count == 0)
+            return;
+
+        var isCopy = e.KeyModifiers.HasFlag(KeyModifiers.Control)
+                     || e.DragEffects == DragDropEffects.Copy;
+        await _pane.HandleDropAsync(paths, path, isCopy);
+
+        e.Handled = true;
     }
 }

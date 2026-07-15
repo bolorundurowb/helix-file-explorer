@@ -35,6 +35,7 @@ public sealed partial class PaneView : UserControl
     private bool _dragStarted;
     private bool _syncingSelectionToView;
     private PointerInteractionMode _interactionMode;
+    private EntryItemViewModel? _dropTargetEntry;
     private readonly List<Control> _millerColumns = new();
     private readonly FuncDataTemplate<EntryItemViewModel> _millerItemTemplate = new(
         (item, _) => new TextBlock { Text = item?.DisplayName ?? string.Empty });
@@ -44,6 +45,21 @@ public sealed partial class PaneView : UserControl
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
         DetailsGrid.ContextRequested += OnDetailsContextRequested;
+
+        // The DataGrid and ListBox mark PointerPressed/PointerMoved handled for their own selection
+        // before the event bubbles to the normally-attached handlers, so the drag-out gesture never
+        // started on an item press. Register these with handledEventsToo:true so drag detection
+        // still runs after the control has handled selection.
+        AttachDragGestureHandlers(DetailsGrid);
+        AttachDragGestureHandlers(ListView);
+        AttachDragGestureHandlers(GridView);
+    }
+
+    private void AttachDragGestureHandlers(Control control)
+    {
+        control.AddHandler(PointerPressedEvent, OnItemDragArmPointerPressed, RoutingStrategies.Bubble, handledEventsToo: true);
+        control.AddHandler(PointerMovedEvent, OnListPointerMoved, RoutingStrategies.Bubble, handledEventsToo: true);
+        control.AddHandler(PointerReleasedEvent, OnListPointerReleased, RoutingStrategies.Bubble, handledEventsToo: true);
     }
 
     private PaneViewModel? Pane => DataContext as PaneViewModel;
@@ -359,6 +375,17 @@ public sealed partial class PaneView : UserControl
         }
 
         SelectGridEntry(entry, e.KeyModifiers);
+
+        // Arm a potential drag-out. The grid tile marks the event handled (to stop the underlying
+        // ListBox from selecting the row), so the container-level OnListPointerPressed never sees
+        // it — record the press state here instead so OnListPointerMoved can start the drag.
+        _pressPoint = e.GetPosition(this);
+        _pressArgs = e;
+        _dragStarted = false;
+        _interactionMode = Pane.SelectedEntries.Contains(entry)
+            ? PointerInteractionMode.DragOutPending
+            : PointerInteractionMode.None;
+
         e.Handled = true;
     }
 
@@ -525,6 +552,30 @@ public sealed partial class PaneView : UserControl
         _pressPoint = e.GetPosition(this);
         _pressArgs = e;
         _dragStarted = false;
+    }
+
+    // Fires even when the DataGrid/ListBox mark the press handled for their own selection (which is
+    // why OnListPointerPressed, attached via normal routing, never sees an item press on those
+    // controls). This arms a drag-out for the pressed item without duplicating selection — the
+    // native control has already updated the selection by the time this runs. Empty-area, header
+    // and scrollbar presses (no item under the pointer) are intentionally ignored here so the
+    // marquee/selection behaviour in OnListPointerPressed is left untouched.
+    private void OnItemDragArmPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (IsTextBoxSource(e.Source)
+            || Pane is null
+            || Pane.IsHome
+            || ReferenceEquals(sender, GridView)
+            || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed
+            || TryGetEntryFromSource(e.Source) is not { } entry)
+            return;
+
+        _pressPoint = e.GetPosition(this);
+        _pressArgs = e;
+        _dragStarted = false;
+        _interactionMode = Pane.SelectedEntries.Contains(entry)
+            ? PointerInteractionMode.DragOutPending
+            : PointerInteractionMode.None;
     }
 
     private void OnListPointerMoved(object? sender, PointerEventArgs e)
@@ -694,13 +745,80 @@ public sealed partial class PaneView : UserControl
         if (Pane is null)
             return;
 
-        if (!e.DataTransfer.Contains(DataFormat.File) || ResolveDropDestination(e) is null)
+        if (!e.DataTransfer.Contains(DataFormat.File))
             return;
+
+        var targetEntry = FindEntryUnderDrag(e);
+        var destinationPath = Pane.ResolveDropDestination(targetEntry);
+        if (string.IsNullOrEmpty(destinationPath))
+        {
+            ClearDropTarget();
+            return;
+        }
+
+        UpdateDropTarget(targetEntry);
 
         e.DragEffects = e.KeyModifiers.HasFlag(KeyModifiers.Control)
             ? DragDropEffects.Copy
             : DragDropEffects.Move;
         e.Handled = true;
+    }
+
+    private void OnDragLeave(object? sender, DragEventArgs e)
+        => ClearDropTarget();
+
+    private void UpdateDropTarget(EntryItemViewModel? entry)
+    {
+        if (ReferenceEquals(_dropTargetEntry, entry))
+            return;
+
+        if (_dropTargetEntry is not null)
+            _dropTargetEntry.IsDropTarget = false;
+
+        _dropTargetEntry = entry;
+
+        if (_dropTargetEntry is { IsDirectory: true })
+            _dropTargetEntry.IsDropTarget = true;
+    }
+
+    private void ClearDropTarget()
+    {
+        if (_dropTargetEntry is not null)
+        {
+            _dropTargetEntry.IsDropTarget = false;
+            _dropTargetEntry = null;
+        }
+    }
+
+    private EntryItemViewModel? FindEntryUnderDrag(DragEventArgs e)
+    {
+        if (DetailsGrid.IsVisible)
+            return HitTestEntry(DetailsGrid, e.GetPosition(DetailsGrid));
+        if (ListView.IsVisible)
+            return HitTestEntry(ListView, e.GetPosition(ListView));
+        if (Pane?.IsGridView == true)
+            return HitTestEntry(GridView, e.GetPosition(GridView));
+
+        return null;
+    }
+
+    private static EntryItemViewModel? HitTestEntry(Control host, Point position)
+    {
+        foreach (var child in host.GetVisualDescendants())
+        {
+            if (child is not Control { DataContext: EntryItemViewModel entry, IsVisible: true })
+                continue;
+
+            var topLeft = child.TranslatePoint(new Point(0, 0), host);
+            if (topLeft is null)
+                continue;
+
+            var bounds = new Rect(topLeft.Value, child.Bounds.Size);
+            if (bounds.Contains(position))
+                return entry;
+        }
+
+        return null;
     }
 
     private async void OnDrop(object? sender, DragEventArgs e)
@@ -711,9 +829,12 @@ public sealed partial class PaneView : UserControl
         if (!e.DataTransfer.Contains(DataFormat.File))
             return;
 
-        var destinationPath = ResolveDropDestination(e);
+        var targetEntry = FindEntryUnderDrag(e);
+        var destinationPath = Pane.ResolveDropDestination(targetEntry);
         if (string.IsNullOrEmpty(destinationPath))
             return;
+
+        ClearDropTarget();
 
         var files = e.DataTransfer.TryGetFiles();
         if (files is null || files.Length == 0)
@@ -737,6 +858,6 @@ public sealed partial class PaneView : UserControl
         e.Handled = true;
     }
 
-    private string? ResolveDropDestination(DragEventArgs e)
-        => Pane?.ResolveDropDestination(TryGetEntryFromSource(e.Source));
+    private string? ResolveDropDestination(EntryItemViewModel? targetEntry)
+        => Pane?.ResolveDropDestination(targetEntry);
 }

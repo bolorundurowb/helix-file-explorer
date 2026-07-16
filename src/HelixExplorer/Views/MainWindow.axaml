@@ -87,12 +87,12 @@
                                     Spacing="8"
                                     VerticalAlignment="Center">
                             <Image Source="avares://HelixExplorer/Assets/helix-explorer-icon.png"
-                                   Width="28"
-                                   Height="28"
+                                   Width="24"
+                                   Height="24"
                                    VerticalAlignment="Center" />
                             <TextBlock Text="Helix File Explorer"
                                        VerticalAlignment="Center"
-                                       FontSize="16"
+                                       FontSize="15"
                                        FontWeight="SemiBold" />
                         </StackPanel>
                     </Border>
@@ -254,12 +254,19 @@
                                     CornerRadius="8,8,0,0"
                                     Background="Transparent"
                                     BorderThickness="0"
-                                    Padding="12,6,12,4"
+                                    Padding="0"
                                     MinWidth="150" MaxWidth="220"
                                     PointerReleased="OnTabPointerReleased"
                                     WindowDecorationProperties.ElementRole="User">
-                                <Grid RowDefinitions="Auto,Auto,Auto">
-                                    <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto">
+                                <!-- Fixed-height top bar so titles stay aligned whether tinted or not. -->
+                                <Grid RowDefinitions="4,*,Auto">
+                                    <Border Grid.Row="0"
+                                            Background="{Binding TintBrush}"
+                                            CornerRadius="8,8,0,0"
+                                            IsHitTestVisible="False" />
+                                    <Grid Grid.Row="1"
+                                          Margin="12,5,12,10"
+                                          ColumnDefinitions="Auto,*,Auto">
                                         <PathIcon Grid.Column="0" Data="{DynamicResource HelixFolderIconGeometry}"
                                                   Width="14" Height="14"
                                                   VerticalAlignment="Center"
@@ -280,28 +287,67 @@
                                             <TextBlock Text="✕" />
                                         </Button>
                                     </Grid>
-                                    <Border Grid.Row="1"
-                                            Height="4"
-                                            CornerRadius="2"
-                                            Margin="0,4,0,0"
-                                            Background="{Binding TintBrush}"
-                                            IsVisible="{Binding HasTint}" />
                                     <Border x:Name="TabActiveBar"
                                             Grid.Row="2"
                                             Height="2"
                                             CornerRadius="1"
-                                            Margin="10,4,10,0"
+                                            Margin="10,4,10,4"
                                             Background="{DynamicResource HelixAccentBrush}"
                                             IsVisible="False" />
                                 </Grid>
                                 <Border.ContextMenu>
                                     <ContextMenu>
                                         <MenuItem Header="Tint">
-                                            <MenuItem Header="Red"    Command="{Binding SetTintCommand}" CommandParameter="#E81123" />
-                                            <MenuItem Header="Orange" Command="{Binding SetTintCommand}" CommandParameter="#F7630C" />
-                                            <MenuItem Header="Green"  Command="{Binding SetTintCommand}" CommandParameter="#107C10" />
-                                            <MenuItem Header="Blue"   Command="{Binding SetTintCommand}" CommandParameter="#0078D4" />
-                                            <MenuItem Header="Purple" Command="{Binding SetTintCommand}" CommandParameter="#8764B8" />
+                                            <MenuItem Header="Red" Command="{Binding SetTintCommand}" CommandParameter="#E81123">
+                                                <MenuItem.Icon>
+                                                    <Ellipse Width="12" Height="12" Fill="#E81123" />
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                            <MenuItem Header="Orange" Command="{Binding SetTintCommand}" CommandParameter="#F7630C">
+                                                <MenuItem.Icon>
+                                                    <Ellipse Width="12" Height="12" Fill="#F7630C" />
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                            <MenuItem Header="Yellow" Command="{Binding SetTintCommand}" CommandParameter="#FCE100">
+                                                <MenuItem.Icon>
+                                                    <Ellipse Width="12" Height="12" Fill="#FCE100" Stroke="#C2A800" StrokeThickness="1" />
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                            <MenuItem Header="Green" Command="{Binding SetTintCommand}" CommandParameter="#107C10">
+                                                <MenuItem.Icon>
+                                                    <Ellipse Width="12" Height="12" Fill="#107C10" />
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                            <MenuItem Header="Teal" Command="{Binding SetTintCommand}" CommandParameter="#038387">
+                                                <MenuItem.Icon>
+                                                    <Ellipse Width="12" Height="12" Fill="#038387" />
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                            <MenuItem Header="Blue" Command="{Binding SetTintCommand}" CommandParameter="#0078D4">
+                                                <MenuItem.Icon>
+                                                    <Ellipse Width="12" Height="12" Fill="#0078D4" />
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                            <MenuItem Header="Purple" Command="{Binding SetTintCommand}" CommandParameter="#8764B8">
+                                                <MenuItem.Icon>
+                                                    <Ellipse Width="12" Height="12" Fill="#8764B8" />
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                            <MenuItem Header="Pink" Command="{Binding SetTintCommand}" CommandParameter="#E3008C">
+                                                <MenuItem.Icon>
+                                                    <Ellipse Width="12" Height="12" Fill="#E3008C" />
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                            <MenuItem Header="Brown" Command="{Binding SetTintCommand}" CommandParameter="#8E562E">
+                                                <MenuItem.Icon>
+                                                    <Ellipse Width="12" Height="12" Fill="#8E562E" />
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                            <MenuItem Header="Gray" Command="{Binding SetTintCommand}" CommandParameter="#7A7574">
+                                                <MenuItem.Icon>
+                                                    <Ellipse Width="12" Height="12" Fill="#7A7574" />
+                                                </MenuItem.Icon>
+                                            </MenuItem>
                                         </MenuItem>
                                         <MenuItem Header="Clear tint" Command="{Binding ClearTintCommand}" />
                                         <Separator />
@@ -330,7 +376,6 @@
             </Grid>
         </Border>
 
-        <!-- Navigation Row -->
         <Border DockPanel.Dock="Top"
                 IsVisible="{Binding ShowBrowserChrome}"
                 Background="{DynamicResource HelixToolbarBrush}"
@@ -401,7 +446,6 @@
             </Grid>
         </Border>
 
-        <!-- Action Toolbar -->
         <Border DockPanel.Dock="Top"
                 IsVisible="{Binding ShowFileToolbar}"
                 Background="{DynamicResource HelixToolbarBrush}"
@@ -659,7 +703,6 @@
             </Grid>
         </Border>
 
-        <!-- Status Bar -->
         <Border DockPanel.Dock="Bottom"
                 Background="{DynamicResource HelixStatusBarBrush}"
                 Padding="12,4"

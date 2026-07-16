@@ -30,4 +30,10 @@ public interface IFileOperationService
     ValueTask<FileOperationResult> RenameAsync(string path, string newName, CancellationToken ct = default);
 
     ValueTask<string> CreateFolderAsync(string parentPath, string name, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns true if the specified item can be moved to the Recycle Bin. This performs a dry-run
+    /// test via the Shell file operation engine and does not modify the item.
+    /// </summary>
+    ValueTask<bool> CanMoveToRecycleBinAsync(string path, CancellationToken ct = default);
 }

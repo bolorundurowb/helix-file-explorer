@@ -243,8 +243,9 @@
                             <Setter Property="Opacity" Value="0.75" />
                         </Style>
                         <Style Selector="ScrollBar.horizontal">
-                            <Setter Property="Height" Value="6" />
-                            <Setter Property="Margin" Value="0,0,0,2" />
+                            <Setter Property="Height" Value="2" />
+                            <Setter Property="MaxHeight" Value="2"></Setter>
+                            <Setter Property="Margin" Value="0,0,0,0" />
                         </Style>
                     </ListBox.Styles>
                     <ListBox.ItemTemplate>
@@ -314,8 +315,8 @@
 
                 <Button Grid.Column="1"
                         Command="{Binding NewTabCommand}"
-                        Padding="8,0"
-                        Margin="4,0,0,0"
+                        Padding="5,5"
+                        Margin="5,0,5,0"
                         Background="Transparent"
                         BorderThickness="0"
                         VerticalAlignment="Center"

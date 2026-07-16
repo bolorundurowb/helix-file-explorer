@@ -7,22 +7,15 @@ namespace HelixExplorer.Core.Git;
 /// window. File watchers and rapid navigation can trigger many refreshes for one repo; serving a
 /// recent snapshot avoids spawning a git process for each.
 /// </summary>
-public sealed class GitStatusCache
+public sealed class GitStatusCache(TimeSpan ttl, Func<DateTime>? clock = null)
 {
-    private readonly TimeSpan _ttl;
-    private readonly Func<DateTime> _clock;
+    private readonly Func<DateTime> _clock = clock ?? (() => DateTime.UtcNow);
     private readonly ConcurrentDictionary<string, Entry> _entries = new(StringComparer.OrdinalIgnoreCase);
-
-    public GitStatusCache(TimeSpan ttl, Func<DateTime>? clock = null)
-    {
-        _ttl = ttl;
-        _clock = clock ?? (() => DateTime.UtcNow);
-    }
 
     /// <summary>Returns a cached snapshot for <paramref name="root"/> when one exists and is still fresh.</summary>
     public bool TryGet(string root, out GitStatusSnapshot snapshot)
     {
-        if (_entries.TryGetValue(root, out var entry) && _clock() - entry.Timestamp < _ttl)
+        if (_entries.TryGetValue(root, out var entry) && _clock() - entry.Timestamp < ttl)
         {
             snapshot = entry.Snapshot;
             return true;

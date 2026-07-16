@@ -11,7 +11,9 @@ public readonly record struct FileSystemEntry(
     long SizeBytes,
     DateTime ModifiedUtc,
     string Extension,
-    bool IsHidden = false)
+    bool IsHidden = false,
+    string? OriginalPath = null,
+    DateTime? DeletedAtUtc = null)
 {
     public string TypeLabel => IsDirectory
         ? "Folder"

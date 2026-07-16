@@ -63,6 +63,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     private GitStatusSnapshot _gitSnapshot = GitStatusSnapshot.Empty;
     private bool _disposed;
     private bool _commandNotifyPending;
+    private bool _isRecycleBinWatcherSubscribed;
 
     public PaneViewModel(
         IFileSystemProvider fileSystem,
@@ -107,6 +108,9 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         _selection.SelectionChanged += OnSelectionModelChanged;
         _selection.SelectedEntries.CollectionChanged += OnSelectedEntriesChanged;
     }
+
+    private void OnRecycleBinChanged(object? sender, EventArgs e)
+        => FireAndForgetSafe.Run(RefreshAsync(showLoading: false), _logger);
 
     private void OnSelectionModelChanged(object? sender, EventArgs e)
     {
@@ -243,6 +247,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         _gitSnapshot = GitStatusSnapshot.Empty;
         _refreshCoordinator.CancelGitRefresh();
         _watcher.Watch(isHomeRoute || IsArchive || ShellPath.IsShellPath(value) ? string.Empty : value);
+        UpdateRecycleBinWatcher();
         PasteCommand.NotifyCanExecuteChanged();
         CutCommand.NotifyCanExecuteChanged();
         CopyCommand.NotifyCanExecuteChanged();
@@ -276,6 +281,26 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
             OmnibarMode = OmnibarMode.Path;
 
         FireAndForgetSafe.Run(RefreshAsync(showLoading: true), _logger);
+    }
+
+    private void UpdateRecycleBinWatcher()
+    {
+        var shouldWatch = IsRecycleBin;
+        if (shouldWatch == _isRecycleBinWatcherSubscribed)
+            return;
+
+        if (shouldWatch)
+        {
+            _shellEnumerator.RecycleBinChanged += OnRecycleBinChanged;
+            _shellEnumerator.StartRecycleBinWatcher();
+            _isRecycleBinWatcherSubscribed = true;
+        }
+        else
+        {
+            _shellEnumerator.RecycleBinChanged -= OnRecycleBinChanged;
+            _shellEnumerator.StopRecycleBinWatcher();
+            _isRecycleBinWatcherSubscribed = false;
+        }
     }
 
     partial void OnLocationKindChanged(PaneLocationKind value)
@@ -1438,7 +1463,13 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         try
         {
             foreach (var entry in SelectedEntries)
-                await _shellEnumerator.RestoreAsync(entry.FullPath).ConfigureAwait(true);
+            {
+                var destination = entry.OriginalPath;
+                if (string.IsNullOrEmpty(destination))
+                    destination = entry.FullPath;
+
+                await _shellEnumerator.RestoreAsync(entry.FullPath, destination).ConfigureAwait(true);
+            }
 
             await RefreshAsync(showLoading: false);
             StatusText = UiStrings.RestoredFromRecycleBin;
@@ -1671,6 +1702,12 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         _clipboard.Changed -= OnClipboardChanged;
         _watcher.Changed -= OnWatcherChanged;
         _watcher.Dispose();
+        if (_isRecycleBinWatcherSubscribed)
+        {
+            _shellEnumerator.RecycleBinChanged -= OnRecycleBinChanged;
+            _shellEnumerator.StopRecycleBinWatcher();
+            _isRecycleBinWatcherSubscribed = false;
+        }
         _refreshCoordinator.Dispose();
         IsLoading = false;
     }

@@ -122,7 +122,6 @@ public class AppSettingsTests
         {
             Directory.CreateDirectory(tempDir);
 
-            // Write initial valid settings
             var initial = new AppSettings { Theme = ThemeMode.Light };
             File.WriteAllText(settingsFile,
                 JsonSerializer.Serialize(initial, Options));

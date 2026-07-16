@@ -17,7 +17,6 @@ public sealed class FireAndForgetSafeTests
             logger);
 
         // OperationCanceledException is swallowed, so the logger should never be called.
-        // Wait briefly and verify no errors were logged.
         var completed = await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(1)));
         Assert.NotEqual(tcs.Task, completed);
 
@@ -59,12 +58,8 @@ public sealed class FireAndForgetSafeTests
         Assert.Same(exception, logger.Errors[0].Exception);
     }
 
-    private sealed class TestLogger : ILogger
+    private sealed class TestLogger(TaskCompletionSource? onLog = null) : ILogger
     {
-        private readonly TaskCompletionSource? _onLog;
-
-        public TestLogger(TaskCompletionSource? onLog = null) => _onLog = onLog;
-
         public readonly List<(Exception? Exception, string Message)> Errors = new();
 
         public IDisposable? BeginScope<TState>(TState state)
@@ -82,7 +77,7 @@ public sealed class FireAndForgetSafeTests
             if (logLevel >= LogLevel.Error)
             {
                 Errors.Add((exception, formatter(state, exception)));
-                _onLog?.TrySetResult();
+                onLog?.TrySetResult();
             }
         }
     }

@@ -45,7 +45,11 @@ public sealed class WinNetworkLocationProvider(
         try
         {
             var shellResult = await EnumerateShellNetworkAsync(ct).ConfigureAwait(false);
-            if (shellResult.Status == NetworkDiscoveryStatus.Discovered)
+
+            // The Shell Network folder is often empty on modern Windows (SMBv1/NetBIOS disabled),
+            // but that is an authoritative result. Only fall back to slow WNet broadcasting when
+            // the Shell provider itself errored, not when it successfully returned zero locations.
+            if (shellResult.Status != NetworkDiscoveryStatus.DiscoveryFailed)
                 return shellResult;
 
             var wnetResult = await Task.Run(() => EnumerateWNetNetworkLocations(ct), ct).ConfigureAwait(false);

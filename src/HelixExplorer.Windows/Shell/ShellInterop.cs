@@ -19,6 +19,9 @@ internal static class Shell32Native
     public const int SW_SHOWNORMAL = 1;
     public const uint SEE_MASK_INVOKEIDLIST = 0x0000000C;
 
+    public const uint SHERB_NOCONFIRMATION = 0x00000001;
+    public const uint SHERB_NOPROGRESSUI = 0x00000002;
+
     [DllImport("shell32.dll")]
     public static extern int SHGetDesktopFolder(out IShellFolder ppshf);
 
@@ -53,6 +56,12 @@ internal static class Shell32Native
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     public static extern bool ShellExecuteEx(ref SHELLEXECUTEINFO lpExecInfo);
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = false)]
+    public static extern int SHQueryRecycleBin(string? pszRootPath, ref SHQUERYRBINFO pSHQueryRBInfo);
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = false)]
+    public static extern int SHEmptyRecycleBin(IntPtr hwnd, string? pszRootPath, uint dwFlags);
 
     [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)]
     public static extern int StrRetToBuf(ref STRRET pstr, IntPtr pidl, [MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder pszBuf, int cchBuf);
@@ -215,4 +224,12 @@ internal struct STRRET
     [FieldOffset(4)] public IntPtr pOleStr;
     [FieldOffset(4)] public IntPtr pStr;
     [FieldOffset(4)] public uint uOffset;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct SHQUERYRBINFO
+{
+    public uint cbSize;
+    public long i64Size;
+    public long i64NumItems;
 }

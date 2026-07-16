@@ -40,6 +40,19 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
         IFileOperationControl? control = null)
     {
         var total = paths.Count;
+        if (total == 0)
+            return new FileOperationResult(0, 0, 0, Array.Empty<FileOperationFailure>());
+
+        if (!permanently)
+        {
+            control?.WaitIfPaused(ct);
+            var (success, count) = await ShellFileOperationsHelper.DeleteToRecycleBinAsync(paths, progress, ct).ConfigureAwait(false);
+            var recycleFailures = new List<FileOperationFailure>();
+            for (var i = count; i < total; i++)
+                recycleFailures.Add(new FileOperationFailure(paths[i], "Recycle bin operation failed."));
+            return new FileOperationResult(count, 0, recycleFailures.Count, recycleFailures);
+        }
+
         var succeeded = 0;
         var failures = new List<FileOperationFailure>();
 
@@ -54,19 +67,12 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
 
                 try
                 {
-                    if (permanently)
-                    {
-                        if (File.Exists(path))
-                            File.Delete(path);
-                        else if (Directory.Exists(path))
-                            Directory.Delete(path, recursive: true);
-                        else
-                            throw new FileNotFoundException($"The item '{path}' no longer exists.", path);
-                    }
+                    if (File.Exists(path))
+                        File.Delete(path);
+                    else if (Directory.Exists(path))
+                        Directory.Delete(path, recursive: true);
                     else
-                    {
-                        SendToRecycleBin(path);
-                    }
+                        throw new FileNotFoundException($"The item '{path}' no longer exists.", path);
 
                     succeeded++;
                 }
@@ -122,6 +128,11 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
             Directory.CreateDirectory(fullPath);
             return fullPath;
         }, ct).ConfigureAwait(false);
+    }
+
+    public async ValueTask<bool> CanMoveToRecycleBinAsync(string path, CancellationToken ct = default)
+    {
+        return await ShellFileOperationsHelper.CanMoveToRecycleBinAsync(path, ct).ConfigureAwait(false);
     }
 
     private FileOperationResult ProcessSources(
@@ -396,38 +407,4 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
         }
     }
 
-    private void SendToRecycleBin(string path)
-    {
-        try
-        {
-            var info = new FileInfo(path);
-            if (info.Exists)
-            {
-                Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(
-                    path,
-                    Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs,
-                    Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
-                return;
-            }
-
-            var dirInfo = new DirectoryInfo(path);
-            if (dirInfo.Exists)
-            {
-                Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory(
-                    path,
-                    Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs,
-                    Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
-                return;
-            }
-
-            // Neither a file nor a directory exists at this path: surface it as a real failure
-            // instead of silently reporting success (which hid missing/already-deleted items).
-            throw new FileNotFoundException($"The item '{path}' no longer exists.", path);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Recycle bin operation failed for '{Path}'", path);
-            throw;
-        }
-    }
 }

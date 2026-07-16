@@ -42,6 +42,8 @@ public sealed partial class EntryItemViewModel : ObservableObject
     public DateTime ModifiedUtc => _entry.ModifiedUtc;
     public string Extension => _entry.Extension;
     public string TypeLabel => _entry.TypeLabel;
+    public string? OriginalPath => _entry.OriginalPath;
+    public DateTime? DeletedAtUtc => _entry.DeletedAtUtc;
 
     internal void UpdateEntry(FileSystemEntry entry, bool showFileExtensions, GitFileStatus gitStatus)
     {
@@ -64,6 +66,8 @@ public sealed partial class EntryItemViewModel : ObservableObject
         OnPropertyChanged(nameof(ModifiedUtc));
         OnPropertyChanged(nameof(Extension));
         OnPropertyChanged(nameof(TypeLabel));
+        OnPropertyChanged(nameof(OriginalPath));
+        OnPropertyChanged(nameof(DeletedAtUtc));
         OnPropertyChanged(nameof(FullPath));
         OnPropertyChanged(nameof(IconAppearance));
     }

@@ -43,7 +43,6 @@ public sealed class WinTerminalLauncher : ITerminalLauncher
         return TryStart(new ProcessStartInfo
         {
             FileName = "wt.exe",
-            // FileName = "wt",
             Arguments = args,
             UseShellExecute = true,
             CreateNoWindow = false

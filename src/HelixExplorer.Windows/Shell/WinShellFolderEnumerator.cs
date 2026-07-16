@@ -1,12 +1,14 @@
 using System.Runtime.InteropServices;
+using System.Security.Principal;
 using System.Text;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Models;
+using HelixExplorer.Windows.FileSystem;
 using Microsoft.Extensions.Logging;
 
 namespace HelixExplorer.Windows.Shell;
 
-public sealed class WinShellFolderEnumerator(ILogger<WinShellFolderEnumerator> logger) : IShellFolderEnumerator
+public sealed class WinShellFolderEnumerator : IShellFolderEnumerator, IDisposable
 {
     private const uint ShgdnForParsing = 0x8000;
     private const uint ShgdnNormal = 0;
@@ -14,47 +16,100 @@ public sealed class WinShellFolderEnumerator(ILogger<WinShellFolderEnumerator> l
     private const uint ShcontFolder = 0x10;
     private const uint ShcontNonFolder = 0x40;
 
-    public async ValueTask<IReadOnlyList<FileSystemEntry>> EnumerateAsync(string shellPath, CancellationToken ct = default)
-        => await Task.Run(() => Enumerate(shellPath, ct), ct).ConfigureAwait(false);
+    private readonly ILogger<WinShellFolderEnumerator> _logger;
+    private readonly RecycleBinWatcher _recycleBinWatcher = new();
 
-    public async ValueTask RestoreAsync(string itemPath, CancellationToken ct = default)
+    public WinShellFolderEnumerator(ILogger<WinShellFolderEnumerator> logger)
     {
-        await Task.Run(() =>
-        {
-            ct.ThrowIfCancellationRequested();
-            var info = new SHELLEXECUTEINFO
-            {
-                cbSize = Marshal.SizeOf<SHELLEXECUTEINFO>(),
-                fMask = Shell32Native.SEE_MASK_INVOKEIDLIST,
-                lpVerb = "undelete",
-                lpFile = itemPath,
-                nShow = Shell32Native.SW_SHOWNORMAL
-            };
-            if (!Shell32Native.ShellExecuteEx(ref info))
-                throw new InvalidOperationException($"Restore failed for '{itemPath}'.");
-        }, ct).ConfigureAwait(false);
+        _logger = logger;
+        _recycleBinWatcher.Changed += (_, _) => RecycleBinChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public async ValueTask<IReadOnlyList<FileSystemEntry>> EnumerateAsync(string shellPath, CancellationToken ct = default)
+        => await STATask.Run(() => Enumerate(shellPath, ct), ct).ConfigureAwait(false);
+
+    public async ValueTask RestoreAsync(string itemPath, string? destinationPath = null, CancellationToken ct = default)
+    {
+        destinationPath ??= ReadRecycleBinMetadata(itemPath)?.OriginalPath;
+        if (string.IsNullOrEmpty(destinationPath))
+            throw new InvalidOperationException($"Could not determine original path for '{itemPath}'.");
+
+        var success = await ShellFileOperationsHelper.RestoreFromRecycleBinAsync(
+            itemPath, destinationPath, ct).ConfigureAwait(false);
+
+        if (!success)
+            throw new InvalidOperationException($"Restore failed for '{itemPath}'.");
     }
 
     public async ValueTask EmptyRecycleBinAsync(CancellationToken ct = default)
     {
-        await Task.Run(() =>
+        await STATask.Run(() =>
         {
             ct.ThrowIfCancellationRequested();
-            var info = new SHELLEXECUTEINFO
-            {
-                cbSize = Marshal.SizeOf<SHELLEXECUTEINFO>(),
-                fMask = Shell32Native.SEE_MASK_INVOKEIDLIST,
-                lpVerb = "empty",
-                lpFile = ShellPath.RecycleBin,
-                nShow = Shell32Native.SW_SHOWNORMAL
-            };
-            Shell32Native.ShellExecuteEx(ref info);
+            Shell32Native.SHEmptyRecycleBin(
+                IntPtr.Zero,
+                null,
+                Shell32Native.SHERB_NOCONFIRMATION | Shell32Native.SHERB_NOPROGRESSUI);
         }, ct).ConfigureAwait(false);
     }
+
+    public async ValueTask<(long ItemCount, long TotalSize)> QueryRecycleBinAsync(CancellationToken ct = default)
+    {
+        return await STATask.Run(() =>
+        {
+            ct.ThrowIfCancellationRequested();
+            var info = new SHQUERYRBINFO { cbSize = (uint)Marshal.SizeOf<SHQUERYRBINFO>() };
+            var hr = Shell32Native.SHQueryRecycleBin(null, ref info);
+            return hr == 0
+                ? (info.i64NumItems, info.i64Size)
+                : (0L, 0L);
+        }, ct).ConfigureAwait(false);
+    }
+
+    public bool HasRecycleBinItems()
+    {
+        var sid = WindowsIdentity.GetCurrent().User?.Value;
+        if (string.IsNullOrEmpty(sid))
+            return false;
+
+        foreach (var drive in System.IO.DriveInfo.GetDrives())
+        {
+            if (!drive.IsReady || drive.DriveType == System.IO.DriveType.Network)
+                continue;
+
+            var recyclePath = System.IO.Path.Combine(drive.RootDirectory.FullName, "$RECYCLE.BIN", sid);
+            if (!System.IO.Directory.Exists(recyclePath))
+                continue;
+
+            try
+            {
+                if (System.IO.Directory.EnumerateFiles(recyclePath, "$I*", System.IO.SearchOption.TopDirectoryOnly).Any())
+                    return true;
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+            catch (IOException)
+            {
+            }
+        }
+
+        return false;
+    }
+
+    public event EventHandler? RecycleBinChanged;
+
+    public void StartRecycleBinWatcher() => _recycleBinWatcher.Start();
+
+    public void StopRecycleBinWatcher() => _recycleBinWatcher.Stop();
+
+    public void Dispose() => _recycleBinWatcher.Dispose();
 
     private IReadOnlyList<FileSystemEntry> Enumerate(string shellPath, CancellationToken ct)
     {
         var entries = new List<FileSystemEntry>();
+        var isRecycleBin = ShellPath.IsRecycleBin(shellPath);
+
         if (!Shell32Native.TryGetDesktopFolder(out var desktop) || desktop is null)
             return entries;
 
@@ -96,12 +151,12 @@ public sealed class WinShellFolderEnumerator(ILogger<WinShellFolderEnumerator> l
 
                     try
                     {
-                        if (TryMapEntry(folder, childPidl, out var entry))
+                        if (TryMapEntry(folder, childPidl, isRecycleBin, out var entry))
                             entries.Add(entry);
                     }
                     catch (Exception ex)
                     {
-                        logger.LogWarning(ex, "Skipping failed shell entry");
+                        _logger.LogWarning(ex, "Skipping failed shell entry");
                     }
                     finally
                     {
@@ -111,7 +166,7 @@ public sealed class WinShellFolderEnumerator(ILogger<WinShellFolderEnumerator> l
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Shell enumerate failed for '{ShellPath}'", shellPath);
+                _logger.LogError(ex, "Shell enumerate failed for '{ShellPath}'", shellPath);
             }
             finally
             {
@@ -135,7 +190,7 @@ public sealed class WinShellFolderEnumerator(ILogger<WinShellFolderEnumerator> l
         }
     }
 
-    private static bool TryMapEntry(IShellFolder folder, IntPtr pidl, out FileSystemEntry entry)
+    private static bool TryMapEntry(IShellFolder folder, IntPtr pidl, bool isRecycleBin, out FileSystemEntry entry)
     {
         entry = default;
         var parsingName = GetDisplayName(folder, pidl, ShgdnForParsing);
@@ -160,7 +215,77 @@ public sealed class WinShellFolderEnumerator(ILogger<WinShellFolderEnumerator> l
             DateTime.MinValue,
             isDir ? string.Empty : Path.GetExtension(displayName),
             IsHidden: false);
+
+        if (isRecycleBin)
+            entry = EnrichRecycleBinEntry(entry, parsingName);
+
         return true;
+    }
+
+    private static FileSystemEntry EnrichRecycleBinEntry(FileSystemEntry entry, string recyclePath)
+    {
+        if (string.IsNullOrWhiteSpace(recyclePath))
+            return entry;
+
+        var metadata = ReadRecycleBinMetadata(recyclePath);
+        if (metadata is null)
+            return entry;
+
+        var (size, deletedAt, originalPath) = metadata.Value;
+        return entry with
+        {
+            SizeBytes = size,
+            ModifiedUtc = deletedAt,
+            OriginalPath = originalPath,
+            DeletedAtUtc = deletedAt
+        };
+    }
+
+    private static (long Size, DateTime DeletedAtUtc, string OriginalPath)? ReadRecycleBinMetadata(string rPath)
+    {
+        var fileName = Path.GetFileName(rPath);
+        if (string.IsNullOrEmpty(fileName) || !fileName.StartsWith("$R", StringComparison.Ordinal))
+            return null;
+
+        var directory = Path.GetDirectoryName(rPath);
+        if (string.IsNullOrEmpty(directory))
+            return null;
+
+        var iFileName = "$I" + fileName.Substring(2);
+        var iPath = Path.Combine(directory, iFileName);
+        if (!File.Exists(iPath))
+            return null;
+
+        try
+        {
+            using var fs = new FileStream(iPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            using var reader = new BinaryReader(fs, Encoding.Unicode);
+
+            var header = reader.ReadBytes(8);
+            if (header.Length < 8 || header[0] != (byte)'$' || header[1] != (byte)'I')
+                return null;
+
+            var fileSize = reader.ReadInt64();
+            var fileTime = reader.ReadInt64();
+            var deletedAt = DateTime.FromFileTimeUtc(fileTime);
+
+            var pathLength = reader.ReadInt32();
+            if (pathLength <= 0 || pathLength > 32 * 1024)
+                return null;
+
+            var pathBytes = reader.ReadBytes(pathLength * 2);
+            var originalPath = Encoding.Unicode.GetString(pathBytes);
+
+            return (fileSize, deletedAt, originalPath);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
     }
 
     /// <summary>

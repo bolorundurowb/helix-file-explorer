@@ -142,6 +142,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         DefaultSplitOrientation = settings.DefaultSplitOrientation;
         AccentColorArgb = settings.AccentColorArgb;
         ApplyOpenInTerminalGesture(settings.OpenInTerminalGesture);
+        AutoCheckForUpdates = settings.AutoCheckForUpdates;
 
         _accentBrushes.ApplyCustomAccent(AccentColorArgb);
         _themeService.ThemeChanged += OnThemeServiceChanged;
@@ -199,6 +200,11 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             : persisted!;
     }
 
+    [ObservableProperty]
+    private bool _autoCheckForUpdates = true;
+
+    partial void OnAutoCheckForUpdatesChanged(bool value) => PersistChromeSettings();
+
     /// <summary>
     /// Proxies the active pane so one window-level <see cref="KeyBinding"/> works regardless of focus.
     /// </summary>
@@ -225,20 +231,48 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         if (restoreSession)
         {
             RestoreSession();
-            return;
         }
-
-        if (!string.IsNullOrWhiteSpace(initialPath))
+        else if (!string.IsNullOrWhiteSpace(initialPath))
         {
             var tab = CreateDefaultTab();
             tab.LeftPane.NavigateTo(initialPath);
             AddTab(tab);
             SelectedTab = tab;
-            return;
+        }
+        else
+        {
+            AddTab(CreateDefaultTab());
+            SelectedTab = Tabs[0];
         }
 
-        AddTab(CreateDefaultTab());
-        SelectedTab = Tabs[0];
+        _ = CheckForUpdatesInBackgroundAsync();
+    }
+
+    private async Task CheckForUpdatesInBackgroundAsync()
+    {
+        if (!AutoCheckForUpdates)
+            return;
+
+        await Task.Delay(TimeSpan.FromSeconds(3)).ConfigureAwait(true);
+
+        if (!AutoCheckForUpdates || _settingsPage.IsCheckingForUpdates)
+            return;
+
+        var command = _settingsPage.CheckForUpdatesCommand;
+        if (command.CanExecute(null))
+            command.Execute(null);
+
+        while (_settingsPage.IsCheckingForUpdates)
+            await Task.Delay(200).ConfigureAwait(true);
+
+        if (_settingsPage.HasUpdate && _settingsPage.UpdateReleaseUrl is { Length: > 0 } url)
+        {
+            var wantsDownload = await _dialogs.ConfirmAsync(
+                "Update Available",
+                $"A new version of Helix Explorer is available.\n\n{_settingsPage.UpdateStatus}\n\nWould you like to download it now?");
+            if (wantsDownload)
+                OpenUrl(url);
+        }
     }
 
     public bool ShouldRestoreWindowLayout => _restoreWindowLayout;
@@ -603,6 +637,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         settings.OpenInTerminalGesture = string.IsNullOrWhiteSpace(OpenInTerminalGesture)
             ? AppDefaultTerminalGesture
             : OpenInTerminalGesture;
+        settings.AutoCheckForUpdates = AutoCheckForUpdates;
         _cachedSettings = settings;
         SchedulePersistSettings();
     }

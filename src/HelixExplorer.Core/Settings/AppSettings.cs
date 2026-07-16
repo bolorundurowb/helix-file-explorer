@@ -37,6 +37,7 @@ public sealed class AppSettings
     /// Empty or invalid values fall back to the default (<c>Ctrl+OemTilde</c>) at load time.
     /// </summary>
     public string OpenInTerminalGesture { get; set; } = "Ctrl+OemTilde";
+    public bool AutoCheckForUpdates { get; set; } = true;
 }
 
 public enum SizeDisplayMode

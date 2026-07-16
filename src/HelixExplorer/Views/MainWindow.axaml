@@ -193,24 +193,26 @@
                 Padding="{DynamicResource HelixTabStripPadding}"
                 Height="{DynamicResource HelixTitleBarHeight}"
                 WindowDecorationProperties.ElementRole="TitleBar">
-            <Grid ColumnDefinitions="*,Auto">
-                <ListBox x:Name="TabStrip"
-                         Grid.Column="0"
-                         HorizontalAlignment="Left"
-                         ItemsSource="{Binding Tabs}"
-                         SelectedItem="{Binding SelectedTab, Mode=TwoWay}"
-                         Background="Transparent"
-                         BorderThickness="0"
-                         Padding="0"
-                         PointerWheelChanged="OnTabStripWheel"
-                         ScrollViewer.VerticalScrollBarVisibility="Disabled"
-                         ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                         WindowDecorationProperties.ElementRole="User">
-                    <ListBox.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <StackPanel Orientation="Horizontal" Spacing="2" />
-                        </ItemsPanelTemplate>
-                    </ListBox.ItemsPanel>
+            <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Disabled"
+                          AllowAutoHide="False"
+                          WindowDecorationProperties.ElementRole="User">
+                <StackPanel Orientation="Horizontal">
+                    <ListBox x:Name="TabStrip"
+                             ItemsSource="{Binding Tabs}"
+                             SelectedItem="{Binding SelectedTab, Mode=TwoWay}"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             Padding="0"
+                             PointerWheelChanged="OnTabStripWheel"
+                             ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             WindowDecorationProperties.ElementRole="User">
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" Spacing="2" />
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
                     <ListBox.Styles>
                         <Style Selector="ListBoxItem">
                             <Setter Property="Padding" Value="0" />
@@ -358,10 +360,8 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
-
-                <Button Grid.Column="1"
-                        Command="{Binding NewTabCommand}"
-                        Padding="5,5"
+                <Button Command="{Binding NewTabCommand}"
+                        Padding="9,5"
                         Margin="5,0,5,0"
                         Background="Transparent"
                         BorderThickness="0"
@@ -373,7 +373,8 @@
                               Width="12" Height="12"
                               Opacity="0.75" />
                 </Button>
-            </Grid>
+            </StackPanel>
+        </ScrollViewer>
         </Border>
 
         <Border DockPanel.Dock="Top"

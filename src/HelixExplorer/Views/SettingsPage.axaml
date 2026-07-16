@@ -276,6 +276,14 @@
                                     HorizontalAlignment="Left"
                                     IsEnabled="{Binding !IsCheckingForUpdates}"
                                     Padding="16,8" />
+                            <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">
+                                <TextBlock Grid.Column="0"
+                                           Text="Check for updates automatically"
+                                           FontSize="13"
+                                           VerticalAlignment="Center" />
+                                <ToggleSwitch Grid.Column="1"
+                                              IsChecked="{Binding Main.AutoCheckForUpdates, Mode=TwoWay}" />
+                            </Grid>
                             <Button Content="Download Update"
                                     Command="{Binding OpenReleaseUrlCommand}"
                                     HorizontalAlignment="Left"

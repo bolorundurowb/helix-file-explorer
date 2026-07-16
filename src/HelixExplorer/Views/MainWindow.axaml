@@ -193,24 +193,9 @@
                 Padding="{DynamicResource HelixTabStripPadding}"
                 Height="{DynamicResource HelixTitleBarHeight}"
                 WindowDecorationProperties.ElementRole="TitleBar">
-            <Grid ColumnDefinitions="Auto,*">
-                <Button Grid.Column="0"
-                        Command="{Binding NewTabCommand}"
-                        Padding="8,0"
-                        Margin="0,0,4,0"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        VerticalAlignment="Center"
-                        Cursor="Hand"
-                        ToolTip.Tip="New Tab (Ctrl+T)"
-                        WindowDecorationProperties.ElementRole="User">
-                    <PathIcon Data="{DynamicResource HelixIconAddGeometry}"
-                              Width="12" Height="12"
-                              Opacity="0.75" />
-                </Button>
-
+            <Grid ColumnDefinitions="*,Auto">
                 <ListBox x:Name="TabStrip"
-                         Grid.Column="1"
+                         Grid.Column="0"
                          HorizontalAlignment="Left"
                          ItemsSource="{Binding Tabs}"
                          SelectedItem="{Binding SelectedTab, Mode=TwoWay}"
@@ -256,6 +241,10 @@
                         </Style>
                         <Style Selector="ListBoxItem:not(:selected) TextBlock#TabTitle">
                             <Setter Property="Opacity" Value="0.75" />
+                        </Style>
+                        <Style Selector="ScrollBar.horizontal">
+                            <Setter Property="Height" Value="6" />
+                            <Setter Property="Margin" Value="0,0,0,2" />
                         </Style>
                     </ListBox.Styles>
                     <ListBox.ItemTemplate>
@@ -322,6 +311,21 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
+
+                <Button Grid.Column="1"
+                        Command="{Binding NewTabCommand}"
+                        Padding="8,0"
+                        Margin="4,0,0,0"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        VerticalAlignment="Center"
+                        Cursor="Hand"
+                        ToolTip.Tip="New Tab (Ctrl+T)"
+                        WindowDecorationProperties.ElementRole="User">
+                    <PathIcon Data="{DynamicResource HelixIconAddGeometry}"
+                              Width="12" Height="12"
+                              Opacity="0.75" />
+                </Button>
             </Grid>
         </Border>
 

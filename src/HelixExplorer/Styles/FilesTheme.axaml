@@ -132,8 +132,8 @@
     <!-- ══ Window chrome (Win11-style caption buttons) ═══════════════════════ -->
     <Styles.Resources>
         <x:Double x:Key="CaptionButtonWidth">46</x:Double>
-        <x:Double x:Key="CaptionButtonHeight">32</x:Double>
-        <x:Double x:Key="HelixTitleBarHeight">32</x:Double>
+        <x:Double x:Key="CaptionButtonHeight">40</x:Double>
+        <x:Double x:Key="HelixTitleBarHeight">40</x:Double>
         <!-- 3 caption buttons at 46px -->
         <x:Double x:Key="HelixCaptionButtonAreaWidth">138</x:Double>
         <Thickness x:Key="HelixTabStripPadding">8,0,138,0</Thickness>

@@ -1,121 +1,68 @@
 using System.Diagnostics;
 using HelixExplorer.Core.Infrastructure;
+using Microsoft.Win32;
 
 namespace HelixExplorer.Windows.Shell;
 
 /// <summary>
-/// Launches Windows Terminal (preferred) at a directory, opening a new tab in an existing window
-/// so it matches the "Open in Terminal" behaviour users expect. Windows Terminal is invoked with
-/// <c>wt -w 0 new-tab -d "&lt;dir&gt;"</c> (no <c>-p</c>) so the user's selected default profile is
-/// used. Git Bash / pwsh / cmd remain only as final fallbacks when Windows Terminal cannot be found
-/// or fails to launch.
+/// Launches a terminal at a directory. When Windows Terminal is the user's default
+/// terminal emulator (detected via the <c>DelegationTerminal</c> registry key), the
+/// command <c>wt -w 0 new-tab -d "&lt;dir&gt;"</c> is used, which opens a new tab in
+/// an existing window with the user's chosen default profile.  Otherwise, the code
+/// falls back to pwsh.exe, powershell.exe, git-bash.exe, or cmd.exe in that order.
 /// </summary>
 public sealed class WinTerminalLauncher : ITerminalLauncher
 {
+    // DelegationTerminal CLSIDs registered by Windows Terminal (stable + preview).
+    // Source: microsoft/terminal policies/WindowsTerminal.admx.
+    private static readonly string[] WindowsTerminalClsids =
+    [
+        "{E12CFF52-A866-4C77-9A90-F570A7AA2C6B}", // Windows Terminal (stable)
+        "{86633F1F-6454-40EC-89CE-DA4EBA977EE2}", // Windows Terminal Preview
+    ];
+
     public bool TryOpenInDirectory(string directoryPath)
     {
         if (string.IsNullOrWhiteSpace(directoryPath) || !Directory.Exists(directoryPath))
             return false;
 
         var fullPath = Path.GetFullPath(directoryPath);
-        var wtPath = ResolveWindowsTerminalPath();
 
-        if (wtPath is not null)
-        {
-            if (TryOpenWindowsTerminalNewTab(fullPath, wtPath))
-                return true;
+        if (IsWindowsTerminalDefault() && TryOpenWindowsTerminalNewTab(fullPath))
+            return true;
 
-            // The first attempt may fail on the app-execution-alias reparse point if the OS
-            // proxy fails to resolve it; try the resolved target of the alias next.
-            var resolved = TryResolveAliasTarget(wtPath);
-            if (!string.IsNullOrEmpty(resolved)
-                && !string.Equals(resolved, wtPath, StringComparison.OrdinalIgnoreCase)
-                && TryOpenWindowsTerminalNewTab(fullPath, resolved))
-            {
-                return true;
-            }
-        }
-
-        // Windows Terminal is genuinely unavailable — fall back to a registered shell. Only use
-        // Git Bash as a *last* resort; we do not want to override the user's Windows Terminal
-        // default profile (which may legitimately be Git Bash but should still open in WT).
         return TryOpenFallbackShell(fullPath);
     }
 
-    private static bool TryOpenWindowsTerminalNewTab(string directoryPath, string wtPath)
+    private static bool TryOpenWindowsTerminalNewTab(string directoryPath)
     {
-        // -w 0 targets the most recently used window; "new-tab" opens a tab inside it without
-        // spawning a second window. Omitting -p lets Windows Terminal use the default profile
-        // the user has set in settings.json.
+        // Just use "wt.exe" — Process.Start with UseShellExecute resolves it from
+        // PATH / AppExecutionAlias without needing to locate the binary on disk.
         var args = $"-w 0 new-tab -d \"{directoryPath}\"";
 
         return TryStart(new ProcessStartInfo
         {
-            FileName = wtPath,
+            FileName = "wt.exe",
+            // FileName = "wt",
             Arguments = args,
             UseShellExecute = true,
             CreateNoWindow = false
         });
     }
 
-    private static string? ResolveWindowsTerminalPath()
-    {
-        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var candidates = new[]
-        {
-            Path.Combine(localAppData, @"Microsoft\WindowsApps\wt.exe"),
-            Path.Combine(localAppData, @"Microsoft\WindowsApps\WindowsTerminal.exe")
-        };
-
-        foreach (var candidate in candidates)
-        {
-            if (File.Exists(candidate))
-                return candidate;
-        }
-
-        return ResolveExecutableOnPath("wt.exe");
-    }
-
-    /// <summary>
-    /// The <c>wt.exe</c> under <c>Microsoft\WindowsApps</c> is a reparse point / execution alias.
-    /// If launching it directly fails, resolve the underlying <c>WindowTerminal.exe</c> in the
-    /// MSIX package install location and try again.
-    /// </summary>
-    private static string? TryResolveAliasTarget(string wtPath)
+    private static bool IsWindowsTerminalDefault()
     {
         try
         {
-            // Resolve any reparse points (true) — this returns the real wt.exe/WindowsTerminal.exe.
-            var resolved = Path.GetFullPath(wtPath);
-            if (!string.IsNullOrEmpty(resolved) && File.Exists(resolved))
-                return resolved;
+            using var key = Registry.CurrentUser.OpenSubKey(@"Console\%%Startup");
+            if (key?.GetValue("DelegationTerminal") is string clsid)
+                return WindowsTerminalClsids.Contains(clsid, StringComparer.OrdinalIgnoreCase);
         }
         catch
         {
         }
 
-        // Last-resort: probe Program Files\WindowsApps for Microsoft.WindowsTerminal*\WindowsTerminal.exe
-        try
-        {
-            var windowsApps = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                "WindowsApps");
-
-            if (Directory.Exists(windowsApps))
-            {
-                foreach (var dir in Directory.EnumerateDirectories(windowsApps, "Microsoft.WindowsTerminal*"))
-                {
-                    var exe = Path.Combine(dir, "WindowsTerminal.exe");
-                    if (File.Exists(exe))
-                        return exe;
-                }
-            }
-        }
-        catch
-        {
-        }
-
-        return null;
+        return false;
     }
 
     private static bool TryOpenFallbackShell(string directoryPath)

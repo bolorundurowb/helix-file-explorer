@@ -1,11 +1,10 @@
 namespace HelixExplorer.Core.Session;
 
-/// <summary>Loads and persists the workspace session snapshot.</summary>
 public interface ISessionStore
 {
-    /// <summary>Loads the last session, or an empty document when none exists / is corrupt.</summary>
+    /// <summary>Missing or corrupt session yields an empty document so callers need not special-case load failures.</summary>
     SessionDocument Load();
 
-    /// <summary>Atomically writes the session snapshot to disk.</summary>
+    /// <summary>Atomic write so a crash mid-save cannot corrupt session.json.</summary>
     void Save(SessionDocument document);
 }

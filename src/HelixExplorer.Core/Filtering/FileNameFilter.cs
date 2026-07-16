@@ -4,13 +4,10 @@ using HelixExplorer.Core.Models;
 namespace HelixExplorer.Core.Filtering;
 
 /// <summary>
-/// Low-allocation, case-insensitive substring matching for the in-view quick filter (Ctrl+F).
-/// Hot path uses <see cref="SearchValues{T}"/> for a SIMD first-character probe, then confirms
-/// with span <c>Contains</c>; never allocates via <c>ToLower()</c>.
+/// SIMD first-char probe via <see cref="SearchValues{T}"/>; never allocates via <c>ToLower()</c>.
 /// </summary>
 public static class FileNameFilter
 {
-    /// <summary>True when <paramref name="query"/> is blank or a case-insensitive substring of <paramref name="name"/>.</summary>
     public static bool Matches(ReadOnlySpan<char> name, ReadOnlySpan<char> query)
     {
         query = query.Trim();
@@ -21,21 +18,16 @@ public static class FileNameFilter
         if (query.Length == 1)
             return name.ContainsAny(probe);
 
-        // Reject quickly when the first character never appears, then confirm the full substring.
+        // First-char miss is the common case; skip full Contains to keep Ctrl+F cheap on large lists.
         if (!name.ContainsAny(probe))
             return false;
 
         return name.Contains(query, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>True when the entry's name matches the query.</summary>
     public static bool Matches(in FileSystemEntry entry, string? query)
         => Matches(entry.Name.AsSpan(), (query ?? string.Empty).AsSpan());
 
-    /// <summary>
-    /// Copies matching entries from <paramref name="source"/> into <paramref name="destination"/>,
-    /// preserving order. Returns the number of matches written.
-    /// </summary>
     public static int Apply(
         IReadOnlyList<FileSystemEntry> source,
         string? query,

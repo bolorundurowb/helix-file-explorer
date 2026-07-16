@@ -3,7 +3,6 @@ using HelixExplorer.Core.Infrastructure;
 
 namespace HelixExplorer.Services;
 
-/// <summary>Shared helpers for reporting file-operation outcomes to the user.</summary>
 public static class FileOperationUiHelper
 {
     public static IFileConflictResolver CreateConflictResolver(IUserDialogService dialogs)

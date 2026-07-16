@@ -6,7 +6,6 @@ using HelixExplorer.ViewModels;
 
 namespace HelixExplorer.Converters;
 
-/// <summary>Maps a listing entry (or its IsDirectory flag) to a folder/file glyph.</summary>
 public sealed class EntryIconConverter : IValueConverter
 {
     private const string FolderPath =

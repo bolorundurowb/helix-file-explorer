@@ -6,9 +6,7 @@ using HelixExplorer.Windows.Theming;
 namespace HelixExplorer.Services;
 
 /// <summary>
-/// Encapsulates startup wiring that used to live in <see cref="App.axaml.cs"/>:
-/// theme/accent application, resource-converter initialization, and the Win32 theme watcher.
-/// Keeping this in a dedicated service makes the application bootstrap layer thin and testable.
+/// Startup wiring extracted from <see cref="App.axaml.cs"/> so the bootstrap layer stays thin and testable.
 /// </summary>
 public sealed class ApplicationStartupCoordinator(
     ISettingsStore settingsStore,

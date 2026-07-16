@@ -6,19 +6,18 @@ using Microsoft.Extensions.Logging;
 namespace HelixExplorer.Core.Git;
 
 /// <summary>
-/// Git status via the CLI. Repository-root lookups and recent status snapshots are cached so rapid,
-/// repeated refreshes for the same repo coalesce instead of spawning a git process each time.
+/// Repository-root lookups and status snapshots are cached so rapid refreshes coalesce
+/// instead of spawning a git process each time.
 /// </summary>
 public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvider
 {
     private const string GitExe = "git";
 
-    /// <summary>Window during which a repeated status request for the same root reuses the last snapshot.</summary>
     private static readonly TimeSpan StatusCacheTtl = TimeSpan.FromMilliseconds(750);
 
     private readonly GitStatusCache _statusCache = new(StatusCacheTtl);
 
-    /// <summary>Cache of directory → repository root (null sentinel stored as empty string).</summary>
+    /// <summary>Null roots are stored as empty string so negative lookups stay cached.</summary>
     private readonly ConcurrentDictionary<string, string?> _rootCache = new(StringComparer.OrdinalIgnoreCase);
 
     public bool IsInsideRepository(string path) => ResolveRepoRoot(path) is not null;
@@ -51,7 +50,7 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
         }
     }
 
-    /// <summary>Repository-root lookup with per-directory caching to avoid repeated upward directory walks.</summary>
+    /// <summary>Per-directory cache avoids repeated upward directory walks.</summary>
     private string? ResolveRepoRoot(string? path)
     {
         if (string.IsNullOrEmpty(path))
@@ -169,7 +168,7 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
             }
             catch
             {
-                // Process already exited.
+                // Ignore races where the process finished between cancel and Kill.
             }
         }, process);
 
@@ -207,7 +206,7 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
             }
             catch
             {
-                // Process already exited.
+                // Ignore races where the process finished between cancel and Kill.
             }
         }, process);
 

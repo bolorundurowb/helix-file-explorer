@@ -4,10 +4,6 @@ using Xunit;
 
 namespace HelixExplorer.ViewModels.Tests;
 
-/// <summary>
-/// Verifies the state transitions of <see cref="FileOperationReporter"/> and the
-/// success/failure metadata carried by completed <see cref="OperationEntry"/> instances.
-/// </summary>
 public class FileOperationReporterTests
 {
     [Fact]

@@ -233,7 +233,6 @@ public sealed class VirtualizingFileGrid : TemplatedControl
             return;
         }
 
-        // ListBox scrolls internally; use this control's bounds as the viewport width.
         var viewportWidth = Bounds.Width;
         if (viewportWidth <= 0)
             viewportWidth = 800;

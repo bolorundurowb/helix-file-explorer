@@ -5,8 +5,7 @@ using Microsoft.Extensions.Logging;
 namespace HelixExplorer.Windows.Shell;
 
 /// <summary>
-/// Shows the Explorer-compatible shell context menu via IShellFolder / IContextMenu.
-/// Falls back gracefully when COM fails so Helix app menus still work alone.
+/// Explorer-compatible shell context menu. COM failures must not break Helix's own menus.
 /// </summary>
 public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuService> logger) : IShellContextMenuService
 {
@@ -142,7 +141,6 @@ public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuServic
 
             if (cidl > 0)
             {
-                // Selected items: get the IContextMenu for the children from the parent folder.
                 var apidl = childPidls![..cidl];
                 var iidCm = ShellIID.IID_IContextMenu;
                 uint reserved = 0;
@@ -155,10 +153,9 @@ public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuServic
             }
             else
             {
-                // Folder background: acquire IContextMenu from the folder itself via
-                // CreateViewObject. GetUIObjectOf with cidl=0 does NOT yield the background menu
-                // on most shell namespaces; CreateViewObject is the documented pattern for the
-                // folder's own (Defender/7-Zip/etc.) background verbs.
+                // GetUIObjectOf(cidl=0) does not yield the background menu on most shell namespaces;
+                // CreateViewObject is the documented pattern for the folder's own background verbs
+                // (Defender/7-Zip/etc.).
                 var iidCm = ShellIID.IID_IContextMenu;
                 var hrCv = folder.CreateViewObject(hwnd, ref iidCm, out cmPtr);
                 if (hrCv != 0 || cmPtr == IntPtr.Zero)
@@ -223,7 +220,7 @@ public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuServic
                 screenY = pt.Y;
             }
 
-            // Forward owner-drawn / cascading submenu messages while the popup is open.
+            // Cascading/owner-drawn shell verbs only paint if we forward menu messages while the popup is open.
             if (cm2 is not null || cm3 is not null)
             {
                 hookProc = (code, wParam, lParam) =>

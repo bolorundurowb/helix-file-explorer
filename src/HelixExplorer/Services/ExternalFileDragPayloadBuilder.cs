@@ -5,17 +5,13 @@ using Microsoft.Extensions.Logging;
 namespace HelixExplorer.Services;
 
 /// <summary>
-/// Builds the drag payload used when the user drags entries out of Helix to an external target
-/// (Explorer, a browser upload field, another app). Kept behind an interface so the view no longer
-/// embeds platform drag details and so a richer, shell-compatible payload can be swapped in later
-/// without touching <c>PaneView</c>.
+/// Kept behind an interface so <c>PaneView</c> does not embed platform drag details and a richer
+/// shell payload can be swapped in later.
 /// </summary>
 public interface IExternalFileDragPayloadBuilder
 {
     /// <summary>
-    /// Materializes an Avalonia <see cref="DataTransfer"/> for the supplied already-resolved physical
-    /// paths, or <c>null</c> when nothing usable could be added. Paths must already be physical
-    /// (archive/virtual entries resolved by the caller) so this method stays fast and does no I/O
+    /// Paths must already be physical (caller resolves archives) so this stays fast and does no I/O
     /// beyond StorageProvider lookups.
     /// </summary>
     Task<DataTransfer?> BuildAsync(
@@ -25,10 +21,8 @@ public interface IExternalFileDragPayloadBuilder
 }
 
 /// <summary>
-/// Default builder using Avalonia's file transfer items. On Windows Avalonia maps
-/// <see cref="DataFormat.File"/> to the shell <c>CF_HDROP</c> format, which most drop targets accept.
-/// Browser upload fields are the fragile case; see docs/external-drag-verification.md for the manual
-/// checklist and the follow-up plan for a full shell <c>IDataObject</c> if a target rejects this payload.
+/// Avalonia maps <see cref="DataFormat.File"/> to <c>CF_HDROP</c> on Windows; browser upload fields
+/// are the fragile case — see docs/external-drag-verification.md.
 /// </summary>
 public sealed class AvaloniaExternalFileDragPayloadBuilder(ILogger<AvaloniaExternalFileDragPayloadBuilder> logger)
     : IExternalFileDragPayloadBuilder

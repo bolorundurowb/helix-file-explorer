@@ -1,9 +1,6 @@
 namespace HelixExplorer.Localization;
 
-/// <summary>
-/// Centralized user-facing strings. Keeping them in one place makes future localization,
-/// accessibility review, and consistency changes much easier.
-/// </summary>
+/// <summary>Single table of user-facing strings for localization review.</summary>
 public static class UiStrings
 {
     public static string ClipboardHasNoFiles => "Clipboard has no files";

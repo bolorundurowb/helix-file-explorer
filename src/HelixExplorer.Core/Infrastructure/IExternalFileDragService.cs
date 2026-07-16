@@ -1,18 +1,12 @@
 namespace HelixExplorer.Core.Infrastructure;
 
 /// <summary>
-/// Native drag-out service used by the Helix UI when the user drags files/folders from a pane
-/// to an external target (Windows Explorer, a browser upload field, another app). Implementations
-/// must default to <see cref="DragDropEffects.Copy"/> so browser upload fields treat the drop as an
-/// upload rather than a destructive move.
+/// Native drag-out to external targets. Implementations must default to
+/// <see cref="DragDropEffects.Copy"/> so browser upload fields treat the drop as an upload
+/// rather than a destructive move.
 /// </summary>
 public interface IExternalFileDragService
 {
-    /// <summary>
-    /// Starts a native drag-out for the already-resolved physical paths and blocks until the drop
-    /// completes. Returns the effect the drop target selected, or <see cref="DragDropEffects.None"/>
-    /// when the user cancelled or the operation failed.
-    /// </summary>
     DragDropEffects DoDragDrop(IReadOnlyList<string> physicalPaths, DragDropEffects allowedEffects);
 }
 

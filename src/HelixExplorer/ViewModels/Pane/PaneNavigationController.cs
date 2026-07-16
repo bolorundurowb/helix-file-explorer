@@ -3,7 +3,6 @@ using HelixExplorer.Core.FileSystem;
 
 namespace HelixExplorer.ViewModels.Pane;
 
-/// <summary>Back/forward stacks and path resolution for pane navigation.</summary>
 public sealed class PaneNavigationController(IFileSystemProvider fileSystem, IArchiveProvider archive)
 {
     private readonly Stack<string> _backStack = new();

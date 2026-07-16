@@ -412,7 +412,6 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         var ct = cts.Token;
         try
         {
-            // Debounce: wait out rapid keystrokes before scanning. A newer keystroke cancels this token.
             await Task.Delay(SearchDebounce, ct).ConfigureAwait(true);
             if (ct.IsCancellationRequested || _disposed)
                 return;
@@ -664,7 +663,6 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         return result;
     }
 
-    /// <summary>Reselects entries whose <c>FullPath</c> survived the publish; clears when none remain.</summary>
     private void RestoreSelection(
         IReadOnlyList<EntryItemViewModel> entries,
         HashSet<string>? selectedPaths,

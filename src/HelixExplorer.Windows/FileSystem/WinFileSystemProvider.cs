@@ -138,7 +138,6 @@ public sealed class WinFileSystemProvider(IShellFolderEnumerator shell, ILogger<
                     var name = info.Name;
                     var matches = name.AsSpan().Contains(query.AsSpan(), StringComparison.OrdinalIgnoreCase);
 
-                    // Queue subdirectories only while we are still under the depth bound.
                     if (isDir && depth < options.MaxDepth)
                         dirQueue.Enqueue((info.FullName, depth + 1));
 

@@ -3,13 +3,8 @@ using HelixExplorer.Core.Models;
 
 namespace HelixExplorer.Core.FileSystem;
 
-/// <summary>
-/// Centralized path classification, normalization, and comparison helpers for the file manager.
-/// Handles physical paths, UNC paths, shell namespace paths, and archive virtual paths.
-/// </summary>
 public static class PathUtilities
 {
-    /// <summary>Classifies a path into one of the known path kinds.</summary>
     public static PathKind Classify(string? path)
     {
         if (string.IsNullOrEmpty(path))
@@ -33,14 +28,9 @@ public static class PathUtilities
         return PathKind.Physical;
     }
 
-    /// <summary>
-    /// Determines whether <paramref name="path"/> refers to the same location as
-    /// <paramref name="directory"/> or is contained within it.
-    /// </summary>
     /// <remarks>
-    /// Both paths are normalized before comparison. Only paths of the same <see cref="PathKind"/>
-    /// can be related; paths of different kinds (e.g. a physical folder and an archive virtual
-    /// folder) are never considered related.
+    /// Only paths of the same <see cref="PathKind"/> can be related; a physical folder and an
+    /// archive virtual folder are never considered related.
     /// </remarks>
     public static bool IsSameOrChildPath(string directory, string path)
     {
@@ -61,7 +51,6 @@ public static class PathUtilities
         };
     }
 
-    /// <summary>Compares two paths for equality using the appropriate normalization for their kind.</summary>
     public static bool PathsEqual(string? a, string? b)
     {
         if (ReferenceEquals(a, b))
@@ -88,10 +77,6 @@ public static class PathUtilities
         };
     }
 
-    /// <summary>
-    /// Normalizes directory separators and resolves <c>.</c> and <c>..</c> segments where possible.
-    /// Preserves drive roots and virtual path schemes.
-    /// </summary>
     public static string NormalizePath(string? path)
     {
         if (string.IsNullOrEmpty(path))
@@ -107,7 +92,6 @@ public static class PathUtilities
         };
     }
 
-    /// <summary>True if the path represents a Windows drive root such as <c>C:\</c>.</summary>
     public static bool IsDriveRoot(string? path)
     {
         if (string.IsNullOrEmpty(path))
@@ -119,7 +103,6 @@ public static class PathUtilities
                && normalized[1] == ':';
     }
 
-    /// <summary>True if the path is a UNC path such as <c>\\</c>, <c>\\server</c>, or <c>\\server\share</c>.</summary>
     public static bool IsUncPath(string? path)
         => NetworkPath.IsUnc(path);
 
@@ -168,7 +151,6 @@ public static class PathUtilities
     {
         try
         {
-            // Resolves . and .. segments and normalizes separators. Does not require the path to exist.
             var normalized = path.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
 
             // Path.GetFullPath interprets a lone "C:" as the current directory on that drive.
@@ -210,7 +192,6 @@ public static class PathUtilities
     }
 }
 
-/// <summary>Known path categories used by the file manager.</summary>
 public enum PathKind
 {
     Empty,

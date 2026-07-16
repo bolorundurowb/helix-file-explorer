@@ -3,9 +3,8 @@ using System.Security.Principal;
 namespace HelixExplorer.Windows.Shell;
 
 /// <summary>
-/// Watches the current user's per-drive <c>$RECYCLE.BIN\{SID}</c> folders and raises a single
-/// changed event when items are added or removed. This avoids polling the Recycle Bin shell
-/// namespace to detect changes.
+/// Watches per-drive <c>$RECYCLE.BIN\{SID}</c> so Recycle Bin changes are detected without
+/// polling the shell namespace.
 /// </summary>
 public sealed class RecycleBinWatcher : IDisposable
 {
@@ -14,14 +13,8 @@ public sealed class RecycleBinWatcher : IDisposable
     private bool _started;
     private bool _disposed;
 
-    /// <summary>
-    /// Raised when a file is created, deleted, or renamed in any watched Recycle Bin folder.
-    /// </summary>
     public event EventHandler? Changed;
 
-    /// <summary>
-    /// Starts watching all accessible <c>$RECYCLE.BIN\{SID}</c> folders on local, ready drives.
-    /// </summary>
     public void Start()
     {
         if (_started || _disposed || string.IsNullOrEmpty(_sid))
@@ -60,9 +53,6 @@ public sealed class RecycleBinWatcher : IDisposable
         _started = true;
     }
 
-    /// <summary>
-    /// Stops all active watchers.
-    /// </summary>
     public void Stop()
     {
         foreach (var watcher in _watchers)
@@ -80,8 +70,7 @@ public sealed class RecycleBinWatcher : IDisposable
 
     private void OnChanged(object sender, FileSystemEventArgs e)
     {
-        // Ignore metadata-only $I changes if you only care about visible items; for now we surface
-        // all changes so the UI can decide whether to refresh.
+        // $I files are metadata-only; we still raise so the UI can decide whether to refresh.
         Changed?.Invoke(this, EventArgs.Empty);
     }
 

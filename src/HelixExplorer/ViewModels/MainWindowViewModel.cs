@@ -48,7 +48,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly ITerminalLauncher _terminalLauncher;
     private readonly HomePageViewModel _homePage;
     private readonly SettingsPageViewModel _settingsPage;
-    /// <summary>DI-resolved logger forwarded to child <see cref="PaneViewModel"/> instances at construction time.</summary>
     private readonly ILogger<PaneViewModel> _paneViewModelLogger;
     private readonly string _homePath;
     private readonly List<CommandItem> _allCommands = new();
@@ -158,14 +157,11 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _folderColors.ColorsChanged += OnFolderColorsChanged;
     }
 
-    /// <summary>Default key gesture for the Open in Terminal shortcut.</summary>
     public const string AppDefaultTerminalGesture = "Ctrl+OemTilde";
 
     /// <summary>
-    /// The user-configurable key gesture used by the Open in Terminal command. Bound by
-    /// <see cref="Views.MainWindow"/> to a <see cref="KeyBinding"/> whose gesture is rebuilt when
-    /// this property changes. Falls back to <see cref="AppDefaultTerminalGesture"/> when empty or
-    /// invalid.
+    /// Bound by <see cref="Views.MainWindow"/> to a rebuildable <see cref="KeyBinding"/>.
+    /// Empty or invalid values fall back to <see cref="AppDefaultTerminalGesture"/>.
     /// </summary>
     [ObservableProperty]
     private string _openInTerminalGesture = AppDefaultTerminalGesture;
@@ -194,8 +190,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Loads a persisted gesture string, falling back to the default if it is empty/invalid. Used
-    /// at construction time before the property setter runs (which itself triggers persistence).
+    /// Applied at construction before the property setter runs (setter would persist immediately).
     /// </summary>
     private void ApplyOpenInTerminalGesture(string? persisted)
     {
@@ -205,9 +200,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Window-level proxy for the active pane's Open in Terminal command, so the configurable
-    /// shortcut can be bound to a single <see cref="KeyBinding"/> regardless of which pane is
-    /// active. Re-validates CanExecute against the active pane on each invocation.
+    /// Proxies the active pane so one window-level <see cref="KeyBinding"/> works regardless of focus.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanOpenInTerminalFromActivePane))]
     private void OpenInTerminal()
@@ -324,7 +317,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _networkBannerText = UiStrings.NetworkDiscoveryBanner;
 
-    /// <summary>Banner shows while discovering, or afterward when there is a notice to surface.</summary>
     public bool IsNetworkBannerVisible => IsDiscoveringNetwork || HasNetworkNotice;
 
     private async Task RefreshNetworkLocationsAsync()
@@ -520,7 +512,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         ApplyViewSettingsToTabs();
     }
 
-    /// <summary>Two-way friendly view of <see cref="DirectorySort"/> for a simple settings toggle.</summary>
     public bool FoldersFirst
     {
         get => DirectorySort == DirectorySortMode.FoldersFirst;
@@ -626,9 +617,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Debounces disk persistence of the cached settings. Frequent property changes (e.g. dragging
-    /// the sidebar or the thumbnail-size slider) previously wrote to disk synchronously on every
-    /// change; now the in-memory cache updates immediately and the disk write is coalesced.
+    /// Coalesces disk writes: sidebar/thumbnail sliders used to hit the store on every change.
     /// </summary>
     private void SchedulePersistSettings()
     {
@@ -650,7 +639,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             TaskScheduler.FromCurrentSynchronizationContext());
     }
 
-    /// <summary>Cancels any pending debounced write and flushes the cached settings synchronously.</summary>
     private void FlushSettings()
     {
         var cts = Interlocked.Exchange(ref _persistCts, null);

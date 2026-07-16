@@ -5,7 +5,6 @@ using Avalonia.Media;
 
 namespace HelixExplorer.Converters;
 
-/// <summary>Maps Failed=true to a red failure brush, otherwise the default text foreground.</summary>
 public sealed class BoolToFailureBrushConverter : IValueConverter
 {
     public static BoolToFailureBrushConverter Instance { get; } = new();

@@ -432,8 +432,6 @@ public sealed partial class PaneView : UserControl
             Pane?.ActivateEntry(entry);
     }
 
-    // ── Miller columns ───────────────────────────────────────────────────────
-
     private void RebuildMiller()
     {
         if (Pane is null)
@@ -509,8 +507,6 @@ public sealed partial class PaneView : UserControl
                 MillerScroll.Offset = new Vector(width - viewport, 0);
         });
     }
-
-    // ── Drag source ──────────────────────────────────────────────────────────
 
     private void OnListPointerPressed(object? sender, PointerPressedEventArgs e)
     {
@@ -589,11 +585,8 @@ public sealed partial class PaneView : UserControl
     }
 
     /// <summary>
-    /// Clears selection when the user left-clicks blank space inside the list/grid/details area.
-    /// Attached with handledEventsToo:true because the underlying DataGrid/ListBox/VirtualizingFileGrid
-    /// class handlers mark the press handled for their own selection management — without that, the
-    /// normally attached <see cref="OnListPointerPressed"/> never sees the blank-area press and the
-    /// previous selection survives. Skips text boxes, headers, scrollbars, and any press on an entry.
+    /// Attached with handledEventsToo:true because DataGrid/ListBox/VirtualizingFileGrid mark the press
+    /// handled for their own selection — without that, blank-area clicks never clear the previous selection.
     /// </summary>
     private void OnBlankAreaPointerPressed(object? sender, PointerPressedEventArgs e)
     {
@@ -626,14 +619,13 @@ public sealed partial class PaneView : UserControl
 
         Pane.UpdateSelection(Array.Empty<EntryItemViewModel>());
         SyncSelectionToView();
-        // Arm marquee after clearing so dragging from blank space still rubber-bands.
+        // Clear first so marquee doesn't union with stale selection.
         _pressPoint = e.GetPosition(this);
         _pressArgs = e;
         _dragStarted = false;
         _interactionMode = PointerInteractionMode.MarqueePending;
     }
 
-    /// <summary>Detects clicks on column headers, scrollbars, or other non-list chrome that should not clear the selection.</summary>
     private static bool IsPointOnHeaderOrScrollbar(Control host, Point position)
     {
         foreach (var descendant in host.GetVisualDescendants())
@@ -641,7 +633,6 @@ public sealed partial class PaneView : UserControl
             if (descendant is not Control c || !c.IsVisible)
                 continue;
 
-            // Scrollbars and column headers must not trigger deselection.
             if (c is ScrollBar or DataGridColumnHeader)
             {
                 var topLeft = c.TranslatePoint(new Point(0, 0), host);
@@ -814,8 +805,7 @@ public sealed partial class PaneView : UserControl
     }
 
     /// <summary>
-    /// The external drag payload builder, resolved once from DI. Falls back to a directly-constructed
-    /// default when the app service provider is unavailable (e.g. in design-time previews).
+    /// Falls back to a direct construct when <see cref="App.Services"/> is unavailable (design-time previews).
     /// </summary>
     private IExternalFileDragPayloadBuilder DragPayloadBuilder =>
         _dragPayloadBuilder ??= App.Services?.GetService<IExternalFileDragPayloadBuilder>()
@@ -824,8 +814,6 @@ public sealed partial class PaneView : UserControl
 
     private HelixExplorer.Core.Infrastructure.IExternalFileDragService? ExternalFileDragService =>
         _externalFileDragService ??= App.Services?.GetService<HelixExplorer.Core.Infrastructure.IExternalFileDragService>();
-
-    // ── Drop target ──────────────────────────────────────────────────────────
 
     private void OnDragOver(object? sender, DragEventArgs e)
     {

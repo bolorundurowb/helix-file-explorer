@@ -5,11 +5,9 @@ using Microsoft.Win32;
 namespace HelixExplorer.Windows.Shell;
 
 /// <summary>
-/// Launches a terminal at a directory. When Windows Terminal is the user's default
-/// terminal emulator (detected via the <c>DelegationTerminal</c> registry key), the
-/// command <c>wt -w 0 new-tab -d "&lt;dir&gt;"</c> is used, which opens a new tab in
-/// an existing window with the user's chosen default profile.  Otherwise, the code
-/// falls back to pwsh.exe, powershell.exe, git-bash.exe, or cmd.exe in that order.
+/// Launches a terminal at a directory. Prefers Windows Terminal when it is the user's default
+/// (via the <c>DelegationTerminal</c> registry key) so <c>wt</c> opens a new tab in an existing
+/// window with the chosen profile; otherwise falls back to pwsh, powershell, git-bash, or cmd.
 /// </summary>
 public sealed class WinTerminalLauncher : ITerminalLauncher
 {
@@ -36,8 +34,7 @@ public sealed class WinTerminalLauncher : ITerminalLauncher
 
     private static bool TryOpenWindowsTerminalNewTab(string directoryPath)
     {
-        // Just use "wt.exe" — Process.Start with UseShellExecute resolves it from
-        // PATH / AppExecutionAlias without needing to locate the binary on disk.
+        // "wt.exe" with UseShellExecute resolves via PATH / AppExecutionAlias without locating the binary.
         var args = $"-w 0 new-tab -d \"{directoryPath}\"";
 
         return TryStart(new ProcessStartInfo

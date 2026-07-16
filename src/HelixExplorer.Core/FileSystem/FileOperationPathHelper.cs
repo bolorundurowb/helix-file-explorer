@@ -1,6 +1,5 @@
 namespace HelixExplorer.Core.FileSystem;
 
-/// <summary>Shared path helpers for copy/move collision naming.</summary>
 public static class FileOperationPathHelper
 {
     public static string EnsureUniqueFilePath(string path)

@@ -26,7 +26,7 @@ public sealed partial class SettingsPageViewModel : ObservableObject
         CopyrightNotice = AppAssembly.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright
                           ?? "Copyright © 2026";
 
-        // Strip any pre-release suffix for comparison (e.g., "1.2.3-beta" -> "1.2.3")
+        // SemVer pre-release suffixes would break numeric compare against GitHub latest.
         _currentVersion = AppVersion;
         var plusIndex = _currentVersion.IndexOf('+');
         if (plusIndex >= 0)

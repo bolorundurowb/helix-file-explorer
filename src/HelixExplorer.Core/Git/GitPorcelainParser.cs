@@ -1,6 +1,5 @@
 namespace HelixExplorer.Core.Git;
 
-/// <summary>Parses <c>git status --porcelain=v2 -z --branch</c> output into an aggregate + file map.</summary>
 public static class GitPorcelainParser
 {
     public static GitStatusSnapshot Parse(string output, string? repoRoot)

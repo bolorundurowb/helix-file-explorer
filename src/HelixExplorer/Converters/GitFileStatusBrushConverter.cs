@@ -6,7 +6,6 @@ using HelixExplorer.Core.Git;
 
 namespace HelixExplorer.Converters;
 
-/// <summary>Maps <see cref="GitFileStatus"/> to theme brushes for row/name coloring.</summary>
 public sealed class GitFileStatusBrushConverter : IValueConverter
 {
     public static GitFileStatusBrushConverter Instance { get; } = new();

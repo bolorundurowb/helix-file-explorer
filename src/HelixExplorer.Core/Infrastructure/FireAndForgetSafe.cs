@@ -4,17 +4,11 @@ using Microsoft.Extensions.Logging;
 namespace HelixExplorer.Core.Infrastructure;
 
 /// <summary>
-/// Runs asynchronous work safely in the background, logging any unexpected failures.
-/// This is intended for opportunistic UI refreshes (sidebar icons, network discovery,
-/// file-system watcher reactions) where awaiting the task is unnecessary but exceptions
-/// and cancellation must still be observed consistently.
+/// Opportunistic background work (sidebar icons, network discovery, watcher reactions)
+/// where awaiting is unnecessary but exceptions and cancellation must still be observed.
 /// </summary>
 public static class FireAndForgetSafe
 {
-    /// <summary>
-    /// Fires the supplied async work without awaiting it. Operation-canceled exceptions
-    /// are swallowed; everything else is logged.
-    /// </summary>
     public static void Run(
         Func<Task> work,
         ILogger logger,
@@ -27,10 +21,6 @@ public static class FireAndForgetSafe
         _ = RunCoreAsync(work, logger, caller, file);
     }
 
-    /// <summary>
-    /// Fires the supplied task without awaiting it. Operation-canceled exceptions are
-    /// swallowed; everything else is logged.
-    /// </summary>
     public static void Run(
         Task task,
         ILogger logger,
@@ -65,7 +55,6 @@ public static class FireAndForgetSafe
         }
         catch (OperationCanceledException)
         {
-            // Expected for background work that observes cancellation; no action needed.
         }
         catch (Exception ex)
         {
@@ -74,10 +63,8 @@ public static class FireAndForgetSafe
     }
 }
 
-/// <summary>Extension-method convenience for <see cref="FireAndForgetSafe"/>.</summary>
 public static class FireAndForgetSafeExtensions
 {
-    /// <summary>Fires the task without awaiting it, logging any unexpected failure.</summary>
     public static void FireAndForget(
         this Task task,
         ILogger logger,
@@ -87,7 +74,6 @@ public static class FireAndForgetSafeExtensions
         FireAndForgetSafe.Run(task, logger, caller, file);
     }
 
-    /// <summary>Fires the async work without awaiting it, logging any unexpected failure.</summary>
     public static void FireAndForget(
         this Func<Task> work,
         ILogger logger,

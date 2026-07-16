@@ -44,11 +44,10 @@ public class ScopedDiWiringTests
         using var windowB = provider.CreateScope();
         b1 = windowB.ServiceProvider.GetRequiredService<HomePageViewModel>();
 
-        // Same instance within a window scope, different instance across window scopes.
         Assert.Same(a1, a2);
         Assert.NotSame(a1, b1);
 
-        // Scoped services must not resolve from the root when scope validation is on.
+        // validateScopes: scoped services must not resolve from the root provider.
         Assert.Throws<InvalidOperationException>(
             () => provider.GetRequiredService<HomePageViewModel>());
     }
@@ -97,7 +96,7 @@ public class ScopedDiWiringTests
 
         Assert.Same(windowReporter, coordinatorReporter);
 
-        // Root must not be able to resolve scoped services when validateScopes is on.
+        // validateScopes: root must not resolve scoped FileOperationReporter.
         Assert.Throws<InvalidOperationException>(
             () => provider.GetRequiredService<FileOperationReporter>());
     }

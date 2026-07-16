@@ -47,10 +47,7 @@ public sealed class WindowHostService(IServiceScopeFactory scopeFactory) : IWind
         return window;
     }
 
-    /// <summary>
-    /// Last-window close persists the captured window's session, then disposes its scope.
-    /// Exposed for tests so we exercise this exact path without opening an Avalonia window.
-    /// </summary>
+    /// <summary>Exposed for tests so this path can run without opening an Avalonia window.</summary>
     internal void OnWindowClosed(IServiceScope scope, Action saveSession)
     {
         lock (_gate)
@@ -63,7 +60,6 @@ public sealed class WindowHostService(IServiceScopeFactory scopeFactory) : IWind
         scope.Dispose();
     }
 
-    /// <summary>Test helper: track a live window scope without constructing Avalonia chrome.</summary>
     internal void TrackScopeForTests(IServiceScope scope)
     {
         lock (_gate)

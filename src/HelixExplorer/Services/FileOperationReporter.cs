@@ -197,14 +197,8 @@ public sealed partial class FileOperationReporter : ObservableObject, IFileOpera
     }
 }
 
-/// <summary>
-/// Represents a completed file-operation entry surfaced in the status centre.
-/// </summary>
-/// <param name="Message">Human-readable summary of the operation result.</param>
 /// <param name="Failed">True if the operation failed (legacy flag kept for bindings/tests).</param>
 /// <param name="Succeeded">True if the operation completed successfully. Explicit so the UI can bind a green check vs error glyph.</param>
-/// <param name="Kind">The operation kind, or null for generic failures.</param>
-/// <param name="ItemCount">Number of items processed by the operation.</param>
 public sealed record OperationEntry(
     string Message,
     bool Failed,

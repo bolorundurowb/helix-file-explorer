@@ -29,9 +29,8 @@ internal static class Shell32Native
     public static extern void SHFree(IntPtr pidl);
 
     /// <summary>
-    /// Obtains the desktop <see cref="IShellFolder"/>. The returned COM object is owned by the
-    /// caller and MUST be released with <see cref="Marshal.ReleaseComObject(object)"/> when done,
-    /// ideally in a <c>finally</c> block.
+    /// Caller must <see cref="Marshal.ReleaseComObject(object)"/> the returned desktop folder
+    /// (ideally in a <c>finally</c>).
     /// </summary>
     public static bool TryGetDesktopFolder(out IShellFolder? desktop)
     {
@@ -136,8 +135,8 @@ internal interface IContextMenu
 }
 
 /// <summary>
-/// Extends IContextMenu for owner-drawn / cascading shell submenu messages.
-/// Methods from IContextMenu are redeclared for COM layout.
+/// Owner-drawn / cascading shell submenu messages. IContextMenu methods are redeclared so COM
+/// vtable layout stays correct.
 /// </summary>
 [ComImport]
 [Guid("000214F4-0000-0000-C000-000000000046")]
@@ -158,7 +157,7 @@ internal interface IContextMenu2
 }
 
 /// <summary>
-/// Extends IContextMenu2 with HandleMenuMsg2 (menu keyboard / owner-draw).
+/// Adds HandleMenuMsg2; prior IContextMenu/2 methods are redeclared for COM vtable layout.
 /// </summary>
 [ComImport]
 [Guid("BCFCE0C0-EC17-11D0-8D10-00A0C90F2719")]

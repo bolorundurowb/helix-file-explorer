@@ -5,7 +5,6 @@ using HelixExplorer.Core.Sorting;
 
 namespace HelixExplorer.ViewModels.Pane;
 
-/// <summary>Sorts, filters, and maps directory entries to view models.</summary>
 public sealed class PaneListingCoordinator
 {
     private readonly Dictionary<string, EntryItemViewModel> _entryPool = new(StringComparer.OrdinalIgnoreCase);
@@ -95,7 +94,6 @@ public sealed class ListingPublishRequest
 
     public required bool SortDescending { get; init; }
 
-    /// <summary>Whether directories are grouped ahead of files or interleaved with them.</summary>
     public DirectorySortMode DirectorySort { get; init; } = DirectorySortMode.FoldersFirst;
 }
 

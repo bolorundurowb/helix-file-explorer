@@ -2,7 +2,6 @@ using Avalonia.Controls;
 
 namespace HelixExplorer.Services;
 
-/// <summary>Scoped owner window for per-window UI services (dialogs, shell HWND).</summary>
 public interface IWindowOwnerContext
 {
     Window? OwnerWindow { get; }

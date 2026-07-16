@@ -3,9 +3,6 @@ using Avalonia.Controls;
 
 namespace HelixExplorer.Controls;
 
-/// <summary>
-/// Lays out children horizontally as Miller columns and routes activation to the host.
-/// </summary>
 public sealed class MillerColumnPanel : Panel
 {
     public static readonly StyledProperty<double> ColumnWidthProperty =

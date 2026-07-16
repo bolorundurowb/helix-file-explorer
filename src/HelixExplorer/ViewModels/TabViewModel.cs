@@ -33,7 +33,6 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     private readonly IWindowHostService _windowHost;
     private readonly IShellFolderEnumerator _shellEnumerator;
     private readonly ITerminalLauncher _terminalLauncher;
-    /// <summary>DI-resolved logger forwarded to child <see cref="PaneViewModel"/> instances at construction time.</summary>
     private readonly ILogger<PaneViewModel> _paneViewModelLogger;
     private readonly HomePageViewModel _home;
     private readonly SettingsPageViewModel? _settings;

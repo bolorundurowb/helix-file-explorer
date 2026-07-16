@@ -7,7 +7,7 @@ using HelixExplorer.ViewModels;
 
 namespace HelixExplorer.Converters;
 
-/// <summary>Maps entries to distinctive icon tint colors (separate from git text coloring).</summary>
+/// <summary>Distinctive icon tint colors, separate from git text coloring.</summary>
 public sealed class EntryIconBrushConverter : IValueConverter
 {
     public IFolderColorService? FolderColors { get; set; }

@@ -106,9 +106,8 @@ public class ArrayPoolListTests
     [Fact]
     public void Dispose_CalledTwice_DoesNotReturnBufferToPoolTwice()
     {
-        // Rent, populate and dispose twice. If the second Dispose returned the (already returned)
-        // buffer again, subsequent independent rentals could hand out the same array, corrupting
-        // the pool. Renting fresh lists afterwards must yield distinct, isolated buffers.
+        // Double-Dispose must not return the buffer twice; that corrupts the pool so later
+        // rentals can share the same array.
         var list = new ArrayPoolList<int>(initialCapacity: 32);
         for (var i = 0; i < 32; i++)
             list.Add(i);

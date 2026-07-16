@@ -56,7 +56,6 @@
         <Setter Property="Background" Value="{DynamicResource HelixHoverBrush}" />
     </Style>
 
-    <!-- ══ Settings rows & nav ═══════════════════════════════════════════════ -->
     <Style Selector="Border.settingsRow">
         <Setter Property="Background" Value="{DynamicResource HelixSettingsRowBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource HelixBorderColor}" />
@@ -108,7 +107,6 @@
         <Setter Property="Opacity" Value="0.92" />
     </Style>
 
-    <!-- ══ Context menu icon-only primary bar buttons ════════════════════════ -->
     <Style Selector="Button.ctxIcon">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
@@ -125,7 +123,6 @@
         <Setter Property="Opacity" Value="0.35" />
     </Style>
 
-    <!-- ══ Window chrome (Win11-style caption buttons) ═══════════════════════ -->
     <Styles.Resources>
         <x:Double x:Key="CaptionButtonWidth">46</x:Double>
         <x:Double x:Key="CaptionButtonHeight">45</x:Double>
@@ -240,7 +237,6 @@
         <Setter Property="Foreground" Value="White" />
     </Style>
 
-    <!-- ══ Layout flyout ═════════════════════════════════════════════════════ -->
     <Style Selector="Border.layoutFlyout">
         <Setter Property="Background" Value="{DynamicResource HelixMenuBackgroundBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource HelixBorderColor}" />

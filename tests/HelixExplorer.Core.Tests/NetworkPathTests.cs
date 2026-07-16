@@ -94,7 +94,7 @@ public class NetworkPathTests
         var result = NetworkPath.Deduplicate(input);
 
         Assert.Equal(2, result.Count);
-        // Sorted by display name; the first \\server\share wins (Zeta) because it appears first.
+        // Case-insensitive path collision keeps the first occurrence (Zeta), not later Alpha.
         Assert.Equal("Middle", result[0].DisplayName);
         Assert.Equal("Zeta", result[1].DisplayName);
     }

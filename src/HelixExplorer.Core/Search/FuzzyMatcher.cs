@@ -1,6 +1,5 @@
 namespace HelixExplorer.Core.Search;
 
-/// <summary>Subsequence fuzzy matching for command palette ranking.</summary>
 public static class FuzzyMatcher
 {
     public static int Score(string target, string query)

@@ -13,8 +13,8 @@ public sealed class AppSettings
     public bool ShowFileExtensions { get; set; } = true;
 
     /// <summary>
-    /// Whether directories are grouped ahead of files in listings. New installs default to
-    /// <see cref="DirectorySortMode.MixedWithFiles"/>; existing users can switch back to folders-first.
+    /// New installs default to <see cref="DirectorySortMode.MixedWithFiles"/>;
+    /// existing users can switch back to folders-first.
     /// </summary>
     public DirectorySortMode DirectorySort { get; set; } = DirectorySortMode.MixedWithFiles;
     public LayoutMode DefaultViewMode { get; set; } = LayoutMode.Details;
@@ -26,25 +26,15 @@ public sealed class AppSettings
     public List<string> UnpinnedPaths { get; set; } = [];
     public Dictionary<string, uint> FolderColors { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Last normal (non-maximized) window width in device-independent pixels.</summary>
     public double? WindowWidth { get; set; }
-
-    /// <summary>Last normal (non-maximized) window height in device-independent pixels.</summary>
     public double? WindowHeight { get; set; }
-
-    /// <summary>Last normal window X position in screen coordinates.</summary>
     public int? WindowX { get; set; }
-
-    /// <summary>Last normal window Y position in screen coordinates.</summary>
     public int? WindowY { get; set; }
-
-    /// <summary>Whether the main window was maximized when last closed.</summary>
     public bool WindowMaximized { get; set; }
 
     /// <summary>
-    /// Key gesture string (Avalonia <see cref="Avalonia.Input.KeyGesture"/> syntax) used by the
-    /// "Open in Terminal" command. Defaults to <c>Ctrl+OemTilde</c> (the backtick/tilde key).
-    /// Empty or invalid values fall back to the default at load time.
+    /// Avalonia <see cref="Avalonia.Input.KeyGesture"/> syntax for "Open in Terminal".
+    /// Empty or invalid values fall back to the default (<c>Ctrl+OemTilde</c>) at load time.
     /// </summary>
     public string OpenInTerminalGesture { get; set; } = "Ctrl+OemTilde";
 }

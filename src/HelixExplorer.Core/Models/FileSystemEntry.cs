@@ -1,7 +1,6 @@
 namespace HelixExplorer.Core.Models;
 
 /// <summary>
-/// Immutable description of a file or directory entry produced by a single Win32 find pass.
 /// Keep this a readonly record struct so listings can accumulate in pooled buffers cheaply.
 /// </summary>
 public readonly record struct FileSystemEntry(

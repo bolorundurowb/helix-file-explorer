@@ -65,13 +65,12 @@ public class PaneSelectionModelTests
         var entries = CreateEntries(5);
         var model = new PaneSelectionModel();
 
-        // Ctrl+click build-up: select 1, then 2, then 3.
         model.SelectSingle(entries[1], entries);
         model.Toggle(entries[2], entries);
         model.Toggle(entries[3], entries);
         Assert.Equal(3, model.SelectedCount);
 
-        // Ctrl+click the middle item OFF. The anchor must move off the now-unselected row.
+        // Unselecting the middle row must re-anchor off that row (otherwise Shift+click drifts).
         model.Toggle(entries[2], entries);
         Assert.Equal(2, model.SelectedCount);
         Assert.DoesNotContain(entries[2], model.SelectedEntries);

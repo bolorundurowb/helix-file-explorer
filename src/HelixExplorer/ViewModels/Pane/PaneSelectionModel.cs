@@ -2,7 +2,6 @@ using System.Collections.ObjectModel;
 
 namespace HelixExplorer.ViewModels.Pane;
 
-/// <summary>Manages file-list selection state including range and bounds-based selection.</summary>
 public sealed class PaneSelectionModel
 {
     private int _anchorIndex = -1;

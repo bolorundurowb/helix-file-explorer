@@ -393,7 +393,6 @@
 
     <Grid Background="{DynamicResource HelixFileAreaBrush}"
           ContextMenu="{StaticResource EmptyAreaContextMenu}">
-        <!-- Details view -->
         <DataGrid x:Name="DetailsGrid"
                   IsVisible="{Binding IsDetailsView}"
                   ItemsSource="{Binding Entries}"
@@ -519,7 +518,6 @@
             </DataGrid.Columns>
         </DataGrid>
 
-        <!-- List view -->
         <ListBox x:Name="ListView"
                  IsVisible="{Binding IsListView}"
                  ItemsSource="{Binding Entries}"
@@ -578,7 +576,6 @@
             </ListBox.Styles>
         </ListBox>
 
-        <!-- Grid view -->
         <controls:VirtualizingFileGrid x:Name="GridView"
                  IsVisible="{Binding IsGridView}"
                  ItemsSource="{Binding Entries}"
@@ -666,7 +663,6 @@
                 </controls:VirtualizingFileGrid.ItemTemplate>
             </controls:VirtualizingFileGrid>
 
-        <!-- Miller columns -->
         <ScrollViewer x:Name="MillerScroll"
                       IsVisible="{Binding IsMillerView}"
                       HorizontalScrollBarVisibility="Auto"
@@ -677,7 +673,6 @@
                                         ColumnActivated="OnMillerColumnActivated" />
         </ScrollViewer>
 
-        <!-- Quick filter pill (Ctrl+F) -->
         <Border IsVisible="{Binding IsFilterVisible}"
                 VerticalAlignment="Top" HorizontalAlignment="Right"
                 Margin="0,8,16,0"
@@ -710,7 +705,6 @@
             </StackPanel>
         </Border>
 
-        <!-- Loading overlay -->
         <controls:SelectionMarquee x:Name="SelectionMarquee"
                                    IsHitTestVisible="False"
                                    ZIndex="50" />

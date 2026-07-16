@@ -5,8 +5,7 @@ using HelixExplorer.Core.Infrastructure;
 namespace HelixExplorer.Core.Session;
 
 /// <summary>
-/// JSON-backed session store. Saves are atomic: the document is written to a sibling
-/// temp file and then moved over the target so a crash mid-write cannot corrupt session.json.
+/// Atomic save: write to a sibling temp file, then move, so a crash mid-write cannot corrupt session.json.
 /// </summary>
 public sealed class JsonSessionStore(string path) : ISessionStore
 {

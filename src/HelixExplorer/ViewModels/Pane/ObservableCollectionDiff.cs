@@ -12,7 +12,7 @@ public static class ObservableCollectionDiff
 {
     public static void Apply<T>(ObservableCollection<T> target, IReadOnlyList<T> desired) where T : class
     {
-        // Fast path: already identical by reference and order.
+        // Skip work when already in the desired order by reference (common after a no-op refresh).
         if (target.Count == desired.Count)
         {
             var sameOrder = true;
@@ -29,7 +29,6 @@ public static class ObservableCollectionDiff
                 return;
         }
 
-        // Full reset when there is nothing to diff against, or the target should become empty.
         if (target.Count == 0 || desired.Count == 0)
         {
             target.Clear();

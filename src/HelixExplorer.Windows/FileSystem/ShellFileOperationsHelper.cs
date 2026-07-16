@@ -6,9 +6,7 @@ using Vanara.Windows.Shell;
 namespace HelixExplorer.Windows.FileSystem;
 
 /// <summary>
-/// Executes file-system operations through the Windows Shell <see cref="IFileOperation"/> COM API
-/// via Vanara. This provides native recycle-bin integration, elevation prompts, progress dialogs,
-/// and proper handling of shell items.
+/// Shell <see cref="IFileOperation"/> via Vanara — recycle-bin, elevation, progress UI, and shell items.
 /// </summary>
 internal static class ShellFileOperationsHelper
 {
@@ -118,7 +116,7 @@ internal static class ShellFileOperationsHelper
         }
         catch (OperationCanceledException)
         {
-            // Expected: we aborted the test operation.
+            // Abort is success for CanRecycle dry-run; don't treat as failure.
         }
         catch
         {

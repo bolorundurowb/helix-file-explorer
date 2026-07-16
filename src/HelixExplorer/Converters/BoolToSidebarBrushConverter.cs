@@ -5,7 +5,6 @@ using Avalonia;
 
 namespace HelixExplorer.Converters;
 
-/// <summary>Maps selected=true to HelixSidebarSelectedBrush, otherwise Transparent.</summary>
 public sealed class BoolToSidebarBrushConverter : IValueConverter
 {
     public static BoolToSidebarBrushConverter Instance { get; } = new();

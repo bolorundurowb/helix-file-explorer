@@ -2,16 +2,12 @@ using Avalonia.Input;
 
 namespace HelixExplorer.Input;
 
-/// <summary>The action the rename editor should take for a given key press.</summary>
 public enum RenameKeyAction
 {
-    /// <summary>Let the key bubble normally.</summary>
     None,
 
-    /// <summary>Commit the rename (Enter).</summary>
     Commit,
 
-    /// <summary>Cancel the rename (Escape).</summary>
     Cancel,
 
     /// <summary>

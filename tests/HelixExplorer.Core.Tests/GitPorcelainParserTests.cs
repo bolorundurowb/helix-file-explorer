@@ -32,8 +32,8 @@ public class GitPorcelainParserTests
         Assert.Equal(2, snapshot.Status.Ahead);
         Assert.Equal(1, snapshot.Status.Behind);
         Assert.True(snapshot.Status.HasRemote);
-        Assert.Equal(3, snapshot.Status.Staged); // A., MM, UU
-        Assert.Equal(3, snapshot.Status.Unstaged); // .M, MM, UU
+        Assert.Equal(3, snapshot.Status.Staged);
+        Assert.Equal(3, snapshot.Status.Unstaged);
         Assert.Equal(1, snapshot.Status.Untracked);
         Assert.Equal("main ↑2 ↓1 · 7 modified", snapshot.Status.Display);
     }

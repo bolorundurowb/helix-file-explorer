@@ -1,6 +1,5 @@
 namespace HelixExplorer.Core.FileSystem;
 
-/// <summary>Maps filesystem exceptions to user-facing status messages.</summary>
 public static class FileSystemError
 {
     public static string Describe(Exception ex, string? path = null)

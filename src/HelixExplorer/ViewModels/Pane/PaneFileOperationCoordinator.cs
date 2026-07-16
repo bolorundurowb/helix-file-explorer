@@ -7,7 +7,6 @@ using Microsoft.Extensions.Logging;
 
 namespace HelixExplorer.ViewModels.Pane;
 
-/// <summary>Clipboard paste, drag-drop, and path helpers for pane file operations.</summary>
 public sealed class PaneFileOperationCoordinator(
     IFileOperationService fileOps,
     IClipboardService clipboard,

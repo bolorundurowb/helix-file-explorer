@@ -303,8 +303,7 @@ public sealed class WinShellFolderEnumerator : IShellFolderEnumerator, IDisposab
         if (hr != 0)
             return string.Empty;
 
-        // Legacy MAX_PATH (260) truncates long paths enabled on modern Windows. Use the extended
-        // maximum (~32K WCHARs). StrRetToBuf always null-terminates within the supplied capacity.
+        // Legacy MAX_PATH (260) truncates long paths; use the extended maximum (~32K WCHARs).
         const int extendedMaxPath = 32768;
         var sb = t_displayNameBuffer ??= new StringBuilder(extendedMaxPath);
         sb.Clear();

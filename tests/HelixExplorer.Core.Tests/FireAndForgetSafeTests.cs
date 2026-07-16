@@ -16,7 +16,6 @@ public sealed class FireAndForgetSafeTests
             () => throw new OperationCanceledException(),
             logger);
 
-        // OperationCanceledException is swallowed, so the logger should never be called.
         var completed = await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(1)));
         Assert.NotEqual(tcs.Task, completed);
 

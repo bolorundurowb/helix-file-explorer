@@ -2,16 +2,11 @@ using HelixExplorer.Core.Models;
 
 namespace HelixExplorer.Core.Sorting;
 
-/// <summary>
-/// Builds comparers for directory listings. Depending on <see cref="DirectorySortMode"/> directories
-/// are grouped ahead of files, grouped after files, or interleaved and ordered purely by the requested column.
-/// </summary>
 public static class FileSystemEntryComparer
 {
     /// <summary>
-    /// Returns a comparer for the requested column and direction. The directory sort mode defaults to
-    /// <see cref="DirectorySortMode.FoldersFirst"/> to preserve historical behavior for callers that
-    /// have not been updated yet.
+    /// Directory sort mode defaults to <see cref="DirectorySortMode.FoldersFirst"/> to preserve
+    /// historical behavior for callers that have not been updated yet.
     /// </summary>
     public static IComparer<FileSystemEntry> For(
         SortColumn column,
@@ -71,8 +66,6 @@ public static class FileSystemEntryComparer
         return StringComparer.OrdinalIgnoreCase.Compare(x.Name, y.Name);
     }
 
-    // ---- Grouped comparers (directories/files grouped before applying column order) ----
-
     private sealed class GroupedComparer(SortColumn column, bool descending, bool filesFirst)
         : IComparer<FileSystemEntry>
     {
@@ -82,8 +75,6 @@ public static class FileSystemEntryComparer
             return kind != 0 ? kind : CompareByColumn(column, descending, in x, in y);
         }
     }
-
-    // ---- Mixed comparers (directories and files interleaved) ----
 
     private sealed class MixedNameAsc : IComparer<FileSystemEntry>
     {

@@ -4,9 +4,7 @@ using HelixExplorer.Core.Infrastructure;
 
 namespace HelixExplorer.Core.Settings;
 
-/// <summary>
-/// JSON-backed settings store. Saves are atomic: write to a sibling temp file, then move.
-/// </summary>
+/// <summary>Atomic save: write to a sibling temp file, then move.</summary>
 public sealed class JsonSettingsStore(string path) : ISettingsStore
 {
     private static readonly JsonSerializerOptions Options = new()

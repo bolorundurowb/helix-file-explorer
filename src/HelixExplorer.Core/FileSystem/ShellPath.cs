@@ -1,6 +1,5 @@
 namespace HelixExplorer.Core.FileSystem;
 
-/// <summary>Helpers for Windows shell namespace paths (e.g. Recycle Bin).</summary>
 public static class ShellPath
 {
     public const string RecycleBin = "shell:RecycleBinFolder";

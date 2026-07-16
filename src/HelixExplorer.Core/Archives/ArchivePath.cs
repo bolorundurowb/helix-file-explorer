@@ -1,9 +1,8 @@
 namespace HelixExplorer.Core.Archives;
 
 /// <summary>
-/// Helpers for the <c>archive://&lt;host-path&gt;!&lt;inner/path/&gt;</c> virtual path scheme.
-/// The host portion is a real archive file on disk (with <c>!</c> / <c>%</c> percent-encoded);
-/// the inner portion uses forward slashes and may contain literal <c>!</c>.
+/// Host path percent-encodes <c>!</c>/<c>%</c> so the <c>!</c> delimiter is unambiguous;
+/// inner paths use forward slashes and may contain literal <c>!</c>.
 /// </summary>
 public static class ArchivePath
 {
@@ -33,7 +32,6 @@ public static class ArchivePath
         return Scheme + EscapeHost(normalized) + "!";
     }
 
-    /// <summary>Builds <c>archive://host!inner</c> with a properly escaped host segment.</summary>
     public static string Combine(string archiveFilePath, string innerPath)
     {
         if (string.IsNullOrEmpty(innerPath))
@@ -127,7 +125,6 @@ public static class ArchivePath
         return crumbs;
     }
 
-    /// <summary>Percent-encodes host characters that would collide with the <c>!</c> delimiter.</summary>
     public static string EscapeHost(string archiveFilePath)
         => archiveFilePath.Replace("%", "%25", StringComparison.Ordinal)
             .Replace("!", "%21", StringComparison.Ordinal);

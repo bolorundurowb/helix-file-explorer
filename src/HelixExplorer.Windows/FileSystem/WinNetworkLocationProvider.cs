@@ -63,12 +63,12 @@ public sealed class WinNetworkLocationProvider(
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // Cancelled by the caller (e.g. window closing) — propagate so the caller can ignore it.
+            // Cancelled by the caller — propagate.
             throw;
         }
         catch (OperationCanceledException)
         {
-            // Our own discovery timeout fired. Surface as a failure so the sidebar can say so.
+            // Discovery timeout: surface as failure so the sidebar can report it.
             logger.LogWarning("Network discovery timed out after {Seconds}s", DiscoveryTimeout.TotalSeconds);
             return NetworkDiscoveryResult.Failed();
         }
@@ -134,13 +134,11 @@ public sealed class WinNetworkLocationProvider(
         var results = new List<NetworkLocationInfo>();
         var openFailed = false;
 
-        // Fallback: enumerate the global network (domains/workgroups → servers).
-        openFailed |= !Enumerate(ResourceGlobalNet, null, results, depth: 0, cancellationToken);
+            openFailed |= !Enumerate(ResourceGlobalNet, null, results, depth: 0, cancellationToken);
 
-        // Fallback: include mapped drives and remembered/persisted UNC connections that Windows already
-        // knows about, so users still see their network shares when live discovery is unavailable.
-        AddKnownConnections(ResourceConnected, results, cancellationToken);
-        AddKnownConnections(ResourceRemembered, results, cancellationToken);
+            // Mapped/remembered UNC connections so users still see shares when live discovery is unavailable.
+            AddKnownConnections(ResourceConnected, results, cancellationToken);
+            AddKnownConnections(ResourceRemembered, results, cancellationToken);
 
         var unique = NetworkPath.Deduplicate(results);
 
@@ -152,7 +150,6 @@ public sealed class WinNetworkLocationProvider(
         return openFailed ? NetworkDiscoveryResult.Failed() : NetworkDiscoveryResult.Empty;
     }
 
-    /// <summary>Returns false when the enumeration could not be opened at this level.</summary>
     private bool Enumerate(
         int scope,
         NetResource? parent,
@@ -188,7 +185,7 @@ public sealed class WinNetworkLocationProvider(
 
                     if (result == ErrorMoreData)
                     {
-                        // Buffer too small for even a single entry: grow and retry this iteration.
+                        // ERROR_MORE_DATA: buffer too small for even one entry — grow and retry.
                         Marshal.FreeHGlobal(buffer);
                         bufferSize = NetworkEnumBuffer.Grow(attemptedSize, bufferSize);
                         buffer = Marshal.AllocHGlobal(bufferSize);
@@ -248,7 +245,6 @@ public sealed class WinNetworkLocationProvider(
         return true;
     }
 
-    /// <summary>Enumerates mapped/remembered network connections and adds their UNC roots.</summary>
     private void AddKnownConnections(int scope, List<NetworkLocationInfo> results, CancellationToken cancellationToken)
     {
         if (WNetOpenEnum(scope, ResourceTypeDisk, 0, null, out var handle) != 0)
@@ -346,22 +342,18 @@ public sealed class WinNetworkLocationProvider(
     }
 }
 
-/// <summary>Pure buffer-sizing logic for WNet enumeration, extracted so it can be unit tested.</summary>
+/// <summary>Buffer sizing for WNet enumeration (extracted for unit tests).</summary>
 public static class NetworkEnumBuffer
 {
-    /// <summary>Initial enumeration buffer size (16 KiB).</summary>
     public const int InitialSize = 16 * 1024;
 
-    /// <summary>Upper bound so a misbehaving provider cannot request unbounded memory (1 MiB).</summary>
+    /// <summary>Cap so a misbehaving provider cannot request unbounded memory (1 MiB).</summary>
     public const int MaxSize = 1024 * 1024;
 
-    /// <summary>Doubles the buffer on <c>ERROR_MORE_DATA</c>, capped at <see cref="MaxSize"/>.</summary>
     public static int Grow(int currentSize)
         => Grow(currentSize, requestedSize: 0);
 
-    /// <summary>
-    /// Grows the buffer, honoring the size Windows requested when it is larger than a simple doubling.
-    /// </summary>
+    /// <summary>Honors Windows' requested size on <c>ERROR_MORE_DATA</c> when larger than a simple doubling.</summary>
     public static int Grow(int currentSize, int requestedSize)
     {
         if (currentSize <= 0)

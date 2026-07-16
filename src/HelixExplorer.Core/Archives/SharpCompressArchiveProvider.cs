@@ -10,10 +10,6 @@ using SharpCompress.Writers.Zip;
 
 namespace HelixExplorer.Core.Archives;
 
-/// <summary>
-/// SharpCompress-backed virtual file system for zip/7z/rar/tar/gzip archives.
-/// Uses <see cref="ArchiveFactory.OpenArchive"/> for random-access enumeration.
-/// </summary>
 public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchiveProvider> logger) : IArchiveProvider
 {
     private static string ExtractionRoot => Path.Combine(Path.GetTempPath(), "HelixExplorer");

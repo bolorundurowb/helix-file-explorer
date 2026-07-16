@@ -1,6 +1,5 @@
 namespace HelixExplorer.Core.Settings;
 
-/// <summary>Merges user-pinned folder paths with built-in quick access entries.</summary>
 public static class PinnedPathHelper
 {
     public static IReadOnlyList<(string Path, string DisplayName)> MergeUserPins(

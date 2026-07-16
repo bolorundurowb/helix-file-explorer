@@ -7,7 +7,6 @@ using Avalonia.Media.Imaging;
 
 namespace HelixExplorer.ViewModels;
 
-/// <summary>View-facing row wrapping a listing entry with optional git status for coloring.</summary>
 public sealed partial class EntryItemViewModel : ObservableObject
 {
     private FileSystemEntry _entry;

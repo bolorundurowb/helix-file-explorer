@@ -5,7 +5,6 @@ using HelixExplorer.Core.Settings;
 
 namespace HelixExplorer.Converters;
 
-/// <summary>Solid folder tint for sidebar folder icons (custom color or default yellow).</summary>
 public sealed class FolderIconBrushConverter : IValueConverter
 {
     public IFolderColorService? FolderColors { get; set; }

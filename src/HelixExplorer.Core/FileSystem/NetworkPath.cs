@@ -8,10 +8,8 @@ namespace HelixExplorer.Core.FileSystem;
 /// </summary>
 public static class NetworkPath
 {
-    /// <summary>The network root (<c>\\</c>).</summary>
     public const string Root = @"\\";
 
-    /// <summary>True when <paramref name="path"/> starts with a UNC prefix (<c>\\</c> or <c>//</c>).</summary>
     public static bool IsUnc(string? path)
     {
         if (string.IsNullOrEmpty(path) || path.Length < 2)
@@ -22,7 +20,6 @@ public static class NetworkPath
         return (a == '\\' || a == '/') && (b == '\\' || b == '/');
     }
 
-    /// <summary>True when the path is exactly the network root (<c>\\</c>, <c>//</c>, etc.).</summary>
     public static bool IsNetworkRoot(string? path)
     {
         if (!IsUnc(path))
@@ -37,11 +34,6 @@ public static class NetworkPath
         return true;
     }
 
-    /// <summary>
-    /// Normalizes a user-typed UNC path: converts forward slashes to backslashes, collapses repeated
-    /// separators inside the path, and trims a trailing separator (except for the bare root).
-    /// Non-UNC input is returned unchanged.
-    /// </summary>
     public static string Normalize(string? path)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -53,7 +45,7 @@ public static class NetworkPath
 
         var body = trimmed[2..].Replace('/', '\\');
 
-        // Collapse any run of separators inside the body into a single backslash.
+        // Collapse runs so pasted //server//share and \\server\share\ match the same key.
         var parts = body.Split('\\', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length == 0)
             return Root;
@@ -61,7 +53,6 @@ public static class NetworkPath
         return Root + string.Join('\\', parts);
     }
 
-    /// <summary>Extracts the server name from a UNC path, or null when none is present (bare root).</summary>
     public static string? GetServer(string? path)
     {
         var normalized = Normalize(path);
@@ -73,7 +64,6 @@ public static class NetworkPath
         return slash < 0 ? body : body[..slash];
     }
 
-    /// <summary>Extracts the share name (first segment after the server), or null when absent.</summary>
     public static string? GetShare(string? path)
     {
         var normalized = Normalize(path);
@@ -90,20 +80,13 @@ public static class NetworkPath
         return next < 0 ? rest : rest[..next];
     }
 
-    /// <summary>True when the path names a server root (<c>\\server</c>) without a share.</summary>
     public static bool IsServerRoot(string? path)
         => GetServer(path) is not null && GetShare(path) is null;
 
-    /// <summary>True when the path is a UNC share root (<c>\\server\share</c>) or child path.</summary>
     public static bool HasShare(string? path) => GetShare(path) is not null;
 
-    /// <summary>Builds the canonical <c>\\server</c> path for a server name.</summary>
     public static string ForServer(string server) => Root + server.Trim().Trim('\\', '/');
 
-    /// <summary>
-    /// De-duplicates and orders network locations by display name (case-insensitive), keeping the
-    /// first occurrence of each distinct path.
-    /// </summary>
     public static IReadOnlyList<NetworkLocationInfo> Deduplicate(IEnumerable<NetworkLocationInfo> locations)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

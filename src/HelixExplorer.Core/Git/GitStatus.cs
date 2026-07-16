@@ -1,6 +1,5 @@
 namespace HelixExplorer.Core.Git;
 
-/// <summary>Aggregate repository status for the status-bar chip.</summary>
 public sealed record GitStatus(
     string Branch,
     int Staged,
@@ -18,7 +17,6 @@ public sealed record GitStatus(
 
     public int ModifiedCount => Staged + Unstaged + Untracked;
 
-    /// <summary>Compact status, e.g. <c>main ↑2 ↓1 · 3 modified</c>.</summary>
     public string Display
     {
         get

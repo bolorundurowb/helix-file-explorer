@@ -4,7 +4,6 @@ using Avalonia.Media;
 
 namespace HelixExplorer.Controls;
 
-/// <summary>Rubber-band selection rectangle overlay for file panes.</summary>
 public sealed class SelectionMarquee : Control
 {
     public static readonly StyledProperty<bool> IsActiveProperty =

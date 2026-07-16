@@ -4,7 +4,7 @@ using Microsoft.Win32;
 namespace HelixExplorer.Windows.Theming;
 
 /// <summary>
-/// Listens for Windows light/dark preference changes and reapplies theme when in System mode.
+/// Reapplies theme on Windows light/dark preference changes when configured for System mode.
 /// </summary>
 /// <remarks>
 /// <see cref="SystemEvents.UserPreferenceChanged"/> is raised on a dedicated system thread, not the
@@ -39,7 +39,6 @@ public sealed class WinThemeWatcher : IDisposable
         if (_getConfiguredMode() != ThemeMode.System)
             return;
 
-        // Marshalling to the UI thread is the delegate's responsibility (see remarks).
         _applyTheme(ThemeMode.System);
     }
 

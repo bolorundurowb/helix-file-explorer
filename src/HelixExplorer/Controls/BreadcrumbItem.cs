@@ -5,7 +5,6 @@ using HelixExplorer.ViewModels;
 
 namespace HelixExplorer.Controls;
 
-/// <summary>Clickable breadcrumb segment with a trailing chevron when not last.</summary>
 public sealed class BreadcrumbItem : Button
 {
     public static readonly StyledProperty<string> SegmentPathProperty =

@@ -1,7 +1,6 @@
 namespace HelixExplorer.Core.Git;
 
 /// <summary>
-/// Snapshot from a single <c>git status --porcelain=v2 -z --branch</c> invocation.
 /// File keys are repo-relative paths normalized with forward slashes and no trailing slash.
 /// </summary>
 public sealed class GitStatusSnapshot(

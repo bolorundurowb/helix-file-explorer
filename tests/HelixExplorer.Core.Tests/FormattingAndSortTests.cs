@@ -81,7 +81,6 @@ public class FileSystemEntryComparerTests
         var file = new FileSystemEntry(@"C:\a.txt", "a.txt", false, 10, DateTime.UtcNow, ".txt");
         var dir = new FileSystemEntry(@"C:\z", "z", true, 0, DateTime.UtcNow, "");
         var items = new[] { file, dir };
-        // No mode argument -> should behave like FoldersFirst.
         Array.Sort(items, FileSystemEntryComparer.For(SortColumn.Name, descending: false));
         Assert.True(items[0].IsDirectory);
     }
@@ -143,7 +142,7 @@ public class DirectorySortModeTests
     public void MixedSize_Descending_OrdersBySizeIgnoringKind()
     {
         var items = SortMixed(SortColumn.Size, descending: true);
-        // Files carry size; directories are 0. Largest file first, directories last (name tie-break).
+        // Directories report SizeBytes=0, so they sort after files when size-descending.
         Assert.Equal("apple.txt", items[0].Name);
         Assert.Equal("cherry.md", items[1].Name);
         Assert.Equal(new[] { "banana", "dates" }, items.Skip(2).Select(i => i.Name));
@@ -160,7 +159,7 @@ public class DirectorySortModeTests
     public void MixedType_Ascending_OrdersByExtensionIgnoringKind()
     {
         var items = SortMixed(SortColumn.Type, descending: false);
-        // Directories have empty extension and sort first, then .md, then .txt.
+        // Type sort keys off Extension; directories use "" so they group before .md/.txt.
         Assert.Equal(new[] { "banana", "dates", "cherry.md", "apple.txt" }, items.Select(i => i.Name));
     }
 }

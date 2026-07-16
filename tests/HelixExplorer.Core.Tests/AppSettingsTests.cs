@@ -126,20 +126,15 @@ public class AppSettingsTests
             File.WriteAllText(settingsFile,
                 JsonSerializer.Serialize(initial, Options));
 
-            // Write trash to the temp file (simulating mid-write crash)
+            // Crash mid-write leaves garbage only in .tmp; atomic save must not Move until
+            // write succeeds, so the existing settings file stays intact.
             File.WriteAllText(tempFile, "{INVALID-JSON");
 
-            // The atomic save pattern would move temp -> target only on success.
-            // Since we wrote garbage, the real save method would not move it.
-            // Verify the original file is intact.
             Assert.True(File.Exists(settingsFile));
             var loaded = JsonSerializer.Deserialize<AppSettings>(
                 File.ReadAllText(settingsFile), Options);
             Assert.NotNull(loaded);
             Assert.Equal(ThemeMode.Light, loaded.Theme);
-
-            // Verify that moving trash would be a separate operation
-            // The real save catches exceptions and deletes temp, keeping original intact.
         }
         finally
         {

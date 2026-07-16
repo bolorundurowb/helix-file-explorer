@@ -35,6 +35,25 @@ public sealed partial class Omnibar : UserControl
     {
         if (e.PropertyName is nameof(PaneViewModel.CurrentPath) or nameof(PaneViewModel.Breadcrumbs))
             Dispatcher.UIThread.Post(RebuildBreadcrumbs);
+        else if (e.PropertyName == nameof(PaneViewModel.OmnibarMode))
+            Dispatcher.UIThread.Post(FocusActiveQueryBox);
+    }
+
+    private void FocusActiveQueryBox()
+    {
+        if (_pane is null)
+            return;
+
+        if (_pane.IsFilterMode)
+        {
+            FilterBox.Focus();
+            FilterBox.SelectAll();
+        }
+        else if (_pane.IsSearchMode)
+        {
+            SearchBox.Focus();
+            SearchBox.SelectAll();
+        }
     }
 
     private void RebuildBreadcrumbs()
@@ -104,7 +123,11 @@ public sealed partial class Omnibar : UserControl
 
     private void OnSearchBoxLostFocus(object? sender, RoutedEventArgs e)
     {
-        if (_pane is { IsSearchMode: true, IsFilterActive: false })
+        if (_pane is null)
+            return;
+
+        // Keep Filter/Search mode while a query is active; exit only when the query is empty.
+        if ((_pane.IsFilterMode || _pane.IsSearchMode) && string.IsNullOrWhiteSpace(_pane.FilterText))
             _pane.ExitSearchModeCommand.Execute(null);
     }
 

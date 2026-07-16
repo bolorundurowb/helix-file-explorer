@@ -3,37 +3,20 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
-using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Infrastructure;
 using System.Diagnostics;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Settings;
 using HelixExplorer.Core.Session;
-using HelixExplorer.Services;
 using HelixExplorer.ViewModels.Pane;
-using Microsoft.Extensions.Logging;
 
 namespace HelixExplorer.ViewModels;
 
 public sealed partial class TabViewModel : ObservableObject, IDisposable
 {
-    private readonly IFileSystemProvider _fileSystem;
-    private readonly IFileOperationService _fileOps;
     private readonly IClipboardService _clipboard;
-    private readonly IShellContextMenuService _shellContextMenu;
-    private readonly IUiHost _uiHost;
-    private readonly IGitProvider _git;
     private readonly IArchiveProvider _archive;
-    private readonly IFolderColorService _folderColors;
-    private readonly ISettingsStore _settingsStore;
-    private readonly Func<IFileChangeWatcher> _watcherFactory;
-    private readonly IPaneCoordinatorFactory _coordinatorFactory;
-    private readonly IQuickAccessProvider _quickAccess;
-    private readonly IUserDialogService _dialogs;
-    private readonly IWindowHostService _windowHost;
-    private readonly IShellFolderEnumerator _shellEnumerator;
-    private readonly ITerminalLauncher _terminalLauncher;
-    private readonly ILogger<PaneViewModel> _paneViewModelLogger;
+    private readonly IPaneViewModelFactory _paneFactory;
     private readonly HomePageViewModel _home;
     private readonly SettingsPageViewModel? _settings;
     private bool _showHiddenFiles;
@@ -42,44 +25,16 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     private bool _disposed;
 
     public TabViewModel(
-        IFileSystemProvider fileSystem,
-        IFileOperationService fileOps,
         IClipboardService clipboard,
-        IShellContextMenuService shellContextMenu,
-        IUiHost uiHost,
-        IGitProvider git,
         IArchiveProvider archive,
-        IFolderColorService folderColors,
-        ISettingsStore settingsStore,
-        Func<IFileChangeWatcher> watcherFactory,
-        IPaneCoordinatorFactory coordinatorFactory,
-        IQuickAccessProvider quickAccess,
-        IUserDialogService dialogs,
-        IWindowHostService windowHost,
-        IShellFolderEnumerator shellEnumerator,
-        ITerminalLauncher terminalLauncher,
-        ILogger<PaneViewModel> paneLogger,
+        IPaneViewModelFactory paneFactory,
         HomePageViewModel home,
         TabKind kind = TabKind.Browser,
         SettingsPageViewModel? settings = null)
     {
-        _fileSystem = fileSystem;
-        _fileOps = fileOps;
         _clipboard = clipboard;
-        _shellContextMenu = shellContextMenu;
-        _uiHost = uiHost;
-        _git = git;
         _archive = archive;
-        _folderColors = folderColors;
-        _settingsStore = settingsStore;
-        _watcherFactory = watcherFactory;
-        _coordinatorFactory = coordinatorFactory;
-        _quickAccess = quickAccess;
-        _dialogs = dialogs;
-        _windowHost = windowHost;
-        _shellEnumerator = shellEnumerator;
-        _terminalLauncher = terminalLauncher;
-        _paneViewModelLogger = paneLogger;
+        _paneFactory = paneFactory;
         _home = home;
         _settings = settings;
         Kind = kind;
@@ -155,24 +110,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
 
     private PaneViewModel CreatePane()
     {
-        var pane = new PaneViewModel(
-            _fileSystem,
-            _archive,
-            _folderColors,
-            _fileOps,
-            _clipboard,
-            _shellContextMenu,
-            _uiHost,
-            _git,
-            _watcherFactory(),
-            _settingsStore,
-            _quickAccess,
-            _dialogs,
-            _windowHost,
-            _shellEnumerator,
-            _terminalLauncher,
-            _coordinatorFactory,
-            _paneViewModelLogger);
+        var pane = _paneFactory.Create();
         pane.SortChanged += OnPaneSortChanged;
         pane.LayoutChanged += OnPaneLayoutChanged;
         pane.Navigated += OnPaneNavigated;

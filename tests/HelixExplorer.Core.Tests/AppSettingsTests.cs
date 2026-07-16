@@ -83,6 +83,17 @@ public class AppSettingsTests
     }
 
     [Fact]
+    public void JsonRoundTrip_PreservesInterFont()
+    {
+        var original = new AppSettings { UiFont = UiFontFamily.Inter };
+        var json = JsonSerializer.Serialize(original, Options);
+        var loaded = JsonSerializer.Deserialize<AppSettings>(json, Options);
+
+        Assert.NotNull(loaded);
+        Assert.Equal(UiFontFamily.Inter, loaded.UiFont);
+    }
+
+    [Fact]
     public void AtomicSave_WritesFileWithoutCorruptingExisting()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "helix-test-" + Guid.NewGuid().ToString("N"));

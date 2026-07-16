@@ -25,9 +25,16 @@ public class UiFontCatalogTests
     }
 
     [Fact]
-    public void Options_ContainSystemAndDmSansLabels()
+    public void Options_ContainSystemDmSansAndInterLabels()
     {
         Assert.Equal("System default", UiFontCatalog.GetDisplayName(UiFontFamily.System));
         Assert.Equal("DM Sans", UiFontCatalog.GetDisplayName(UiFontFamily.DmSans));
+        Assert.Equal("Inter", UiFontCatalog.GetDisplayName(UiFontFamily.Inter));
+    }
+
+    [Fact]
+    public void ResolveFontFamilySource_Inter_UsesAvaloniaInterCollection()
+    {
+        Assert.Equal("fonts:Inter#Inter", UiFontCatalog.ResolveFontFamilySource(UiFontFamily.Inter));
     }
 }

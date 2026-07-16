@@ -76,6 +76,19 @@ public class FileNameFilterTests
         Assert.True(count > 0);
         Assert.True(sw.ElapsedMilliseconds < 500, $"Filter took {sw.ElapsedMilliseconds}ms");
     }
+
+    [Fact]
+    public void Apply_SupportsGlobPatterns()
+    {
+        var source = new[] { Entry("alpha.pdf"), Entry("beta.txt"), Entry("gamma.PDF") };
+        var dest = new List<FileSystemEntry>();
+
+        FileNameFilter.Apply(source, "*.pdf", dest);
+
+        Assert.Equal(2, dest.Count);
+        Assert.Contains(dest, e => e.Name == "alpha.pdf");
+        Assert.Contains(dest, e => e.Name == "gamma.PDF");
+    }
 }
 
 public class SessionStoreTests

@@ -12,6 +12,10 @@ public interface IPaneCoordinatorFactory
     PaneRefreshCoordinator CreateRefreshCoordinator();
 
     PaneFileOperationCoordinator CreateFileOperationCoordinator();
+
+    PaneSearchCoordinator CreateSearchCoordinator();
+
+    PaneShellActionCoordinator CreateShellActionCoordinator();
 }
 
 public sealed class PaneCoordinatorFactory(IServiceProvider serviceProvider) : IPaneCoordinatorFactory
@@ -21,4 +25,10 @@ public sealed class PaneCoordinatorFactory(IServiceProvider serviceProvider) : I
 
     public PaneFileOperationCoordinator CreateFileOperationCoordinator()
         => serviceProvider.GetRequiredService<PaneFileOperationCoordinator>();
+
+    public PaneSearchCoordinator CreateSearchCoordinator()
+        => serviceProvider.GetRequiredService<PaneSearchCoordinator>();
+
+    public PaneShellActionCoordinator CreateShellActionCoordinator()
+        => serviceProvider.GetRequiredService<PaneShellActionCoordinator>();
 }

@@ -1,6 +1,8 @@
 using HelixExplorer.Core.Collections;
 using HelixExplorer.Core.FileSystem;
+using HelixExplorer.Core.Filtering;
 using HelixExplorer.Core.Models;
+using HelixExplorer.Core.Search;
 using HelixExplorer.Core.Sorting;
 using Microsoft.Extensions.Logging;
 
@@ -50,8 +52,7 @@ public sealed class WinFileSystemProvider(IShellFolderEnumerator shell, ILogger<
             return SearchResult.Empty;
 
         var resolved = ResolvePath(path);
-        return await Task.Run(() => SearchRecursive(resolved, query.Trim(), options, cancellationToken), cancellationToken)
-            .ConfigureAwait(false);
+        return await SearchRecursiveAsyncCore(resolved, query.Trim(), options, cancellationToken).ConfigureAwait(false);
     }
 
     public string ResolvePath(string path)
@@ -102,14 +103,17 @@ public sealed class WinFileSystemProvider(IShellFolderEnumerator shell, ILogger<
         return normalized;
     }
 
-    private SearchResult SearchRecursive(string path, string query, SearchOptions options, CancellationToken token)
+    private async Task<SearchResult> SearchRecursiveAsyncCore(
+        string path,
+        string query,
+        SearchOptions options,
+        CancellationToken token)
     {
         var results = new List<FileSystemEntry>(Math.Min(options.MaxResults, 256));
         var dirQueue = new Queue<(string Dir, int Depth)>();
         dirQueue.Enqueue((path, 0));
+        var scanContent = options.SearchFileContents && !GlobMatcher.HasGlobMetacharacters(query);
 
-        // Stream entries (EnumerateFileSystemInfos) instead of materializing a full array per directory,
-        // so a directory with tens of thousands of entries does not allocate a large transient array.
         var opts = new EnumerationOptions
         {
             IgnoreInaccessible = true,
@@ -122,6 +126,7 @@ public sealed class WinFileSystemProvider(IShellFolderEnumerator shell, ILogger<
         };
 
         var capped = false;
+        var rootPrefixLength = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Length;
 
         while (dirQueue.Count > 0)
         {
@@ -135,13 +140,27 @@ public sealed class WinFileSystemProvider(IShellFolderEnumerator shell, ILogger<
                     token.ThrowIfCancellationRequested();
 
                     var isDir = (info.Attributes & FileAttributes.Directory) != 0;
-                    var name = info.Name;
-                    var matches = name.AsSpan().Contains(query.AsSpan(), StringComparison.OrdinalIgnoreCase);
-
                     if (isDir && depth < options.MaxDepth)
                         dirQueue.Enqueue((info.FullName, depth + 1));
 
-                    if (!matches)
+                    var relative = info.FullName.Length > rootPrefixLength
+                        ? info.FullName[(rootPrefixLength + 1)..]
+                        : info.Name;
+                    var nameMatches = EntryNameMatcher.Matches(info.Name, query)
+                                      || EntryNameMatcher.Matches(relative.Replace('\\', '/'), query);
+
+                    var contentMatches = false;
+                    if (!nameMatches && scanContent && !isDir
+                        && TextFileClassifier.IsLikelyTextExtension(info.Extension))
+                    {
+                        contentMatches = await FileContentSearcher.ContainsAsync(
+                            info.FullName,
+                            query,
+                            options.MaxContentBytes,
+                            token).ConfigureAwait(false);
+                    }
+
+                    if (!nameMatches && !contentMatches)
                         continue;
 
                     long size = 0;

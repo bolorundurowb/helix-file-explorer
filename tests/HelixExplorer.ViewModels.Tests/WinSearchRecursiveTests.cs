@@ -66,6 +66,42 @@ public class WinSearchRecursiveTests : IDisposable
             async () => await _provider.SearchRecursiveAsync(_root, "x", SearchOptions.Default, cts.Token));
     }
 
+    [Fact]
+    public async Task Search_FindsTextFileByContent()
+    {
+        File.WriteAllText(Path.Combine(_root, "notes.txt"), "unique-token-helix-42");
+        File.WriteAllText(Path.Combine(_root, "other.txt"), "nothing here");
+
+        var result = await _provider.SearchRecursiveAsync(_root, "unique-token-helix-42", SearchOptions.Default);
+
+        Assert.Contains(result.Entries, e => e.Name == "notes.txt");
+        Assert.DoesNotContain(result.Entries, e => e.Name == "other.txt");
+    }
+
+    [Fact]
+    public async Task Search_GlobQuery_DoesNotScanContent()
+    {
+        File.WriteAllText(Path.Combine(_root, "a.txt"), "*.cs appears in content");
+        File.WriteAllText(Path.Combine(_root, "code.cs"), "class X {}");
+
+        var result = await _provider.SearchRecursiveAsync(_root, "*.cs", SearchOptions.Default);
+
+        Assert.Contains(result.Entries, e => e.Name == "code.cs");
+        Assert.DoesNotContain(result.Entries, e => e.Name == "a.txt");
+    }
+
+    [Fact]
+    public async Task Search_SupportsNameGlobs()
+    {
+        File.WriteAllText(Path.Combine(_root, "alpha.pdf"), "x");
+        File.WriteAllText(Path.Combine(_root, "beta.txt"), "x");
+
+        var result = await _provider.SearchRecursiveAsync(_root, "*.pdf", SearchOptions.Default);
+
+        Assert.Contains(result.Entries, e => e.Name == "alpha.pdf");
+        Assert.DoesNotContain(result.Entries, e => e.Name == "beta.txt");
+    }
+
     public void Dispose()
     {
         try { Directory.Delete(_root, recursive: true); } catch { /* best effort */ }

@@ -324,6 +324,52 @@ public sealed class PaneFileOperationCoordinator(
         }
     }
 
+    public async Task RenameAsync(
+        string oldPath,
+        string newName,
+        Func<Task> refreshAsync,
+        Action onClearRename,
+        Action<string> setStatusText)
+    {
+        try
+        {
+            var result = await fileOps.RenameAsync(oldPath, newName).ConfigureAwait(true);
+            if (result.Failed > 0)
+            {
+                await dialogs.ShowErrorAsync(UiStrings.RenameFailed, result.Failures[0].Message).ConfigureAwait(true);
+                setStatusText(UiStrings.RenameFailed);
+                onClearRename();
+                return;
+            }
+
+            onClearRename();
+            await refreshAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Rename failed for '{Path}'", oldPath);
+            setStatusText(UiStrings.RenameFailed);
+            onClearRename();
+        }
+    }
+
+    public async Task CreateFolderAsync(
+        string currentPath,
+        Func<Task> refreshAsync,
+        Action<string> setStatusText)
+    {
+        try
+        {
+            await fileOps.CreateFolderAsync(currentPath, "New Folder").ConfigureAwait(true);
+            await refreshAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "NewFolder failed in '{Path}'", currentPath);
+            setStatusText(UiStrings.NewFolderFailed);
+        }
+    }
+
     private async Task<ClipboardPayload?> ResolvePastePayloadAsync(string currentPath)
     {
         if (clipboard.Current is { } internalPayload)

@@ -393,8 +393,9 @@
 
     <Grid Background="{DynamicResource HelixFileAreaBrush}"
           ContextMenu="{StaticResource EmptyAreaContextMenu}">
+        <Grid IsVisible="{Binding IsDetailsView}" RowDefinitions="*,28">
         <DataGrid x:Name="DetailsGrid"
-                  IsVisible="{Binding IsDetailsView}"
+                  Grid.Row="0"
                   ItemsSource="{Binding Entries}"
                   AutoGenerateColumns="False"
                   IsReadOnly="True"
@@ -517,9 +518,16 @@
                 </DataGridTemplateColumn>
             </DataGrid.Columns>
         </DataGrid>
+        <!-- Empty-area hit target below the DataGrid so the context menu is accessible
+             when the pane has fewer rows than the viewport. -->
+        <Border Grid.Row="1"
+                Background="Transparent"
+                Cursor="Arrow" />
+        </Grid>
 
+        <Grid IsVisible="{Binding IsListView}" RowDefinitions="*,28">
         <ListBox x:Name="ListView"
-                 IsVisible="{Binding IsListView}"
+                 Grid.Row="0"
                  ItemsSource="{Binding Entries}"
                  SelectionMode="Multiple"
                  Background="Transparent"
@@ -575,6 +583,12 @@
                 </Style>
             </ListBox.Styles>
         </ListBox>
+        <!-- Empty-area hit target below the ListBox so the context menu is accessible
+             when the pane has fewer items than the viewport. -->
+        <Border Grid.Row="1"
+                Background="Transparent"
+                Cursor="Arrow" />
+        </Grid>
 
         <controls:VirtualizingFileGrid x:Name="GridView"
                  IsVisible="{Binding IsGridView}"
@@ -672,38 +686,6 @@
                                         ColumnSpacing="4"
                                         ColumnActivated="OnMillerColumnActivated" />
         </ScrollViewer>
-
-        <Border IsVisible="{Binding IsFilterVisible}"
-                VerticalAlignment="Top" HorizontalAlignment="Right"
-                Margin="0,8,16,0"
-                Background="{DynamicResource HelixContentCardBrush}"
-                BorderBrush="{DynamicResource HelixAccentBrush}"
-                BorderThickness="1"
-                CornerRadius="14"
-                Padding="10,4"
-                BoxShadow="0 2 8 0 #30000000">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-                <PathIcon Data="{DynamicResource HelixIconSearchGeometry}"
-                          Width="14" Height="14" Opacity="0.6" VerticalAlignment="Center" />
-                <TextBox x:Name="FilterBox"
-                         Text="{Binding FilterText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                         Width="200"
-                         BorderThickness="0"
-                         Background="Transparent"
-                         Padding="0"
-                         VerticalAlignment="Center"
-                         PlaceholderText="Filter items…"
-                         KeyDown="OnFilterBoxKeyDown" />
-                <Button Content="✕"
-                        Padding="4,0"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Cursor="Hand"
-                        FontSize="12"
-                        Opacity="0.6"
-                        Click="OnFilterCloseClick" />
-            </StackPanel>
-        </Border>
 
         <controls:SelectionMarquee x:Name="SelectionMarquee"
                                    IsHitTestVisible="False"

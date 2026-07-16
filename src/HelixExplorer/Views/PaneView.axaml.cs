@@ -95,15 +95,7 @@ public sealed partial class PaneView : UserControl
         if (_pane is null)
             return;
 
-        if (e.PropertyName == nameof(PaneViewModel.IsFilterVisible) && _pane.IsFilterVisible)
-        {
-            Dispatcher.UIThread.Post(() =>
-            {
-                FilterBox.Focus();
-                FilterBox.SelectAll();
-            });
-        }
-        else if (e.PropertyName == nameof(PaneViewModel.IsRenaming) && _pane.IsRenaming)
+        if (e.PropertyName == nameof(PaneViewModel.IsRenaming) && _pane.IsRenaming)
         {
             Dispatcher.UIThread.Post(FocusRenameEditor);
         }
@@ -215,29 +207,6 @@ public sealed partial class PaneView : UserControl
         e.Handled = true;
     }
 
-    private void OnFilterBoxKeyDown(object? sender, KeyEventArgs e)
-    {
-        if (Pane is null)
-            return;
-
-        if (e.Key == Key.Escape)
-        {
-            Pane.ClearFilter();
-            Focus();
-            e.Handled = true;
-        }
-        else if (e.Key == Key.Enter)
-        {
-            e.Handled = true;
-        }
-    }
-
-    private void OnFilterCloseClick(object? sender, RoutedEventArgs e)
-    {
-        Pane?.ClearFilter();
-        Focus();
-    }
-
     private void OnRenameKeyDown(object? sender, KeyEventArgs e)
     {
         if (Pane is null)
@@ -299,7 +268,7 @@ public sealed partial class PaneView : UserControl
             Pane.RefreshCommand.Execute(null);
             e.Handled = true;
         }
-        else if (e.Key == Key.Escape && Pane.IsFilterVisible)
+        else if (e.Key == Key.Escape && (Pane.IsFilterMode || Pane.IsSearchMode))
         {
             Pane.ClearFilter();
             e.Handled = true;
@@ -344,14 +313,18 @@ public sealed partial class PaneView : UserControl
             switch (visibleControl)
             {
                 case DataGrid grid:
-                    grid.SelectedItems?.Clear();
-                    foreach (var entry in selected)
-                        grid.SelectedItems?.Add(entry);
+                    SyncDataGridSelection(grid, selected);
                     break;
                 case ListBox list:
                     list.SelectedItems?.Clear();
-                    foreach (var entry in selected)
-                        list.SelectedItems?.Add(entry);
+                    if (selected.Count == 0)
+                        list.SelectedItem = null;
+                    else
+                    {
+                        foreach (var entry in selected)
+                            list.SelectedItems?.Add(entry);
+                    }
+
                     break;
             }
         }
@@ -361,11 +334,35 @@ public sealed partial class PaneView : UserControl
         }
     }
 
+    private static void SyncDataGridSelection(DataGrid grid, List<EntryItemViewModel> selected)
+    {
+        // Avalonia DataGrid often leaves :selected row chrome after SelectedItems.Clear() alone.
+        if (grid.SelectedItems is { } items)
+        {
+            while (items.Count > 0)
+                items.RemoveAt(items.Count - 1);
+        }
+
+        grid.SelectedItem = null;
+
+        if (selected.Count == 0)
+            return;
+
+        foreach (var entry in selected)
+            grid.SelectedItems?.Add(entry);
+
+        if (selected.Count == 1)
+            grid.SelectedItem = selected[0];
+    }
+
     private Control? GetVisibleControl()
     {
-        if (DetailsGrid.IsVisible) return DetailsGrid;
-        if (ListView.IsVisible) return ListView;
-        if (Pane?.IsGridView == true) return GridView;
+        if (Pane is null)
+            return null;
+
+        if (Pane.IsDetailsView) return DetailsGrid;
+        if (Pane.IsListView) return ListView;
+        if (Pane.IsGridView) return GridView;
         return null;
     }
 

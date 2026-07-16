@@ -33,7 +33,8 @@
         <KeyBinding Gesture="Ctrl+T" Command="{Binding NewTabCommand}" />
         <KeyBinding Gesture="Ctrl+W" Command="{Binding CloseSelectedTabCommand}" />
         <KeyBinding Gesture="Ctrl+D" Command="{Binding ToggleDualPaneCommand}" />
-        <KeyBinding Gesture="Ctrl+F" Command="{Binding FocusSearchCommand}" />
+        <KeyBinding Gesture="Ctrl+F" Command="{Binding FocusFilterCommand}" />
+        <KeyBinding Gesture="Ctrl+Shift+F" Command="{Binding FocusSearchCommand}" />
         <KeyBinding Gesture="Ctrl+X" Command="{Binding CutCommand}" />
         <KeyBinding Gesture="Ctrl+C" Command="{Binding CopyCommand}" />
         <KeyBinding Gesture="Ctrl+V" Command="{Binding PasteCommand}" />
@@ -431,8 +432,8 @@
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
                     <Button Classes="toolButton"
-                            Command="{Binding FocusSearchCommand}"
-                            ToolTip.Tip="Search (Ctrl+F)"
+                            Command="{Binding FocusFilterCommand}"
+                            ToolTip.Tip="Filter (Ctrl+F) · Search (Ctrl+Shift+F)"
                             IsVisible="{Binding IsBrowserTab}"
                             Padding="8,4"
                             Cursor="Hand">

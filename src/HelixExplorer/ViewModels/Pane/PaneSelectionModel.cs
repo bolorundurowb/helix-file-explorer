@@ -16,11 +16,24 @@ public sealed class PaneSelectionModel
 
     public void UpdateSelection(IList<EntryItemViewModel> entries, IReadOnlyList<EntryItemViewModel> allEntries)
     {
+        ReplaceSelection(entries, allEntries, preferredSingle: null);
+    }
+
+    /// <summary>
+    /// Replaces the selection in one shot and raises <see cref="SelectionChanged"/> once.
+    /// Use for restore-after-sort so callers can sync entry flags a single time.
+    /// </summary>
+    public void ReplaceSelection(
+        IEnumerable<EntryItemViewModel> entries,
+        IReadOnlyList<EntryItemViewModel> allEntries,
+        EntryItemViewModel? preferredSingle)
+    {
         SelectedEntries.Clear();
         foreach (var entry in entries)
             SelectedEntries.Add(entry);
 
-        SelectedEntry = SelectedEntries.Count == 1 ? SelectedEntries[0] : null;
+        SelectedEntry = preferredSingle
+            ?? (SelectedEntries.Count == 1 ? SelectedEntries[0] : null);
         _anchorIndex = SelectedEntry is not null ? IndexOf(allEntries, SelectedEntry) : -1;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
     }

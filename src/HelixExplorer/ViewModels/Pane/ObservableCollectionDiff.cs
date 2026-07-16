@@ -31,13 +31,25 @@ public static class ObservableCollectionDiff
 
         if (target.Count == 0 || desired.Count == 0)
         {
-            target.Clear();
-            foreach (var item in desired)
-                target.Add(item);
+            ReplaceAll(target, desired);
             return;
         }
 
         var wanted = new HashSet<T>(desired, ReferenceComparer<T>.Instance);
+        var shared = 0;
+        for (var i = 0; i < target.Count; i++)
+        {
+            if (wanted.Contains(target[i]))
+                shared++;
+        }
+
+        // High churn: Clear+Add is cheaper than O(n²) Move/IndexOf scans and fewer UI notifications.
+        var maxCount = Math.Max(target.Count, desired.Count);
+        if (maxCount > 0 && shared < maxCount * 0.7)
+        {
+            ReplaceAll(target, desired);
+            return;
+        }
 
         for (var i = target.Count - 1; i >= 0; i--)
         {
@@ -61,6 +73,13 @@ public static class ObservableCollectionDiff
 
         while (target.Count > desired.Count)
             target.RemoveAt(target.Count - 1);
+    }
+
+    private static void ReplaceAll<T>(ObservableCollection<T> target, IReadOnlyList<T> desired) where T : class
+    {
+        target.Clear();
+        foreach (var item in desired)
+            target.Add(item);
     }
 
     private static int IndexOfReference<T>(IList<T> list, T target, int startIndex) where T : class

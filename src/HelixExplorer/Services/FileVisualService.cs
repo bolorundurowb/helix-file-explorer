@@ -13,6 +13,7 @@ public sealed class FileVisualService(IFileVisualProvider provider) : IDisposabl
     private readonly LinkedList<VisualCacheKey> _lruOrder = new();
     private readonly Dictionary<VisualCacheKey, LinkedListNode<VisualCacheKey>> _lruNodes = new();
     private readonly object _lruLock = new();
+    private readonly SemaphoreSlim _uiDecodeGate = new(1, 1);
     private bool _disposed;
 
     public async Task<Bitmap?> GetBitmapAsync(
@@ -60,11 +61,24 @@ public sealed class FileVisualService(IFileVisualProvider provider) : IDisposabl
                 return null;
             }
 
-            var bitmap = await Dispatcher.UIThread.InvokeAsync(() =>
+            // Serialize UI-thread Bitmap construction so bounded loaders do not stampede the dispatcher.
+            await _uiDecodeGate.WaitAsync().ConfigureAwait(false);
+            Bitmap? bitmap;
+            try
             {
-                using var stream = new MemoryStream(data.Png);
-                return new Bitmap(stream);
-            });
+                if (_disposed)
+                    return null;
+
+                bitmap = await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    using var stream = new MemoryStream(data.Png);
+                    return new Bitmap(stream);
+                });
+            }
+            finally
+            {
+                _uiDecodeGate.Release();
+            }
 
             EvictIfNeeded();
             return bitmap;
@@ -137,6 +151,8 @@ public sealed class FileVisualService(IFileVisualProvider provider) : IDisposabl
             _lruOrder.Clear();
             _lruNodes.Clear();
         }
+
+        _uiDecodeGate.Dispose();
     }
 
     private readonly record struct VisualCacheKey(string Path, int Size, bool PreferThumbnail);

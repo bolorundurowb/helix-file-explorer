@@ -14,6 +14,9 @@ public static class FileNameFilter
         if (query.IsEmpty)
             return true;
 
+        if (GlobMatcher.HasGlobMetacharacters(query))
+            return GlobMatcher.IsMatch(name, query);
+
         var probe = CreateCaseInsensitiveProbe(query[0]);
         if (query.Length == 1)
             return name.ContainsAny(probe);
@@ -45,8 +48,9 @@ public static class FileNameFilter
             return destination.Count;
         }
 
-        var probe = CreateCaseInsensitiveProbe(trimmed[0]);
-        var isSingleChar = trimmed.Length == 1;
+        var useGlob = GlobMatcher.HasGlobMetacharacters(trimmed);
+        SearchValues<char>? probe = useGlob ? null : CreateCaseInsensitiveProbe(trimmed[0]);
+        var isSingleChar = !useGlob && trimmed.Length == 1;
         var needle = trimmed.AsSpan();
 
         for (var i = 0; i < source.Count; i++)
@@ -54,7 +58,14 @@ public static class FileNameFilter
             var entry = source[i];
             var name = entry.Name.AsSpan();
 
-            if (!name.ContainsAny(probe))
+            if (useGlob)
+            {
+                if (GlobMatcher.IsMatch(name, needle))
+                    destination.Add(entry);
+                continue;
+            }
+
+            if (probe is not null && !name.ContainsAny(probe))
                 continue;
 
             if (isSingleChar || name.Contains(needle, StringComparison.OrdinalIgnoreCase))

@@ -11,6 +11,11 @@ public sealed record SearchOptions
 
     public bool IncludeHiddenAndSystem { get; init; }
 
+    /// <summary>When true, scan text-file contents for a literal (non-glob) query.</summary>
+    public bool SearchFileContents { get; init; } = true;
+
+    public long MaxContentBytes { get; init; } = Search.TextFileClassifier.DefaultMaxBytes;
+
     public static readonly SearchOptions Default = new();
 }
 

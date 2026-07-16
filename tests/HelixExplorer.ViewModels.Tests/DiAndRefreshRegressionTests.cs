@@ -1,6 +1,7 @@
 using System.Reflection;
 using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Services;
+using HelixExplorer.ViewModels;
 using HelixExplorer.ViewModels.Pane;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -25,7 +26,13 @@ public class ScopedDiWiringTests
         Assert.Equal(ServiceLifetime.Scoped, Descriptor<FileOperationReporter>(services).Lifetime);
         Assert.Equal(ServiceLifetime.Scoped, Descriptor<IFileOperationReporter>(services).Lifetime);
         Assert.Equal(ServiceLifetime.Scoped, Descriptor<IPaneCoordinatorFactory>(services).Lifetime);
+        Assert.Equal(ServiceLifetime.Scoped, Descriptor<IPaneViewModelFactory>(services).Lifetime);
+        Assert.Equal(ServiceLifetime.Scoped, Descriptor<AppSettingsCoordinator>(services).Lifetime);
+        Assert.Equal(ServiceLifetime.Scoped, Descriptor<SidebarViewModel>(services).Lifetime);
+        Assert.Equal(ServiceLifetime.Scoped, Descriptor<CommandPaletteService>(services).Lifetime);
+        Assert.Equal(ServiceLifetime.Scoped, Descriptor<TabSessionCoordinator>(services).Lifetime);
         Assert.Equal(ServiceLifetime.Transient, Descriptor<PaneFileOperationCoordinator>(services).Lifetime);
+        Assert.Equal(ServiceLifetime.Transient, Descriptor<PaneShellActionCoordinator>(services).Lifetime);
         Assert.Equal(ServiceLifetime.Singleton, Descriptor<IWindowHostService>(services).Lifetime);
     }
 

@@ -28,7 +28,8 @@ Built after persistent performance issues with [Files](https://files.community/)
 | Ctrl+W | Close tab |
 | Ctrl+Tab / Ctrl+Shift+Tab | Next / previous tab |
 | Ctrl+D | Toggle dual pane |
-| Ctrl+F | Search current folder |
+| Ctrl+F | Filter current folder (globs supported) |
+| Ctrl+Shift+F | Search files and content (recursive) |
 | Ctrl+X / C / V | Cut / Copy / Paste |
 | Ctrl+A | Select all |
 | Ctrl+Shift+C | Copy path |

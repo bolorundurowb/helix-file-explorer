@@ -56,7 +56,14 @@ public static class HelixServiceRegistration
         });
         services.AddTransient<PaneRefreshCoordinator>();
         services.AddTransient<PaneFileOperationCoordinator>();
+        services.AddTransient<PaneSearchCoordinator>();
+        services.AddTransient<PaneShellActionCoordinator>();
         services.AddScoped<IPaneCoordinatorFactory, PaneCoordinatorFactory>();
+        services.AddScoped<IPaneViewModelFactory, PaneViewModelFactory>();
+        services.AddScoped<AppSettingsCoordinator>();
+        services.AddScoped<SidebarViewModel>();
+        services.AddScoped<CommandPaletteService>();
+        services.AddScoped<TabSessionCoordinator>();
         services.AddSingleton<ApplicationStartupCoordinator>();
         // Window-graph ViewModels are scoped per window (see WindowHostService), so each window gets its
         // own MainWindowViewModel and a single HomePageViewModel shared across that window's tabs.

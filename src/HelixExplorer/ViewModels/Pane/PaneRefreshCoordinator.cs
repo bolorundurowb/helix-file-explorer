@@ -165,7 +165,7 @@ public sealed class PaneRefreshCoordinator(
                 if (showLoading)
                     host.SetLoading(false);
 
-                RequestEntryVisuals(host, result.VisualTargets);
+                // Visuals are requested by ApplySortAndPublish on the host; do not double-queue here.
             });
 
             if (IsTokenCancelled(token) || host.IsDisposed || generation != _refreshGeneration)
@@ -214,14 +214,16 @@ public sealed class PaneRefreshCoordinator(
 
     public void RequestEntryVisuals(IPaneRefreshHost host, IReadOnlyList<EntryItemViewModel>? targets = null)
     {
+        // Snapshot first so empty VisualTargets (sort/filter reuse) do not cancel in-flight loads.
+        var entries = (targets ?? host.Entries).ToList();
+        if (entries.Count == 0)
+            return;
+
         CancelVisuals();
         _visualCts = new CancellationTokenSource();
         var ct = _visualCts.Token;
         var size = host.IsGridView ? (int)host.ThumbnailSize : 20;
         var isGrid = host.IsGridView;
-
-        // Snapshot the targets so the queue is stable even if the live collection changes.
-        var entries = (targets ?? host.Entries).ToList();
 
         // Bound concurrency so opening a folder of photos does not spawn one decode task per entry.
         _ = _visualLoader.RunAsync(

@@ -5,122 +5,79 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
-using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Core.Models;
-using HelixExplorer.Core.Search;
-using HelixExplorer.Core.Session;
 using HelixExplorer.Core.Settings;
 using HelixExplorer.Core.Theming;
 using HelixExplorer.Input;
 using HelixExplorer.Localization;
 using HelixExplorer.Services;
 using HelixExplorer.ViewModels.Pane;
-using Microsoft.Extensions.Logging;
 
 namespace HelixExplorer.ViewModels;
 
 public partial class MainWindowViewModel : ObservableObject, IDisposable
 {
-    private readonly ISettingsStore _settingsStore;
-    private readonly ISessionStore _sessionStore;
     private readonly IThemeService _themeService;
-    private readonly IUiFontService _uiFontService;
     private readonly IAccentBrushService _accentBrushes;
-    private readonly IFileSystemProvider _fileSystem;
     private readonly IQuickAccessProvider _quickAccess;
-    private readonly IVolumeProvider _volumes;
     private readonly INetworkLocationProvider _networkLocations;
-    private readonly IFileOperationService _fileOps;
     private readonly IClipboardService _clipboard;
-    private readonly IShellContextMenuService _shellContextMenu;
-    private readonly IUiHost _uiHost;
-    private readonly IGitProvider _git;
     private readonly IArchiveProvider _archive;
     private readonly IFolderColorService _folderColors;
-    private readonly FileVisualService _visuals;
-    private readonly Func<IFileChangeWatcher> _watcherFactory;
-    private readonly IPaneCoordinatorFactory _coordinatorFactory;
+    private readonly IPaneViewModelFactory _paneFactory;
+    private readonly AppSettingsCoordinator _settingsCoordinator;
+    private readonly SidebarViewModel _sidebar;
+    private readonly CommandPaletteService _commandPalette;
+    private readonly TabSessionCoordinator _tabSession;
     private readonly FileOperationReporter _operationReporter;
     private readonly IUserDialogService _dialogs;
-    private readonly IWindowHostService _windowHost;
-    private readonly IShellFolderEnumerator _shellEnumerator;
-    private readonly ITerminalLauncher _terminalLauncher;
     private readonly HomePageViewModel _homePage;
     private readonly SettingsPageViewModel _settingsPage;
-    private readonly ILogger<PaneViewModel> _paneViewModelLogger;
     private readonly string _homePath;
-    private readonly List<CommandItem> _allCommands = new();
     private readonly List<string> _recentPaths = new();
-    private AppSettings? _cachedSettings;
     private IReadOnlyList<NetworkLocationInfo> _lastNetworkLocations = [];
     private CancellationTokenSource? _networkCts;
-    private CancellationTokenSource? _persistCts;
-    private const int PersistDebounceMs = 500;
-    private bool _commandsBuilt;
     private bool _disposed;
     private TabViewModel? _lastBrowserTab;
     private bool _restoreWindowLayout;
 
-    private const int MaxPaletteResults = 24;
     private const double MinWindowWidth = 800;
     private const double MinWindowHeight = 500;
 
     public MainWindowViewModel(
-        ISettingsStore settingsStore,
-        ISessionStore sessionStore,
         IThemeService themeService,
-        IUiFontService uiFontService,
         IAccentBrushService accentBrushes,
-        IFileSystemProvider fileSystem,
         IQuickAccessProvider quickAccess,
-        IVolumeProvider volumes,
         INetworkLocationProvider networkLocations,
-        IFileOperationService fileOps,
         IClipboardService clipboard,
-        IShellContextMenuService shellContextMenu,
-        IUiHost uiHost,
-        IGitProvider git,
         IArchiveProvider archive,
         IFolderColorService folderColors,
-        FileVisualService visuals,
-        Func<IFileChangeWatcher> watcherFactory,
-        IPaneCoordinatorFactory coordinatorFactory,
+        IPaneViewModelFactory paneFactory,
+        AppSettingsCoordinator settingsCoordinator,
+        SidebarViewModel sidebar,
+        CommandPaletteService commandPalette,
+        TabSessionCoordinator tabSession,
         FileOperationReporter operationReporter,
         IUserDialogService dialogs,
-        IWindowHostService windowHost,
-        IShellFolderEnumerator shellEnumerator,
-        ITerminalLauncher terminalLauncher,
-        HomePageViewModel homePage,
-        ILogger<PaneViewModel> paneLogger)
+        HomePageViewModel homePage)
     {
-        _settingsStore = settingsStore;
-        _sessionStore = sessionStore;
         _themeService = themeService;
-        _uiFontService = uiFontService;
         _accentBrushes = accentBrushes;
-        _fileSystem = fileSystem;
         _quickAccess = quickAccess;
-        _volumes = volumes;
         _networkLocations = networkLocations;
-        _fileOps = fileOps;
         _clipboard = clipboard;
-        _shellContextMenu = shellContextMenu;
-        _uiHost = uiHost;
-        _git = git;
         _archive = archive;
         _folderColors = folderColors;
-        _visuals = visuals;
-        _watcherFactory = watcherFactory;
-        _coordinatorFactory = coordinatorFactory;
+        _paneFactory = paneFactory;
+        _settingsCoordinator = settingsCoordinator;
+        _sidebar = sidebar;
+        _commandPalette = commandPalette;
+        _tabSession = tabSession;
         _operationReporter = operationReporter;
         _dialogs = dialogs;
-        _windowHost = windowHost;
-        _shellEnumerator = shellEnumerator;
-        _terminalLauncher = terminalLauncher;
         OperationReporter = operationReporter;
         _homePage = homePage;
-        _paneViewModelLogger = paneLogger;
         _settingsPage = new SettingsPageViewModel(this);
         _homePage.NavigateRequested += OnHomeNavigateRequested;
         _operationReporter.PropertyChanged += OnOperationReporterPropertyChanged;
@@ -147,12 +104,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _accentBrushes.ApplyCustomAccent(AccentColorArgb);
         _themeService.ThemeChanged += OnThemeServiceChanged;
 
-        SidebarItems = SidebarFactory.Build(
-            _quickAccess,
-            _volumes,
-            settings.PinnedPaths,
-            settings.UnpinnedPaths);
-        _ = LoadSidebarIconsAsync();
+        _sidebar.Rebuild(settings.PinnedPaths, settings.UnpinnedPaths);
         _ = RefreshNetworkLocationsAsync();
 
         _folderColors.ColorsChanged += OnFolderColorsChanged;
@@ -328,7 +280,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<TabViewModel> Tabs { get; } = new();
 
-    public ObservableCollection<SidebarItemViewModel> SidebarItems { get; }
+    public ObservableCollection<SidebarItemViewModel> SidebarItems => _sidebar.Items;
 
     public FileOperationReporter OperationReporter { get; }
 
@@ -368,7 +320,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             if (!ct.IsCancellationRequested)
             {
                 _lastNetworkLocations = result.Locations;
-                RebuildSidebar(result.Locations);
+                RebuildSidebar();
                 ApplyNetworkStatus(result.Status);
             }
         }
@@ -409,46 +361,14 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         }
     }
 
-    private void RebuildSidebar(IReadOnlyList<NetworkLocationInfo> networkLocations)
+    private void RebuildSidebar()
     {
-        var selectedPath = ActivePane?.CurrentPath;
         var settings = GetSettings();
-        var items = SidebarFactory.Build(
-            _quickAccess,
-            _volumes,
+        _sidebar.Rebuild(
             settings.PinnedPaths,
             settings.UnpinnedPaths,
-            networkLocations,
-            selectedPath);
-        SidebarItems.Clear();
-        foreach (var item in items)
-            SidebarItems.Add(item);
-
-        _ = LoadSidebarIconsAsync();
-    }
-
-    private async Task LoadSidebarIconsAsync()
-    {
-        foreach (var item in SidebarItems)
-        {
-            if (!item.IsNavigable || string.IsNullOrEmpty(item.Path))
-                continue;
-
-            try
-            {
-                var icon = await _visuals.GetBitmapAsync(
-                    item.Path,
-                    isDirectory: true,
-                    size: 16,
-                    preferThumbnail: false,
-                    CancellationToken.None).ConfigureAwait(true);
-                item.Icon = icon;
-            }
-            catch
-            {
-                item.Icon = null;
-            }
-        }
+            _lastNetworkLocations,
+            ActivePane?.CurrentPath);
     }
 
     [ObservableProperty]
@@ -552,16 +472,10 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         set => DirectorySort = value ? DirectorySortMode.FoldersFirst : DirectorySortMode.MixedWithFiles;
     }
 
-    partial void OnThemeChanged(ThemeMode value)
-    {
-        _themeService.ApplyTheme(value);
-        PersistChromeSettings();
-        _accentBrushes.ApplyCustomAccent(AccentColorArgb);
-    }
+    partial void OnThemeChanged(ThemeMode value) => PersistChromeSettings();
 
     partial void OnUiFontChanged(UiFontFamily value)
     {
-        _uiFontService.ApplyFont(value);
         PersistChromeSettings();
         OnPropertyChanged(nameof(SelectedUiFontOption));
     }
@@ -603,86 +517,51 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     partial void OnDefaultSplitOrientationChanged(PaneSplitOrientation value) => PersistChromeSettings();
 
-    partial void OnAccentColorArgbChanged(uint? value)
-    {
-        _accentBrushes.ApplyCustomAccent(value);
-        PersistChromeSettings();
-    }
+    partial void OnAccentColorArgbChanged(uint? value) => PersistChromeSettings();
 
     private void OnThemeServiceChanged(ThemeMode _)
         => _accentBrushes.ApplyCustomAccent(AccentColorArgb);
 
     private void PersistViewSettings()
     {
-        var settings = GetSettings();
-        settings.ShowHiddenFiles = ShowHiddenFiles;
-        settings.ShowFileExtensions = ShowFileExtensions;
-        settings.DirectorySort = DirectorySort;
-        _cachedSettings = settings;
-        SchedulePersistSettings();
+        _settingsCoordinator.ScheduleSave(settings =>
+        {
+            settings.ShowHiddenFiles = ShowHiddenFiles;
+            settings.ShowFileExtensions = ShowFileExtensions;
+            settings.DirectorySort = DirectorySort;
+        });
     }
 
     private void PersistChromeSettings()
     {
-        var settings = GetSettings();
-        settings.SidebarWidth = SidebarWidth;
-        settings.Theme = Theme;
-        settings.UiFont = UiFont;
-        settings.SizeDisplay = SizeDisplay;
-        settings.DefaultViewMode = DefaultViewMode;
-        settings.DefaultThumbnailSize = DefaultThumbnailSize;
-        settings.DefaultDualPane = DefaultDualPane;
-        settings.DefaultSplitOrientation = DefaultSplitOrientation;
-        settings.AccentColorArgb = AccentColorArgb;
-        settings.OpenInTerminalGesture = string.IsNullOrWhiteSpace(OpenInTerminalGesture)
-            ? AppDefaultTerminalGesture
-            : OpenInTerminalGesture;
-        settings.AutoCheckForUpdates = AutoCheckForUpdates;
-        _cachedSettings = settings;
-        SchedulePersistSettings();
+        _settingsCoordinator.ScheduleSave(settings =>
+        {
+            settings.SidebarWidth = SidebarWidth;
+            settings.Theme = Theme;
+            settings.UiFont = UiFont;
+            settings.SizeDisplay = SizeDisplay;
+            settings.DefaultViewMode = DefaultViewMode;
+            settings.DefaultThumbnailSize = DefaultThumbnailSize;
+            settings.DefaultDualPane = DefaultDualPane;
+            settings.DefaultSplitOrientation = DefaultSplitOrientation;
+            settings.AccentColorArgb = AccentColorArgb;
+            settings.OpenInTerminalGesture = string.IsNullOrWhiteSpace(OpenInTerminalGesture)
+                ? AppDefaultTerminalGesture
+                : OpenInTerminalGesture;
+            settings.AutoCheckForUpdates = AutoCheckForUpdates;
+        });
     }
 
-    private AppSettings GetSettings()
-        => _cachedSettings ??= _settingsStore.Load();
+    private AppSettings GetSettings() => _settingsCoordinator.Load();
 
     private void SaveSettings(AppSettings settings)
     {
-        _settingsStore.Save(settings);
-        _cachedSettings = settings;
+        // Callers mutate the cached instance from GetSettings(); flush writes it immediately.
+        _ = settings;
+        _settingsCoordinator.Flush();
     }
 
-    /// <summary>
-    /// Coalesces disk writes: sidebar/thumbnail sliders used to hit the store on every change.
-    /// </summary>
-    private void SchedulePersistSettings()
-    {
-        var cts = new CancellationTokenSource();
-        var previous = Interlocked.Exchange(ref _persistCts, cts);
-        previous?.Cancel();
-        previous?.Dispose();
-
-        var token = cts.Token;
-        _ = Task.Delay(PersistDebounceMs, token).ContinueWith(
-            _ =>
-            {
-                var settings = _cachedSettings;
-                if (settings is not null)
-                    _settingsStore.Save(settings);
-            },
-            CancellationToken.None,
-            TaskContinuationOptions.OnlyOnRanToCompletion,
-            TaskScheduler.FromCurrentSynchronizationContext());
-    }
-
-    private void FlushSettings()
-    {
-        var cts = Interlocked.Exchange(ref _persistCts, null);
-        cts?.Cancel();
-        cts?.Dispose();
-
-        if (_cachedSettings is not null)
-            _settingsStore.Save(_cachedSettings);
-    }
+    private void FlushSettings() => _settingsCoordinator.Flush();
 
     private void ApplyViewSettingsToTabs()
     {
@@ -705,73 +584,24 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     private void RestoreSession()
     {
-        var session = _sessionStore.Load();
-
-        if (session.RecentPaths.Count > 0)
-        {
-            _recentPaths.Clear();
-            foreach (var path in session.RecentPaths)
-                _recentPaths.Add(path);
-        }
-
-        if (session.Tabs.Count == 0)
-        {
-            AddTab(CreateDefaultTab());
-        }
-        else
-        {
-            foreach (var snapshot in session.Tabs)
-            {
-                var tab = CreateTab();
-                AddTab(tab);
-                tab.RestoreFrom(snapshot);
-            }
-        }
-
-        var index = Math.Clamp(session.ActiveTabIndex, 0, Tabs.Count - 1);
-        SelectedTab = Tabs[index];
+        _tabSession.Restore(
+            _recentPaths,
+            () => CreateTab(),
+            CreateDefaultTab,
+            AddTab,
+            tab => SelectedTab = tab,
+            Tabs);
     }
 
     public void SaveSession()
-    {
-        var document = new SessionDocument
-        {
-            ActiveTabIndex = SelectedTab is null ? 0 : Math.Max(0, Tabs.IndexOf(SelectedTab)),
-            RecentPaths = _recentPaths.Take(12).ToList()
-        };
-
-        foreach (var tab in Tabs.Where(t => t.IsBrowserTab))
-            document.Tabs.Add(tab.CreateSnapshot());
-
-        try
-        {
-            _sessionStore.Save(document);
-        }
-        catch
-        {
-        }
-    }
+        => _tabSession.Save(Tabs, SelectedTab, _recentPaths);
 
     private TabViewModel CreateTab(TabKind kind = TabKind.Browser)
     {
         var tab = new TabViewModel(
-            _fileSystem,
-            _fileOps,
             _clipboard,
-            _shellContextMenu,
-            _uiHost,
-            _git,
             _archive,
-            _folderColors,
-            _settingsStore,
-            _watcherFactory,
-            _coordinatorFactory,
-            _quickAccess,
-            _dialogs,
-            _windowHost,
-            _shellEnumerator,
-            _terminalLauncher,
-            _paneViewModelLogger,
+            _paneFactory,
             _homePage,
             kind,
             kind == TabKind.Settings ? _settingsPage : null);
@@ -838,16 +668,18 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private void CloseTab(TabViewModel? tab)
     {
         tab ??= SelectedTab;
-        if (tab is null)
-            return;
+        SelectedTab = _tabSession.CloseTab(
+            Tabs,
+            tab,
+            SelectedTab,
+            DetachTab,
+            CreateDefaultTab,
+            AddTab);
+        OnPropertyChanged(nameof(HasMultipleTabs));
+    }
 
-        var index = Tabs.IndexOf(tab);
-        if (index < 0)
-            return;
-
-        var wasSelected = ReferenceEquals(tab, SelectedTab);
-
-        Tabs.Remove(tab);
+    private void DetachTab(TabViewModel tab)
+    {
         tab.CloseRequested -= OnTabCloseRequested;
         tab.SortChanged -= OnTabSortChanged;
         tab.LayoutChanged -= OnTabLayoutChanged;
@@ -855,20 +687,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         tab.OpenInNewTabRequested -= OnOpenInNewTabRequested;
         tab.PinPathRequested -= OnPinPathRequested;
         tab.SelectionChanged -= OnTabSelectionChanged;
-        tab.Dispose();
-
-        if (Tabs.Count == 0)
-        {
-            var replacement = CreateDefaultTab();
-            AddTab(replacement);
-            SelectedTab = replacement;
-        }
-        else if (wasSelected)
-        {
-            SelectedTab = Tabs[Math.Clamp(index, 0, Tabs.Count - 1)];
-        }
-
-        OnPropertyChanged(nameof(HasMultipleTabs));
     }
 
     [RelayCommand]
@@ -881,14 +699,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private void SelectPreviousTab() => CycleSelectedTab(-1);
 
     public void CycleSelectedTab(int delta)
-    {
-        if (Tabs.Count < 2 || SelectedTab is null)
-            return;
-
-        var current = Tabs.IndexOf(SelectedTab);
-        var next = ((current + delta) % Tabs.Count + Tabs.Count) % Tabs.Count;
-        SelectedTab = Tabs[next];
-    }
+        => SelectedTab = _tabSession.CycleSelectedTab(Tabs, SelectedTab, delta);
 
     private void OnTabCloseRequested(object? sender, EventArgs e)
     {
@@ -929,76 +740,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     partial void OnCommandPaletteQueryChanged(string value) => RefreshCommandPalette(value);
 
-    private void EnsureCommandsBuilt()
-    {
-        if (_commandsBuilt)
-            return;
-
-        _commandsBuilt = true;
-        _allCommands.Add(new CommandItem("New Tab", "File", vm => vm.NewTabCommand.Execute(null), "Ctrl+T"));
-        _allCommands.Add(new CommandItem("Close Tab", "File", vm => vm.CloseSelectedTabCommand.Execute(null), "Ctrl+W"));
-        _allCommands.Add(new CommandItem("Toggle Theme", "Appearance", vm => vm.ToggleThemeCommand.Execute(null), "Ctrl+Shift+T"));
-        _allCommands.Add(new CommandItem("Toggle Dual Pane", "View", vm => vm.ToggleDualPaneCommand.Execute(null), "Ctrl+D"));
-        _allCommands.Add(new CommandItem("Search", "View", vm => vm.FocusSearchCommand.Execute(null), "Ctrl+F"));
-        _allCommands.Add(new CommandItem("Settings", "View", vm => vm.OpenSettingsCommand.Execute(null)));
-        _allCommands.Add(new CommandItem("Go Back", "Navigation", vm => vm.ActivePane?.GoBackCommand.Execute(null)));
-        _allCommands.Add(new CommandItem("Go Forward", "Navigation", vm => vm.ActivePane?.GoForwardCommand.Execute(null)));
-        _allCommands.Add(new CommandItem("Go Up", "Navigation", vm => vm.ActivePane?.GoUpCommand.Execute(null)));
-        _allCommands.Add(new CommandItem("Refresh", "Navigation", vm => vm.ActivePane?.RefreshCommand.Execute(null), "F5"));
-        _allCommands.Add(new CommandItem("New Folder", "File", vm => vm.NewFolderCommand.Execute(null), "Ctrl+Shift+N"));
-        _allCommands.Add(new CommandItem("Details View", "View", vm => vm.SetViewModeCommand.Execute(LayoutMode.Details)));
-        _allCommands.Add(new CommandItem("List View", "View", vm => vm.SetViewModeCommand.Execute(LayoutMode.List)));
-        _allCommands.Add(new CommandItem("Grid View", "View", vm => vm.SetViewModeCommand.Execute(LayoutMode.Grid)));
-        _allCommands.Add(new CommandItem("Miller Columns", "View", vm => vm.SetViewModeCommand.Execute(LayoutMode.Miller)));
-        _allCommands.Add(new CommandItem("Show Hidden Items", "View", vm => vm.ToggleShowHiddenFilesCommand.Execute(null)));
-        _allCommands.Add(new CommandItem("Show File Extensions", "View", vm => vm.ToggleShowFileExtensionsCommand.Execute(null)));
-        _allCommands.Add(new CommandItem("Copy Path", "File", vm => vm.CopyPathCommand.Execute(null), "Ctrl+Shift+C"));
-        _allCommands.Add(new CommandItem("Pin Current Folder", "View", vm => vm.PinCurrentFolderCommand.Execute(null)));
-        _allCommands.Add(new CommandItem("Cut", "File", vm => vm.CutCommand.Execute(null), "Ctrl+X"));
-        _allCommands.Add(new CommandItem("Copy", "File", vm => vm.CopyCommand.Execute(null), "Ctrl+C"));
-        _allCommands.Add(new CommandItem("Paste", "File", vm => vm.PasteCommand.Execute(null), "Ctrl+V"));
-        _allCommands.Add(new CommandItem("Delete", "File", vm => vm.DeleteCommand.Execute(null), "Delete"));
-        _allCommands.Add(new CommandItem("Delete Permanently", "File", vm => vm.DeletePermanentlyCommand.Execute(null), "Shift+Delete"));
-        _allCommands.Add(new CommandItem("Next Tab", "View", vm => vm.SelectNextTabCommand.Execute(null), "Ctrl+Tab"));
-        _allCommands.Add(new CommandItem("Previous Tab", "View", vm => vm.SelectPreviousTabCommand.Execute(null), "Ctrl+Shift+Tab"));
-        _allCommands.Add(new CommandItem("Rename", "File", vm => vm.RenameCommand.Execute(null), "F2"));
-        _allCommands.Add(new CommandItem("Open in Terminal", "File", vm => vm.OpenInTerminalCommand.Execute(null), AppDefaultTerminalGesture));
-        _allCommands.Add(new CommandItem("Git: Switch Branch", "Git", vm => _ = vm.ActivePane?.OpenBranchFlyoutCommand.ExecuteAsync(null)));
-    }
-
     private void RefreshCommandPalette(string query)
-    {
-        EnsureCommandsBuilt();
-        FilteredCommands.Clear();
-
-        if (string.IsNullOrWhiteSpace(query))
-        {
-            foreach (var command in _allCommands)
-                FilteredCommands.Add(command);
-            return;
-        }
-
-        var scored = new List<(int score, CommandItem item)>();
-        foreach (var command in _allCommands)
-        {
-            var score = command.FuzzyScore(query);
-            if (score >= 0)
-                scored.Add((score, command));
-        }
-
-        foreach (var path in _recentPaths)
-        {
-            var score = FuzzyMatcher.Score(path, query);
-            if (score >= 0)
-            {
-                var captured = path;
-                scored.Add((score, new CommandItem(path, "Recent", vm => vm.NavigateActive(captured))));
-            }
-        }
-
-        foreach (var entry in scored.OrderByDescending(t => t.score).Take(MaxPaletteResults))
-            FilteredCommands.Add(entry.item);
-    }
+        => _commandPalette.FilterInto(FilteredCommands, query, _recentPaths);
 
     private void RecordRecent(string? path)
     {
@@ -1041,7 +784,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         navigate(GetOrCreateBrowserTab().ActivePane);
     }
 
-    private void NavigateActive(string path) => NavigateActivePane(pane => pane.NavigateTo(path));
+    public void NavigateActive(string path) => NavigateActivePane(pane => pane.NavigateTo(path));
 
     [RelayCommand]
     private void ToggleCommandPalette()
@@ -1132,11 +875,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     private void OnFolderColorsChanged(object? sender, EventArgs e)
     {
-        foreach (var item in SidebarItems)
-        {
-            if (item.IsNavigable)
-                item.NotifyFolderColorChanged();
-        }
+        _sidebar.NotifyFolderColorsChanged();
 
         foreach (var tab in Tabs)
             tab.RefreshFolderColorBindings();
@@ -1274,7 +1013,10 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private void ToggleDualPane() => SelectedTab?.ToggleDualPaneCommand.Execute(null);
 
     [RelayCommand]
-    private void ToggleFilter() => FocusSearch();
+    private void ToggleFilter() => FocusFilter();
+
+    [RelayCommand]
+    private void FocusFilter() => SelectedTab?.ActivePane?.EnterFilterModeCommand.Execute(null);
 
     [RelayCommand]
     private void FocusSearch() => SelectedTab?.ActivePane?.EnterSearchModeCommand.Execute(null);
@@ -1305,15 +1047,10 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private bool CanPinCurrentFolder()
     {
         var path = ActivePane?.CurrentPath;
-        if (string.IsNullOrEmpty(path) || ActivePane?.IsArchive == true || !Directory.Exists(path))
+        if (string.IsNullOrEmpty(path) || ActivePane?.IsArchive == true)
             return false;
 
-        var settings = GetSettings();
-        return !PinnedPathHelper.IsPinnedOrDefault(
-            settings.PinnedPaths,
-            settings.UnpinnedPaths,
-            GetDefaultPinnedPaths(),
-            path);
+        return _sidebar.CanPinPath(path, GetSettings());
     }
 
     [RelayCommand(CanExecute = nameof(CanCutSelection))]
@@ -1358,25 +1095,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private void ToggleShowFileExtensions() => ShowFileExtensions = !ShowFileExtensions;
 
     private void UpdateSidebarSelection(string path)
-    {
-        foreach (var item in SidebarItems)
-        {
-            if (item.IsSectionHeader)
-                continue;
-
-            if (item.Kind == SidebarItemKind.Home)
-            {
-                item.IsSelected = ActivePane?.IsHome == true;
-                continue;
-            }
-
-            item.IsSelected = !string.IsNullOrEmpty(item.Path)
-                && string.Equals(
-                    item.Path.TrimEnd('\\', '/'),
-                    path.TrimEnd('\\', '/'),
-                    StringComparison.OrdinalIgnoreCase);
-        }
-    }
+        => _sidebar.UpdateSelection(path, ActivePane?.IsHome == true);
 
     [RelayCommand]
     private void NavigateSidebar(SidebarItemViewModel? item)
@@ -1413,83 +1132,31 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public void PinPath(string path)
     {
-        if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
+        var settings = GetSettings();
+        if (!_sidebar.TryPin(path, settings))
             return;
 
-        var settings = GetSettings();
-        var normalized = NormalizePinnedPath(path);
-        settings.UnpinnedPaths.RemoveAll(p =>
-            string.Equals(NormalizePinnedPath(p), normalized, StringComparison.OrdinalIgnoreCase));
-
-        if (!PinnedPathHelper.IsPinned(settings.PinnedPaths, normalized))
-            settings.PinnedPaths.Insert(0, normalized);
-
         SaveSettings(settings);
-        RebuildSidebar(_lastNetworkLocations);
+        RebuildSidebar();
         SelectedTab?.ActivePane?.NotifyPinStateChanged();
     }
 
     public void UnpinPath(string path)
     {
-        if (string.IsNullOrWhiteSpace(path))
+        var settings = GetSettings();
+        if (!_sidebar.TryUnpin(path, settings))
             return;
 
-        var settings = GetSettings();
-        var normalized = NormalizePinnedPath(path);
-        settings.PinnedPaths.RemoveAll(p =>
-            string.Equals(NormalizePinnedPath(p), normalized, StringComparison.OrdinalIgnoreCase));
-
-        var defaults = GetDefaultPinnedPaths();
-        if (defaults.Any(d => string.Equals(NormalizePinnedPath(d), normalized, StringComparison.OrdinalIgnoreCase))
-            && !settings.UnpinnedPaths.Any(p =>
-                string.Equals(NormalizePinnedPath(p), normalized, StringComparison.OrdinalIgnoreCase)))
-        {
-            settings.UnpinnedPaths.Add(normalized);
-        }
-
         SaveSettings(settings);
-        RebuildSidebar(_lastNetworkLocations);
+        RebuildSidebar();
         SelectedTab?.ActivePane?.NotifyPinStateChanged();
     }
 
     public bool CanUnpinSidebarItem(SidebarItemViewModel? item)
-    {
-        if (item is null || !item.IsNavigable || string.IsNullOrEmpty(item.Path))
-            return false;
-
-        var settings = GetSettings();
-        return PinnedPathHelper.IsVisibleInSidebar(
-            settings.PinnedPaths,
-            settings.UnpinnedPaths,
-            GetDefaultPinnedPaths(),
-            item.Path);
-    }
+        => _sidebar.CanUnpin(item, GetSettings());
 
     public bool CanPinSidebarItem(SidebarItemViewModel? item)
-    {
-        if (item is null || !item.IsNavigable || string.IsNullOrEmpty(item.Path))
-            return false;
-
-        if (item.Path.StartsWith("shell:", StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        var settings = GetSettings();
-        return !PinnedPathHelper.IsPinnedOrDefault(
-            settings.PinnedPaths,
-            settings.UnpinnedPaths,
-            GetDefaultPinnedPaths(),
-            item.Path);
-    }
-
-    private IReadOnlyList<string> GetDefaultPinnedPaths()
-        => _quickAccess.GetPinnedDefaults()
-            .Select(t => t.Path)
-            .Where(p => !string.IsNullOrEmpty(p))
-            .Select(p => p!)
-            .ToList();
-
-    private static string NormalizePinnedPath(string path)
-        => path.TrimEnd('\\', '/');
+        => _sidebar.CanPin(item, GetSettings());
 
     private void OnPinPathRequested(object? sender, (string Path, bool Pin) args)
     {
@@ -1556,13 +1223,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
         foreach (var tab in Tabs)
         {
-            tab.CloseRequested -= OnTabCloseRequested;
-            tab.SortChanged -= OnTabSortChanged;
-            tab.LayoutChanged -= OnTabLayoutChanged;
-            tab.Navigated -= OnTabNavigated;
-            tab.OpenInNewTabRequested -= OnOpenInNewTabRequested;
-            tab.PinPathRequested -= OnPinPathRequested;
-            tab.SelectionChanged -= OnTabSelectionChanged;
+            DetachTab(tab);
             tab.Dispose();
         }
 

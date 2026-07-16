@@ -1,4 +1,3 @@
-using System.Globalization;
 using HelixExplorer.Core.Settings;
 
 namespace HelixExplorer.Core.Formatting;

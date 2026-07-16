@@ -1,8 +1,6 @@
 using System.Reflection;
-using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Services;
-using HelixExplorer.ViewModels;
 using HelixExplorer.ViewModels.Pane;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;

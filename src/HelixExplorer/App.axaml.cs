@@ -5,7 +5,6 @@ using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Services;
 using HelixExplorer.ViewModels;
-using HelixExplorer.Views;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;

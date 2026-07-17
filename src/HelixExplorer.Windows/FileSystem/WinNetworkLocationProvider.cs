@@ -42,39 +42,32 @@ public sealed class WinNetworkLocationProvider(
         timeoutCts.CancelAfter(DiscoveryTimeout);
         var ct = timeoutCts.Token;
 
+        var locations = new List<NetworkLocationInfo>();
+
         try
         {
-            var shellResult = await EnumerateShellNetworkAsync(ct).ConfigureAwait(false);
+            locations.AddRange(await TryEnumerateShellNetworkAsync(ct).ConfigureAwait(false));
 
-            // The Shell Network folder is often empty on modern Windows (SMBv1/NetBIOS disabled),
-            // but that is an authoritative result. Only fall back to slow WNet broadcasting when
-            // the Shell provider itself errored, not when it successfully returned zero locations.
-            if (shellResult.Status != NetworkDiscoveryStatus.DiscoveryFailed)
-                return shellResult;
-
-            var wnetResult = await Task.Run(() => EnumerateWNetNetworkLocations(ct), ct).ConfigureAwait(false);
-            if (wnetResult.Status == NetworkDiscoveryStatus.Discovered)
-                return wnetResult;
-
-            return shellResult.Status == NetworkDiscoveryStatus.DiscoveryFailed
-                   || wnetResult.Status == NetworkDiscoveryStatus.DiscoveryFailed
-                ? NetworkDiscoveryResult.Failed()
-                : NetworkDiscoveryResult.Empty;
+            if (locations.Count == 0)
+                locations.AddRange(await Task.Run(() => TryEnumerateWNetNetworkLocations(ct), ct).ConfigureAwait(false));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // Cancelled by the caller — propagate.
             throw;
         }
         catch (OperationCanceledException)
         {
-            // Discovery timeout: surface as failure so the sidebar can report it.
-            logger.LogWarning("Network discovery timed out after {Seconds}s", DiscoveryTimeout.TotalSeconds);
-            return NetworkDiscoveryResult.Failed();
+            logger.LogDebug("Network discovery timed out after {Seconds}s; returning partial results", DiscoveryTimeout.TotalSeconds);
         }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Network discovery failed; returning partial results");
+        }
+
+        return NetworkDiscoveryResult.From(NetworkPath.Deduplicate(locations));
     }
 
-    private async ValueTask<NetworkDiscoveryResult> EnumerateShellNetworkAsync(CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<NetworkLocationInfo>> TryEnumerateShellNetworkAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -89,7 +82,7 @@ public sealed class WinNetworkLocationProvider(
                     locations.Add(location);
             }
 
-            return NetworkDiscoveryResult.From(NetworkPath.Deduplicate(locations));
+            return locations;
         }
         catch (OperationCanceledException)
         {
@@ -97,8 +90,8 @@ public sealed class WinNetworkLocationProvider(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Shell Network folder discovery failed");
-            return NetworkDiscoveryResult.Failed();
+            logger.LogDebug(ex, "Shell Network folder discovery failed");
+            return Array.Empty<NetworkLocationInfo>();
         }
     }
 
@@ -129,28 +122,20 @@ public sealed class WinNetworkLocationProvider(
         return new NetworkLocationInfo(path, display);
     }
 
-    private NetworkDiscoveryResult EnumerateWNetNetworkLocations(CancellationToken cancellationToken)
+    private List<NetworkLocationInfo> TryEnumerateWNetNetworkLocations(CancellationToken cancellationToken)
     {
         var results = new List<NetworkLocationInfo>();
-        var openFailed = false;
 
-            openFailed |= !Enumerate(ResourceGlobalNet, null, results, depth: 0, cancellationToken);
+        Enumerate(ResourceGlobalNet, null, results, depth: 0, cancellationToken);
 
-            // Mapped/remembered UNC connections so users still see shares when live discovery is unavailable.
-            AddKnownConnections(ResourceConnected, results, cancellationToken);
-            AddKnownConnections(ResourceRemembered, results, cancellationToken);
+        // Mapped/remembered UNC connections so users still see shares when live discovery is unavailable.
+        AddKnownConnections(ResourceConnected, results, cancellationToken);
+        AddKnownConnections(ResourceRemembered, results, cancellationToken);
 
-        var unique = NetworkPath.Deduplicate(results);
-
-        if (unique.Count > 0)
-            return NetworkDiscoveryResult.From(unique);
-
-        // No locations. If the primary enumeration could not even open, treat it as a failure so the UI
-        // can distinguish "nothing shared" from "discovery unavailable".
-        return openFailed ? NetworkDiscoveryResult.Failed() : NetworkDiscoveryResult.Empty;
+        return results;
     }
 
-    private bool Enumerate(
+    private void Enumerate(
         int scope,
         NetResource? parent,
         List<NetworkLocationInfo> results,
@@ -162,13 +147,13 @@ public sealed class WinNetworkLocationProvider(
         var openResult = WNetOpenEnum(scope, ResourceTypeDisk, 0, parent, out var handle);
         if (openResult != 0)
         {
-            logger.LogWarning(
+            logger.LogDebug(
                 "WNetOpenEnum failed ({Error}) for parent '{Parent}' at depth {Depth}: {Message}",
                 openResult,
                 parent?.RemoteName ?? "<root>",
                 depth,
                 new Win32Exception(openResult).Message);
-            return false;
+            return;
         }
 
         try
@@ -185,7 +170,6 @@ public sealed class WinNetworkLocationProvider(
 
                     if (result == ErrorMoreData)
                     {
-                        // ERROR_MORE_DATA: buffer too small for even one entry — grow and retry.
                         Marshal.FreeHGlobal(buffer);
                         bufferSize = NetworkEnumBuffer.Grow(attemptedSize, bufferSize);
                         buffer = Marshal.AllocHGlobal(bufferSize);
@@ -198,7 +182,7 @@ public sealed class WinNetworkLocationProvider(
 
                     if (result != 0)
                     {
-                        logger.LogWarning(
+                        logger.LogDebug(
                             "WNetEnumResource failed ({Error}) for parent '{Parent}': {Message}",
                             result,
                             parent?.RemoteName ?? "<root>",
@@ -222,8 +206,6 @@ public sealed class WinNetworkLocationProvider(
                                 resource.Comment));
                         }
 
-                        // Recurse into containers (domain → servers), but stop before deep-scanning every
-                        // server's shares at startup.
                         if ((resource.Usage & ResourceUsageContainer) == ResourceUsageContainer
                             && depth + 1 < MaxContainerDepth)
                         {
@@ -241,8 +223,6 @@ public sealed class WinNetworkLocationProvider(
         {
             WNetCloseEnum(handle);
         }
-
-        return true;
     }
 
     private void AddKnownConnections(int scope, List<NetworkLocationInfo> results, CancellationToken cancellationToken)
@@ -301,11 +281,9 @@ public sealed class WinNetworkLocationProvider(
 
     private static bool ShouldInclude(NetResource resource)
     {
-        // Skip low-level provider roots (Terminal Services, Web Client, Plan 9, etc.).
         if (resource.DisplayType is DisplayTypeNetwork or DisplayTypeRoot)
             return false;
 
-        // Sidebar shows workgroups and computers, not every share discovered during enumeration.
         return resource.DisplayType is DisplayTypeDomain or DisplayTypeServer;
     }
 

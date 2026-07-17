@@ -22,6 +22,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly IAccentBrushService _accentBrushes;
     private readonly IQuickAccessProvider _quickAccess;
     private readonly INetworkLocationProvider _networkLocations;
+    private readonly INetworkDiscoveryAvailability _networkAvailability;
     private readonly IClipboardService _clipboard;
     private readonly IArchiveProvider _archive;
     private readonly IFolderColorService _folderColors;
@@ -37,6 +38,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly string _homePath;
     private readonly List<string> _recentPaths = new();
     private IReadOnlyList<NetworkLocationInfo> _lastNetworkLocations = [];
+    private bool _networkBrowsingVerified;
     private CancellationTokenSource? _networkCts;
     private bool _disposed;
     private TabViewModel? _lastBrowserTab;
@@ -50,6 +52,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         IAccentBrushService accentBrushes,
         IQuickAccessProvider quickAccess,
         INetworkLocationProvider networkLocations,
+        INetworkDiscoveryAvailability networkAvailability,
         IClipboardService clipboard,
         IArchiveProvider archive,
         IFolderColorService folderColors,
@@ -66,6 +69,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _accentBrushes = accentBrushes;
         _quickAccess = quickAccess;
         _networkLocations = networkLocations;
+        _networkAvailability = networkAvailability;
         _clipboard = clipboard;
         _archive = archive;
         _folderColors = folderColors;
@@ -105,6 +109,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _themeService.ThemeChanged += OnThemeServiceChanged;
 
         _sidebar.Rebuild(settings.PinnedPaths, settings.UnpinnedPaths);
+        _networkAvailability.AvailabilityChanged += OnNetworkAvailabilityChanged;
         _ = RefreshNetworkLocationsAsync();
 
         _folderColors.ColorsChanged += OnFolderColorsChanged;
@@ -316,22 +321,20 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         NetworkBannerText = UiStrings.NetworkDiscoveryBanner;
         try
         {
+            _networkAvailability.Refresh();
             var result = await _networkLocations.GetNetworkLocationsAsync(ct).ConfigureAwait(true);
             if (!ct.IsCancellationRequested)
             {
                 _lastNetworkLocations = result.Locations;
+                if (result.Status == NetworkDiscoveryStatus.Discovered)
+                    _networkBrowsingVerified = true;
+
                 RebuildSidebar();
-                ApplyNetworkStatus(result.Status);
+                UpdateNetworkNotice();
             }
         }
         catch (OperationCanceledException)
         {
-        }
-        catch
-        {
-            // Network discovery is opportunistic; surface a failure notice but keep the sidebar usable.
-            if (!ct.IsCancellationRequested)
-                ApplyNetworkStatus(NetworkDiscoveryStatus.DiscoveryFailed);
         }
         finally
         {
@@ -343,22 +346,33 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         }
     }
 
-    private void ApplyNetworkStatus(NetworkDiscoveryStatus status)
+    private void UpdateNetworkNotice()
     {
-        switch (status)
+        if (!NetworkNoticePolicy.ShouldShowUnavailableNotice(
+                _networkBrowsingVerified,
+                _lastNetworkLocations.Count > 0,
+                _networkAvailability.IsUnavailable))
         {
-            case NetworkDiscoveryStatus.DiscoveryFailed:
-                NetworkBannerText = UiStrings.NetworkDiscoveryFailed;
-                HasNetworkNotice = true;
-                break;
-            case NetworkDiscoveryStatus.NoLocationsFound:
-                NetworkBannerText = UiStrings.NetworkNoSharesFound;
-                HasNetworkNotice = true;
-                break;
-            default:
-                HasNetworkNotice = false;
-                break;
+            HasNetworkNotice = false;
+            return;
         }
+
+        NetworkBannerText = UiStrings.NetworkDiscoveryFailed;
+        HasNetworkNotice = true;
+    }
+
+    private void OnNetworkAvailabilityChanged(object? sender, EventArgs e) => UpdateNetworkNotice();
+
+    private void NoteNetworkBrowsing(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+
+        if (!NetworkPath.IsUnc(path) && !NetworkPath.IsNetworkRoot(path))
+            return;
+
+        _networkBrowsingVerified = true;
+        HasNetworkNotice = false;
     }
 
     private void RebuildSidebar()
@@ -627,6 +641,12 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     partial void OnIsWindowActiveChanged(bool value)
     {
+        if (value)
+        {
+            _networkAvailability.Refresh();
+            UpdateNetworkNotice();
+        }
+
         foreach (var tab in Tabs)
             tab.SetSelectionActive(value);
     }
@@ -713,10 +733,15 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     private void OnTabNavigated(object? sender, EventArgs e)
     {
-        if (!ReferenceEquals(sender, SelectedTab))
+        if (sender is not TabViewModel tab || !ReferenceEquals(tab, SelectedTab))
             return;
 
-        RecordRecent(SelectedTab?.ActivePane?.CurrentPath);
+        NoteNetworkBrowsing(tab.ActivePane?.CurrentPath);
+        NoteNetworkBrowsing(tab.LeftPane.CurrentPath);
+        if (tab.IsDualPane)
+            NoteNetworkBrowsing(tab.RightPane?.CurrentPath);
+
+        RecordRecent(tab.ActivePane?.CurrentPath);
         SyncChromeToActivePane();
     }
 
@@ -1211,6 +1236,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _networkCts?.Cancel();
         _networkCts?.Dispose();
 
+        _networkAvailability.AvailabilityChanged -= OnNetworkAvailabilityChanged;
         _folderColors.ColorsChanged -= OnFolderColorsChanged;
         _themeService.ThemeChanged -= OnThemeServiceChanged;
         _operationReporter.PropertyChanged -= OnOperationReporterPropertyChanged;

@@ -27,21 +27,17 @@ public sealed class VirtualizingFileGrid : TemplatedControl
     private int _lastColumnCount = -1;
     private int _lastItemCount;
     private string _lastItemsPathsKey = string.Empty;
-    private readonly Queue<Control> _itemContainerPool = new();
-    private readonly HashSet<Control> _pooledSet = new();
 
     static VirtualizingFileGrid()
     {
         ItemsSourceProperty.Changed.AddClassHandler<VirtualizingFileGrid>((g, e) =>
         {
             g.UpdateItemsSubscription(e.OldValue as IEnumerable, e.NewValue as IEnumerable);
-            g.PoolClear();
             g.ScheduleRebuildRows();
         });
         ItemSizeProperty.Changed.AddClassHandler<VirtualizingFileGrid>((g, _) => g.ScheduleRebuildRows());
         ItemTemplateProperty.Changed.AddClassHandler<VirtualizingFileGrid>((g, _) =>
         {
-            g.PoolClear();
             g.ApplyRowTemplate();
         });
     }
@@ -76,7 +72,6 @@ public sealed class VirtualizingFileGrid : TemplatedControl
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         UnsubscribeFromItems();
-        PoolClear();
         base.OnDetachedFromVisualTree(e);
     }
 
@@ -144,7 +139,6 @@ public sealed class VirtualizingFileGrid : TemplatedControl
                         if (child is Control c)
                         {
                             c.DataContext = null;
-                            PoolEnqueue(c);
                         }
                     }
                     s.Children.Clear();
@@ -158,7 +152,7 @@ public sealed class VirtualizingFileGrid : TemplatedControl
                 {
                     for (int i = currentChildCount; i < items.Count; i++)
                     {
-                        var content = PoolDequeue() ?? ItemTemplate.Build(items[i]);
+                        var content = ItemTemplate.Build(items[i]);
                         if (content is not null)
                         {
                             s.Children.Add(content);
@@ -174,7 +168,6 @@ public sealed class VirtualizingFileGrid : TemplatedControl
                         if (child is Control c)
                         {
                             c.DataContext = null;
-                            PoolEnqueue(c);
                         }
                     }
                 }
@@ -205,7 +198,6 @@ public sealed class VirtualizingFileGrid : TemplatedControl
                         if (child is Control c)
                         {
                             c.DataContext = null;
-                            PoolEnqueue(c);
                         }
                     }
                     s.Children.Clear();
@@ -237,17 +229,18 @@ public sealed class VirtualizingFileGrid : TemplatedControl
         if (viewportWidth <= 0)
             viewportWidth = 800;
 
-        var tileWidth = Math.Max(48, ItemSize + 12);
-        var columns = Math.Max(1, (int)(viewportWidth / tileWidth));
+        var columns = GetColumnCount(viewportWidth);
         var rowCount = (items.Count + columns - 1) / columns;
-        var pathsKey = BuildItemsPathsKey(items);
+        if (columns == _lastColumnCount && items.Count == _lastItemCount)
+        {
+            var currentPathsKey = BuildItemsPathsKey(items);
+            if (currentPathsKey == _lastItemsPathsKey
+                && _rows.ItemsSource is IList<GridRow> existing
+                && existing.Count == rowCount)
+                return;
+        }
 
-        if (columns == _lastColumnCount
-            && items.Count == _lastItemCount
-            && pathsKey == _lastItemsPathsKey
-            && _rows.ItemsSource is IList<GridRow> existing
-            && existing.Count == rowCount)
-            return;
+        var pathsKey = BuildItemsPathsKey(items);
 
         var rows = new List<GridRow>(rowCount);
         for (var i = 0; i < items.Count; i += columns)
@@ -275,28 +268,35 @@ public sealed class VirtualizingFileGrid : TemplatedControl
     private static string GetItemPathKey(object item)
         => item is EntryItemViewModel entry ? entry.FullPath : item.GetHashCode().ToString();
 
-    private void PoolEnqueue(Control control)
+    public int GetColumnCount(double viewportWidth)
     {
-        if (_pooledSet.Add(control))
-            _itemContainerPool.Enqueue(control);
+        if (viewportWidth <= 0)
+            viewportWidth = 800;
+
+        return Math.Max(1, (int)(viewportWidth / Math.Max(48, ItemSize + 12)));
     }
 
-    private Control? PoolDequeue()
+    public bool TryGetAdjacentIndex(int currentIndex, int itemCount, Avalonia.Input.Key direction, out int targetIndex)
     {
-        if (_itemContainerPool.Count > 0)
+        targetIndex = currentIndex;
+        if ((uint)currentIndex >= (uint)itemCount)
+            return false;
+
+        var columns = GetColumnCount(Bounds.Width);
+        var candidate = direction switch
         {
-            var control = _itemContainerPool.Dequeue();
-            _pooledSet.Remove(control);
-            return control;
-        }
+            Avalonia.Input.Key.Left => currentIndex - 1,
+            Avalonia.Input.Key.Right => currentIndex + 1,
+            Avalonia.Input.Key.Up => currentIndex - columns,
+            Avalonia.Input.Key.Down => currentIndex + columns,
+            _ => currentIndex
+        };
 
-        return null;
-    }
+        if ((uint)candidate >= (uint)itemCount)
+            return false;
 
-    private void PoolClear()
-    {
-        _itemContainerPool.Clear();
-        _pooledSet.Clear();
+        targetIndex = candidate;
+        return true;
     }
 
     /// <summary>

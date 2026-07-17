@@ -88,8 +88,13 @@ public sealed class PaneSelectionModel
         for (var i = start; i <= end; i++)
             range.Add(allEntries[i]);
 
-        UpdateSelection(range, allEntries);
+        // Do not use ReplaceSelection here: a range can be extended and contracted repeatedly,
+        // so its original anchor must survive while the target becomes the active item.
+        SelectedEntries.Clear();
+        foreach (var entry in range)
+            SelectedEntries.Add(entry);
         SelectedEntry = target;
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public void SelectByBounds(
@@ -100,6 +105,8 @@ public sealed class PaneSelectionModel
         if (!additive)
         {
             UpdateSelection(hits.ToList(), allEntries);
+            if (hits.Count > 0)
+                _anchorIndex = LowestIndexAmong(allEntries, hits);
             return;
         }
 
@@ -110,8 +117,8 @@ public sealed class PaneSelectionModel
         }
 
         SelectedEntry = SelectedEntries.Count == 1 ? SelectedEntries[0] : null;
-        if (SelectedEntry is not null)
-            _anchorIndex = IndexOf(allEntries, SelectedEntry);
+        if (hits.Count > 0)
+            _anchorIndex = LowestIndexAmong(allEntries, hits);
         SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 

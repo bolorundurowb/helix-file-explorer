@@ -63,6 +63,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     private bool _disposed;
     private bool _commandNotifyPending;
     private bool _isRecycleBinWatcherSubscribed;
+    private bool _hasPastePayload;
 
     public PaneViewModel(
         IFileSystemProvider fileSystem,
@@ -258,6 +259,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         _watcher.Watch(isHomeRoute || IsArchive || ShellPath.IsShellPath(value) ? string.Empty : value);
         UpdateRecycleBinWatcher();
         PasteCommand.NotifyCanExecuteChanged();
+        RefreshPasteAvailability();
         CutCommand.NotifyCanExecuteChanged();
         CopyCommand.NotifyCanExecuteChanged();
         DeleteCommand.NotifyCanExecuteChanged();
@@ -521,6 +523,9 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         else
             _selection.SelectSingle(entry, Entries);
     }
+
+    public void SelectGridNavigationTarget(EntryItemViewModel entry, KeyModifiers modifiers)
+        => SelectEntry(entry, modifiers);
 
     public void SelectByBounds(IReadOnlyList<EntryItemViewModel> hits, bool additive)
         => _selection.SelectByBounds(hits, Entries, additive);
@@ -959,6 +964,19 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     private void OnClipboardChanged(object? sender, EventArgs e)
     {
         RefreshCutState();
+        RefreshPasteAvailability();
+    }
+
+    public void RefreshPasteAvailability()
+        => FireAndForgetSafe.Run(RefreshPasteAvailabilityAsync(), _logger);
+
+    public async Task RefreshPasteAvailabilityAsync()
+    {
+        var hasPayload = await _fileOperations.HasPastePayloadAsync().ConfigureAwait(true);
+        if (_disposed || _hasPastePayload == hasPayload)
+            return;
+
+        _hasPastePayload = hasPayload;
         PasteCommand.NotifyCanExecuteChanged();
     }
 
@@ -1532,9 +1550,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
 
     private bool CanShowMoreOptions() => CanModifyHere() && (HasSelection() || !string.IsNullOrEmpty(CurrentPath));
 
-    // Always allow Paste when a folder is open so OS clipboard (Explorer) works;
-    // Paste resolves internal payload first, then falls back to IOsFileClipboard.
-    private bool CanPaste() => CanModifyHere() && !string.IsNullOrEmpty(CurrentPath);
+    private bool CanPaste() => _hasPastePayload && CanModifyHere() && !string.IsNullOrEmpty(CurrentPath);
 
     private bool CanRename() => CanModifySelection() && SelectedEntries.Count == 1;
 

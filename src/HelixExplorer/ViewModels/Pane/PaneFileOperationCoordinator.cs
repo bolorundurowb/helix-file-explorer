@@ -15,6 +15,9 @@ public sealed class PaneFileOperationCoordinator(
     IFileOperationReporter operationReporter,
     ILogger<PaneFileOperationCoordinator> logger)
 {
+    public async Task<bool> HasPastePayloadAsync(CancellationToken cancellationToken = default)
+        => await ResolvePastePayloadAsync(destinationPath: null, cancellationToken).ConfigureAwait(true) is not null;
+
     public async Task PasteAsync(
         string currentPath,
         Func<Task> refreshAsync,
@@ -370,15 +373,33 @@ public sealed class PaneFileOperationCoordinator(
         }
     }
 
-    private async Task<ClipboardPayload?> ResolvePastePayloadAsync(string currentPath)
+    private async Task<ClipboardPayload?> ResolvePastePayloadAsync(
+        string? destinationPath,
+        CancellationToken cancellationToken = default)
     {
-        if (clipboard.Current is { } internalPayload)
-            return internalPayload;
+        if (clipboard.Current is { } internalPayload && HasValidLocalPaths(internalPayload.Paths))
+            return destinationPath is null
+                ? internalPayload
+                : new ClipboardPayload(internalPayload.Operation, internalPayload.Paths, destinationPath);
 
-        var os = await osClipboard.TryGetFilesAsync().ConfigureAwait(true);
-        if (os is null)
+        var os = await osClipboard.TryGetFilesAsync(cancellationToken).ConfigureAwait(true);
+        if (os is null || !HasValidLocalPaths(os.Value.Paths))
             return null;
 
-        return new ClipboardPayload(os.Value.Operation, os.Value.Paths, currentPath);
+        return new ClipboardPayload(os.Value.Operation, os.Value.Paths, destinationPath ?? string.Empty);
+    }
+
+    private static bool HasValidLocalPaths(IReadOnlyList<string> paths)
+    {
+        if (paths.Count == 0)
+            return false;
+
+        foreach (var path in paths)
+        {
+            if (string.IsNullOrWhiteSpace(path) || (!File.Exists(path) && !Directory.Exists(path)))
+                return false;
+        }
+
+        return true;
     }
 }

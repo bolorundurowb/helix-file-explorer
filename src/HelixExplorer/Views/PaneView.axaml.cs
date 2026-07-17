@@ -43,8 +43,32 @@ public sealed partial class PaneView : UserControl
     private PointerInteractionMode _interactionMode;
     private EntryItemViewModel? _dropTargetEntry;
     private readonly List<Control> _millerColumns = new();
-    private readonly FuncDataTemplate<EntryItemViewModel> _millerItemTemplate = new(
-        (item, _) => new TextBlock { Text = item?.DisplayName ?? string.Empty });
+    private readonly Dictionary<Control, List<Control>> _headerAndScrollbarCache = new();
+    private int _millerRequestVersion;
+    private readonly FuncDataTemplate<EntryItemViewModel> _millerItemTemplate = new(CreateMillerItem);
+
+    private static Control CreateMillerItem(EntryItemViewModel? item, INameScope _)
+    {
+        var icon = new EntryVisualView
+        {
+            Width = 20,
+            Height = 20,
+            DataContext = item,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
+        };
+        var name = new TextBlock
+        {
+            Text = item?.DisplayName ?? string.Empty,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis
+        };
+        Grid.SetColumn(name, 1);
+
+        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("28,*") };
+        row.Children.Add(icon);
+        row.Children.Add(name);
+        return row;
+    }
 
     public PaneView()
     {
@@ -113,16 +137,19 @@ public sealed partial class PaneView : UserControl
         }
     }
 
-    private void OnEntryContextMenuOpening(object? sender, CancelEventArgs e)
+    private async void OnEntryContextMenuOpening(object? sender, CancelEventArgs e)
     {
         if (sender is not ContextMenu menu)
             return;
 
-        if (menu.PlacementTarget is Control { DataContext: PaneViewModel pane })
-        {
-            menu.DataContext = pane;
-            pane.NotifyCommandsCanExecuteChanged();
-        }
+        if (menu.PlacementTarget is not Control { DataContext: PaneViewModel pane })
+            return;
+
+        menu.DataContext = pane;
+        // Resolve clipboard validity before command state is applied so Paste enablement matches
+        // the current internal/OS payload (including external Explorer copies).
+        await pane.RefreshPasteAvailabilityAsync().ConfigureAwait(true);
+        pane.NotifyCommandsCanExecuteChanged();
     }
 
     private void OnDetailsContextRequested(object? sender, ContextRequestedEventArgs e)
@@ -296,6 +323,28 @@ public sealed partial class PaneView : UserControl
         }
     }
 
+    private void OnGridKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (Pane is null || TextInputFocus.IsActive() || !e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+            return;
+
+        if (e.Key is not (Key.Left or Key.Right or Key.Up or Key.Down))
+            return;
+
+        var current = Pane.SelectedEntry ?? Pane.SelectedEntries.LastOrDefault();
+        if (current is null)
+            return;
+
+        var currentIndex = Pane.Entries.IndexOf(current);
+        if (GridView.TryGetAdjacentIndex(currentIndex, Pane.Entries.Count, e.Key, out var targetIndex))
+        {
+            Pane.SelectGridNavigationTarget(Pane.Entries[targetIndex], e.KeyModifiers);
+            SyncSelectionToView();
+        }
+
+        e.Handled = true;
+    }
+
     private void SyncSelectionToView()
     {
         if (Pane is null)
@@ -382,6 +431,7 @@ public sealed partial class PaneView : UserControl
         }
 
         SelectGridEntry(entry, e.KeyModifiers);
+        GridView.Focus();
 
         // Arm a potential drag-out. The grid tile marks the event handled (to stop the underlying
         // ListBox from selecting the row), so the container-level OnListPointerPressed never sees
@@ -436,6 +486,7 @@ public sealed partial class PaneView : UserControl
 
         MillerPanel.Children.Clear();
         _millerColumns.Clear();
+        _millerRequestVersion++;
 
         var entries = new ObservableCollection<EntryItemViewModel>(Pane.Entries);
         var column = BuildMillerColumn(entries, columnIndex: 0);
@@ -451,14 +502,25 @@ public sealed partial class PaneView : UserControl
         {
             Width = 250,
             ItemsSource = entries,
-            ItemTemplate = _millerItemTemplate
+            ItemTemplate = _millerItemTemplate,
+            SelectionMode = SelectionMode.Single
         };
         list.ItemsPanel = new FuncTemplate<Panel?>(() => new VirtualizingStackPanel());
         MillerColumnPanel.SetColumnIndex(list, columnIndex);
-        list.DoubleTapped += (_, _) =>
+        list.SelectionChanged += (_, _) =>
         {
             if (list.SelectedItem is EntryItemViewModel entry)
-                MillerPanel.RaiseActivated(columnIndex, entry);
+            {
+                Pane?.SelectEntry(entry, KeyModifiers.None);
+                if (entry.IsDirectory || ArchivePath.IsArchiveFile(entry.FullPath))
+                    MillerPanel.RaiseActivated(columnIndex, entry);
+            }
+        };
+        list.DoubleTapped += (_, _) =>
+        {
+            if (list.SelectedItem is EntryItemViewModel { IsDirectory: false } entry
+                && !ArchivePath.IsArchiveFile(entry.FullPath))
+                Pane?.ActivateEntry(entry);
         };
         return list;
     }
@@ -469,10 +531,9 @@ public sealed partial class PaneView : UserControl
             return;
 
         if (!entry.IsDirectory && !ArchivePath.IsArchiveFile(entry.FullPath))
-        {
-            Pane.ActivateEntry(entry);
             return;
-        }
+
+        var requestVersion = ++_millerRequestVersion;
 
         var keep = e.ColumnIndex + 1;
         while (_millerColumns.Count > keep)
@@ -492,6 +553,8 @@ public sealed partial class PaneView : UserControl
         }
 
         var children = await Pane.EnumerateMillerChildrenAsync(entry.FullPath).ConfigureAwait(true);
+        if (requestVersion != _millerRequestVersion || Pane is null)
+            return;
         var column = BuildMillerColumn(children, keep);
         MillerPanel.Children.Add(column);
         _millerColumns.Add(column);
@@ -623,11 +686,22 @@ public sealed partial class PaneView : UserControl
         _interactionMode = PointerInteractionMode.MarqueePending;
     }
 
-    private static bool IsPointOnHeaderOrScrollbar(Control host, Point position)
+    private bool IsPointOnHeaderOrScrollbar(Control host, Point position)
     {
-        foreach (var descendant in host.GetVisualDescendants())
+        if (!_headerAndScrollbarCache.TryGetValue(host, out var controls))
         {
-            if (descendant is not Control c || !c.IsVisible)
+            controls = [];
+            foreach (var descendant in host.GetVisualDescendants())
+            {
+                if (descendant is Control c && (c is ScrollBar or DataGridColumnHeader))
+                    controls.Add(c);
+            }
+            _headerAndScrollbarCache.Add(host, controls);
+        }
+
+        foreach (var c in controls)
+        {
+            if (!c.IsVisible)
                 continue;
 
             if (c is ScrollBar or DataGridColumnHeader)
@@ -930,6 +1004,4 @@ public sealed partial class PaneView : UserControl
         e.Handled = true;
     }
 
-    private string? ResolveDropDestination(EntryItemViewModel? targetEntry)
-        => Pane?.ResolveDropDestination(targetEntry);
 }

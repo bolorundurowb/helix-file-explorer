@@ -74,27 +74,38 @@
         <ContextMenu x:Key="EntryContextMenu"
                      x:CompileBindings="False"
                      Opening="OnEntryContextMenuOpening">
-            <StackPanel Orientation="Horizontal" Spacing="2" Margin="4,2">
-                <Button Classes="toolButton" ToolTip.Tip="Cut" Command="{Binding CutCommand}">
-                    <PathIcon Data="{DynamicResource HelixIconCutGeometry}" Width="14" Height="14"
-                              Foreground="{DynamicResource HelixIconCutBrush}" />
-                </Button>
-                <Button Classes="toolButton" ToolTip.Tip="Copy" Command="{Binding CopyCommand}">
-                    <PathIcon Data="{DynamicResource HelixIconCopyGeometry}" Width="14" Height="14"
-                              Foreground="{DynamicResource HelixIconCopyBrush}" />
-                </Button>
-                <Button Classes="toolButton" ToolTip.Tip="Rename" Command="{Binding BeginRenameCommand}">
-                    <PathIcon Data="{DynamicResource HelixIconRenameGeometry}" Width="14" Height="14"
-                              Foreground="{DynamicResource HelixIconRenameBrush}" />
-                </Button>
-                <Button Classes="toolButton" ToolTip.Tip="Delete" Command="{Binding DeleteCommand}">
-                    <PathIcon Data="{DynamicResource HelixIconDeleteGeometry}" Width="14" Height="14"
-                              Foreground="{DynamicResource HelixIconDeleteBrush}" />
-                </Button>
-                <Button Classes="toolButton" ToolTip.Tip="Properties" Command="{Binding ShowPropertiesCommand}">
-                    <PathIcon Data="{DynamicResource HelixIconInfoGeometry}" Width="14" Height="14" />
-                </Button>
-            </StackPanel>
+            <MenuItem Classes="ctxToolbarHost" StaysOpenOnClick="True">
+                <MenuItem.Header>
+                    <StackPanel Classes="ctxToolbar" Orientation="Horizontal" Spacing="2" Margin="4,2">
+                        <Button Classes="ctxIcon" ToolTip.Tip="Cut" Command="{Binding CutCommand}">
+                            <PathIcon Data="{DynamicResource HelixIconCutGeometry}" Width="14" Height="14"
+                                      Foreground="{DynamicResource HelixIconCutBrush}" />
+                        </Button>
+                        <Button Classes="ctxIcon" ToolTip.Tip="Copy" Command="{Binding CopyCommand}">
+                            <PathIcon Data="{DynamicResource HelixIconCopyGeometry}" Width="14" Height="14"
+                                      Foreground="{DynamicResource HelixIconCopyBrush}" />
+                        </Button>
+                        <Button Classes="ctxIcon" ToolTip.Tip="Paste" Command="{Binding PasteCommand}">
+                            <PathIcon Data="{DynamicResource HelixIconPasteGeometry}" Width="14" Height="14"
+                                      Foreground="{DynamicResource HelixIconPasteBrush}" />
+                        </Button>
+                        <Button Classes="ctxIcon" ToolTip.Tip="Copy path" Command="{Binding CopyPathCommand}">
+                            <PathIcon Data="{DynamicResource HelixIconLinkGeometry}" Width="14" Height="14" />
+                        </Button>
+                        <Button Classes="ctxIcon" ToolTip.Tip="Rename" Command="{Binding BeginRenameCommand}">
+                            <PathIcon Data="{DynamicResource HelixIconRenameGeometry}" Width="14" Height="14"
+                                      Foreground="{DynamicResource HelixIconRenameBrush}" />
+                        </Button>
+                        <Button Classes="ctxIcon" ToolTip.Tip="Delete" Command="{Binding DeleteCommand}">
+                            <PathIcon Data="{DynamicResource HelixIconDeleteGeometry}" Width="14" Height="14"
+                                      Foreground="{DynamicResource HelixIconDeleteBrush}" />
+                        </Button>
+                        <Button Classes="ctxIcon" ToolTip.Tip="Properties" Command="{Binding ShowPropertiesCommand}">
+                            <PathIcon Data="{DynamicResource HelixIconInfoGeometry}" Width="14" Height="14" />
+                        </Button>
+                    </StackPanel>
+                </MenuItem.Header>
+            </MenuItem>
             <Separator />
             <MenuItem Header="Open" Command="{Binding OpenCommand}">
                 <MenuItem.Icon>
@@ -188,11 +199,6 @@
                 </MenuItem.Icon>
             </MenuItem>
             <Separator />
-            <MenuItem Header="Copy path" Command="{Binding CopyPathCommand}">
-                <MenuItem.Icon>
-                    <PathIcon Data="{DynamicResource HelixIconLinkGeometry}" />
-                </MenuItem.Icon>
-            </MenuItem>
             <MenuItem Header="Pin to sidebar" Command="{Binding PinToSidebarCommand}">
                 <MenuItem.Icon>
                     <PathIcon Data="{DynamicResource HelixIconPinGeometry}" />
@@ -201,11 +207,6 @@
             <MenuItem Header="Unpin from sidebar" Command="{Binding UnpinFromSidebarCommand}">
                 <MenuItem.Icon>
                     <PathIcon Data="{DynamicResource HelixIconPinOffGeometry}" />
-                </MenuItem.Icon>
-            </MenuItem>
-            <MenuItem Header="Paste" Command="{Binding PasteCommand}">
-                <MenuItem.Icon>
-                    <PathIcon Data="{DynamicResource HelixIconPasteGeometry}" Foreground="{DynamicResource HelixIconPasteBrush}" />
                 </MenuItem.Icon>
             </MenuItem>
             <Separator />
@@ -266,6 +267,20 @@
         <ContextMenu x:Key="EmptyAreaContextMenu"
                      x:CompileBindings="False"
                      Opening="OnEntryContextMenuOpening">
+            <MenuItem Classes="ctxToolbarHost" StaysOpenOnClick="True">
+                <MenuItem.Header>
+                    <StackPanel Classes="ctxToolbar" Orientation="Horizontal" Spacing="2" Margin="4,2">
+                        <Button Classes="ctxIcon" ToolTip.Tip="Paste" Command="{Binding PasteCommand}">
+                            <PathIcon Data="{DynamicResource HelixIconPasteGeometry}" Width="14" Height="14"
+                                      Foreground="{DynamicResource HelixIconPasteBrush}" />
+                        </Button>
+                        <Button Classes="ctxIcon" ToolTip.Tip="Copy path" Command="{Binding CopyPathCommand}">
+                            <PathIcon Data="{DynamicResource HelixIconLinkGeometry}" Width="14" Height="14" />
+                        </Button>
+                    </StackPanel>
+                </MenuItem.Header>
+            </MenuItem>
+            <Separator />
             <MenuItem Header="Restore" Command="{Binding RestoreFromRecycleBinCommand}">
                 <MenuItem.Icon>
                     <PathIcon Data="{DynamicResource HelixIconArrowClockwiseGeometry}" />
@@ -277,11 +292,6 @@
                 </MenuItem.Icon>
             </MenuItem>
             <Separator />
-            <MenuItem Header="Paste" Command="{Binding PasteCommand}">
-                <MenuItem.Icon>
-                    <PathIcon Data="{DynamicResource HelixIconPasteGeometry}" Foreground="{DynamicResource HelixIconPasteBrush}" />
-                </MenuItem.Icon>
-            </MenuItem>
             <MenuItem Header="New folder" Command="{Binding NewFolderCommand}">
                 <MenuItem.Icon>
                     <PathIcon Data="{DynamicResource HelixIconAddCircleGeometry}" />
@@ -532,6 +542,8 @@
                  SelectionMode="Multiple"
                  Background="Transparent"
                  BorderThickness="0"
+                 Focusable="True"
+                 KeyDown="OnGridKeyDown"
                  DoubleTapped="OnItemActivated"
                  SelectionChanged="OnSelectionChanged"
                  PointerPressed="OnListPointerPressed"
@@ -679,9 +691,11 @@
 
         <ScrollViewer x:Name="MillerScroll"
                       IsVisible="{Binding IsMillerView}"
+                      HorizontalContentAlignment="Left"
                       HorizontalScrollBarVisibility="Auto"
                       VerticalScrollBarVisibility="Disabled">
             <controls:MillerColumnPanel x:Name="MillerPanel"
+                                        HorizontalAlignment="Left"
                                         ColumnWidth="250"
                                         ColumnSpacing="4"
                                         ColumnActivated="OnMillerColumnActivated" />

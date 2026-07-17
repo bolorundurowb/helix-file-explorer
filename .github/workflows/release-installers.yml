@@ -50,7 +50,15 @@ jobs:
 
       - name: Publish application
         if: steps.check.outputs.skip != 'true'
-        run: dotnet publish src/HelixExplorer/HelixExplorer.csproj -c Release -r win-x64 --self-contained true -p:Version=${{ steps.version.outputs.version }} -o publish/win-x64
+        run: >-
+          dotnet publish src/HelixExplorer/HelixExplorer.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:Version=${{ steps.version.outputs.version }}
+          -p:DebugType=none
+          -p:DebugSymbols=false
+          -o publish/win-x64
 
       - name: Setup PolyInstall
         if: steps.check.outputs.skip != 'true'

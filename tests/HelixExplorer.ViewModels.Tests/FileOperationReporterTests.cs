@@ -1,6 +1,5 @@
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Services;
-using Xunit;
 
 namespace HelixExplorer.ViewModels.Tests;
 
@@ -13,13 +12,13 @@ public class FileOperationReporterTests
 
         reporter.Begin(FileOperationKind.Copy, totalItems: 4, title: "Copying items");
 
-        Assert.True(reporter.HasActive);
-        Assert.True(reporter.IsBusy);
-        Assert.Equal(0, reporter.Progress);
-        Assert.False(reporter.IsIndeterminate);
-        Assert.Equal("Copying items", reporter.ActiveTitle);
-        Assert.True(reporter.CanPauseOperation);
-        Assert.True(reporter.CanCancelOperation);
+        reporter.HasActive.Must().BeTrue();
+        reporter.IsBusy.Must().BeTrue();
+        reporter.Progress.Must().Be(0);
+        reporter.IsIndeterminate.Must().BeFalse();
+        reporter.ActiveTitle.Must().Be("Copying items");
+        reporter.CanPauseOperation.Must().BeTrue();
+        reporter.CanCancelOperation.Must().BeTrue();
     }
 
     [Fact]
@@ -29,7 +28,7 @@ public class FileOperationReporterTests
 
         reporter.Begin(FileOperationKind.Delete, totalItems: 0, title: "Deleting");
 
-        Assert.True(reporter.IsIndeterminate);
+        reporter.IsIndeterminate.Must().BeTrue();
     }
 
     [Fact]
@@ -40,10 +39,10 @@ public class FileOperationReporterTests
 
         reporter.Report(new FileOperationProgress(1, 3, @"C:\Temp\file.txt", FileOperationKind.Copy));
 
-        Assert.Equal(1.0 / 3.0, reporter.Progress, 5);
-        Assert.False(reporter.IsIndeterminate);
-        Assert.Contains("1 of 3", reporter.ActiveTitle);
-        Assert.Equal("file.txt", reporter.ActiveDetail);
+        reporter.Progress.Must().BeApproximately(1.0 / 3.0, 1e-5);
+        reporter.IsIndeterminate.Must().BeFalse();
+        reporter.ActiveTitle.Must().Contain("1 of 3");
+        reporter.ActiveDetail.Must().Be("file.txt");
     }
 
     [Fact]
@@ -54,17 +53,18 @@ public class FileOperationReporterTests
 
         reporter.Complete(FileOperationKind.Copy, itemCount: 1, message: "Copied 1 item");
 
-        Assert.False(reporter.HasActive);
-        Assert.Equal(1, reporter.Progress);
-        Assert.True(reporter.HasCompleted);
+        reporter.HasActive.Must().BeFalse();
+        reporter.Progress.Must().Be(1);
+        reporter.HasCompleted.Must().BeTrue();
 
-        var entry = Assert.Single(reporter.Completed);
-        Assert.Equal("Copied 1 item", entry.Message);
-        Assert.True(entry.Succeeded);
-        Assert.False(entry.Failed);
-        Assert.False(entry.Cancelled);
-        Assert.Equal(FileOperationKind.Copy, entry.Kind);
-        Assert.Equal(1, entry.ItemCount);
+        reporter.Completed.Must().HaveCount(1);
+        var entry = reporter.Completed[0];
+        entry.Message.Must().Be("Copied 1 item");
+        entry.Succeeded.Must().BeTrue();
+        entry.Failed.Must().BeFalse();
+        entry.Cancelled.Must().BeFalse();
+        entry.Kind.Must().Be(FileOperationKind.Copy);
+        entry.ItemCount.Must().Be(1);
     }
 
     [Fact]
@@ -75,13 +75,14 @@ public class FileOperationReporterTests
 
         reporter.Fail("Delete failed");
 
-        Assert.False(reporter.HasActive);
-        var entry = Assert.Single(reporter.Completed);
-        Assert.True(entry.Failed);
-        Assert.False(entry.Succeeded);
-        Assert.False(entry.Cancelled);
-        Assert.Null(entry.Kind);
-        Assert.Equal(0, entry.ItemCount);
+        reporter.HasActive.Must().BeFalse();
+        reporter.Completed.Must().HaveCount(1);
+        var entry = reporter.Completed[0];
+        entry.Failed.Must().BeTrue();
+        entry.Succeeded.Must().BeFalse();
+        entry.Cancelled.Must().BeFalse();
+        entry.Kind.Must().BeNull();
+        entry.ItemCount.Must().Be(0);
     }
 
     [Fact]
@@ -92,15 +93,15 @@ public class FileOperationReporterTests
 
         reporter.PauseOperationCommand.Execute(null);
 
-        Assert.True(reporter.IsPaused);
-        Assert.False(reporter.CanPauseOperation);
-        Assert.True(reporter.CanResumeOperation);
+        reporter.IsPaused.Must().BeTrue();
+        reporter.CanPauseOperation.Must().BeFalse();
+        reporter.CanResumeOperation.Must().BeTrue();
 
         reporter.ResumeOperationCommand.Execute(null);
 
-        Assert.False(reporter.IsPaused);
-        Assert.True(reporter.CanPauseOperation);
-        Assert.False(reporter.CanResumeOperation);
+        reporter.IsPaused.Must().BeFalse();
+        reporter.CanPauseOperation.Must().BeTrue();
+        reporter.CanResumeOperation.Must().BeFalse();
     }
 
     [Fact]
@@ -111,8 +112,8 @@ public class FileOperationReporterTests
 
         reporter.CancelOperationCommand.Execute(null);
 
-        Assert.True(reporter.CancellationToken.IsCancellationRequested);
-        Assert.False(reporter.IsPaused);
+        reporter.CancellationToken.IsCancellationRequested.Must().BeTrue();
+        reporter.IsPaused.Must().BeFalse();
     }
 
     [Fact]
@@ -123,11 +124,12 @@ public class FileOperationReporterTests
 
         reporter.Cancelled("Operation cancelled");
 
-        Assert.False(reporter.HasActive);
-        var entry = Assert.Single(reporter.Completed);
-        Assert.True(entry.Cancelled);
-        Assert.False(entry.Succeeded);
-        Assert.False(entry.Failed);
+        reporter.HasActive.Must().BeFalse();
+        reporter.Completed.Must().HaveCount(1);
+        var entry = reporter.Completed[0];
+        entry.Cancelled.Must().BeTrue();
+        entry.Succeeded.Must().BeFalse();
+        entry.Failed.Must().BeFalse();
     }
 
     [Fact]
@@ -135,12 +137,12 @@ public class FileOperationReporterTests
     {
         var reporter = new FileOperationReporter();
         reporter.Complete(FileOperationKind.Copy, 1, "Copied");
-        Assert.True(reporter.HasCompleted);
+        reporter.HasCompleted.Must().BeTrue();
 
         reporter.ClearCompletedCommand.Execute(null);
 
-        Assert.False(reporter.HasCompleted);
-        Assert.Empty(reporter.Completed);
+        reporter.HasCompleted.Must().BeFalse();
+        reporter.Completed.Must().BeEmpty();
     }
 
     [Fact]
@@ -150,7 +152,7 @@ public class FileOperationReporterTests
 
         reporter.Report(new FileOperationProgress(1, 4, "path", FileOperationKind.Copy));
 
-        Assert.False(reporter.HasActive);
-        Assert.Equal(0, reporter.Progress);
+        reporter.HasActive.Must().BeFalse();
+        reporter.Progress.Must().Be(0);
     }
 }

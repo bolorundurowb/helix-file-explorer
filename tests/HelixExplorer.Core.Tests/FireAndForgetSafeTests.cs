@@ -1,6 +1,5 @@
 using HelixExplorer.Core.Infrastructure;
 using Microsoft.Extensions.Logging;
-using Xunit;
 
 namespace HelixExplorer.Core.Tests;
 
@@ -17,9 +16,9 @@ public sealed class FireAndForgetSafeTests
             logger);
 
         var completed = await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(1)));
-        Assert.NotEqual(tcs.Task, completed);
+        ReferenceEquals(completed, tcs.Task).Must().BeFalse();
 
-        Assert.Empty(logger.Errors);
+        logger.Errors.Must().BeEmpty();
     }
 
     [Fact]
@@ -35,9 +34,9 @@ public sealed class FireAndForgetSafeTests
 
         await tcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-        Assert.Single(logger.Errors);
-        Assert.Same(exception, logger.Errors[0].Exception);
-        Assert.Contains("boom", exception.Message);
+        logger.Errors.Must().HaveCount(1);
+        logger.Errors[0].Exception.Must().Be(exception);
+        exception.Message.Must().Contain("boom");
     }
 
     [Fact]
@@ -53,8 +52,8 @@ public sealed class FireAndForgetSafeTests
 
         await tcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-        Assert.Single(logger.Errors);
-        Assert.Same(exception, logger.Errors[0].Exception);
+        logger.Errors.Must().HaveCount(1);
+        logger.Errors[0].Exception.Must().Be(exception);
     }
 
     private sealed class TestLogger(TaskCompletionSource? onLog = null) : ILogger

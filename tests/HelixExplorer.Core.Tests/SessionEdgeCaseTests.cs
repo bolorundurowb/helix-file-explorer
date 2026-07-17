@@ -1,6 +1,5 @@
 using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Session;
-using Xunit;
 
 namespace HelixExplorer.Core.Tests;
 
@@ -23,7 +22,7 @@ public sealed class SessionEdgeCaseTests
             });
 
             var loaded = new JsonSessionStore(path).Load();
-            Assert.Equal(storedIndex, loaded.ActiveTabIndex);
+            loaded.ActiveTabIndex.Must().Be(storedIndex);
         }
         finally
         {
@@ -48,7 +47,7 @@ public sealed class SessionEdgeCaseTests
             store.Save(document);
             var loaded = new JsonSessionStore(path).Load();
 
-            Assert.Equal(20, loaded.RecentPaths.Count);
+            loaded.RecentPaths.Count.Must().Be(20);
         }
         finally
         {
@@ -82,15 +81,16 @@ public sealed class SessionEdgeCaseTests
             store.Save(document);
             var loaded = new JsonSessionStore(path).Load();
 
-            var tab = Assert.Single(loaded.Tabs);
-            Assert.True(tab.IsDualPane);
-            Assert.True(tab.IsRightPaneActive);
-            Assert.Equal(PaneSplitOrientation.Horizontal, tab.Orientation);
-            Assert.Equal(@"C:\Left", tab.LeftPane.Path);
-            Assert.Equal(LayoutMode.Grid, tab.LeftPane.ViewMode);
-            Assert.NotNull(tab.RightPane);
-            Assert.Equal(@"D:\Right", tab.RightPane!.Path);
-            Assert.Equal(LayoutMode.Details, tab.RightPane.ViewMode);
+            loaded.Tabs.Must().HaveCount(1);
+            var tab = loaded.Tabs[0];
+            tab.IsDualPane.Must().BeTrue();
+            tab.IsRightPaneActive.Must().BeTrue();
+            tab.Orientation.Must().Be(PaneSplitOrientation.Horizontal);
+            tab.LeftPane.Path.Must().Be(@"C:\Left");
+            tab.LeftPane.ViewMode.Must().Be(LayoutMode.Grid);
+            tab.RightPane.Must().NotBeNull();
+            tab.RightPane!.Path.Must().Be(@"D:\Right");
+            tab.RightPane.ViewMode.Must().Be(LayoutMode.Details);
         }
         finally
         {
@@ -108,9 +108,9 @@ public sealed class SessionEdgeCaseTests
             File.WriteAllText(path, "{ not valid json");
             var loaded = new JsonSessionStore(path).Load();
 
-            Assert.Empty(loaded.Tabs);
-            Assert.Empty(loaded.RecentPaths);
-            Assert.Equal(0, loaded.ActiveTabIndex);
+            loaded.Tabs.Must().BeEmpty();
+            loaded.RecentPaths.Must().BeEmpty();
+            loaded.ActiveTabIndex.Must().Be(0);
         }
         finally
         {

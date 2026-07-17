@@ -1,5 +1,4 @@
 using HelixExplorer.Core.Models;
-using Xunit;
 
 namespace HelixExplorer.Core.Tests;
 
@@ -10,7 +9,7 @@ public class EntryDisplayNameTests
     {
         var entry = new FileSystemEntry(@"C:\docs\report.docx", "report.docx", false, 0, DateTime.UtcNow, ".docx");
 
-        Assert.Equal("report.docx", EntryDisplayName.Format(entry, showFileExtensions: true));
+        EntryDisplayName.Format(entry, showFileExtensions: true).Must().Be("report.docx");
     }
 
     [Fact]
@@ -18,7 +17,7 @@ public class EntryDisplayNameTests
     {
         var entry = new FileSystemEntry(@"C:\docs\report.docx", "report.docx", false, 0, DateTime.UtcNow, ".docx");
 
-        Assert.Equal("report", EntryDisplayName.Format(entry, showFileExtensions: false));
+        EntryDisplayName.Format(entry, showFileExtensions: false).Must().Be("report");
     }
 
     [Fact]
@@ -26,7 +25,7 @@ public class EntryDisplayNameTests
     {
         var entry = new FileSystemEntry(@"C:\docs", "docs", true, 0, DateTime.UtcNow, string.Empty);
 
-        Assert.Equal("docs", EntryDisplayName.Format(entry, showFileExtensions: false));
+        EntryDisplayName.Format(entry, showFileExtensions: false).Must().Be("docs");
     }
 
     [Fact]
@@ -34,6 +33,6 @@ public class EntryDisplayNameTests
     {
         var entry = new FileSystemEntry(@"C:\docs\README", "README", false, 0, DateTime.UtcNow, string.Empty);
 
-        Assert.Equal("README", EntryDisplayName.Format(entry, showFileExtensions: false));
+        EntryDisplayName.Format(entry, showFileExtensions: false).Must().Be("README");
     }
 }

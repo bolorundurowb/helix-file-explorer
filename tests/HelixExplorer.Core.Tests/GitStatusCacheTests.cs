@@ -1,5 +1,4 @@
 using HelixExplorer.Core.Git;
-using Xunit;
 
 namespace HelixExplorer.Core.Tests;
 
@@ -18,8 +17,8 @@ public class GitStatusCacheTests
         cache.Store(@"C:\repo", snap);
 
         now = now.AddMilliseconds(500);
-        Assert.True(cache.TryGet(@"C:\repo", out var got));
-        Assert.Same(snap, got);
+        cache.TryGet(@"C:\repo", out var got).Must().BeTrue();
+        got.Must().Be(snap);
     }
 
     [Fact]
@@ -30,7 +29,7 @@ public class GitStatusCacheTests
         cache.Store(@"C:\repo", Snapshot());
 
         now = now.AddSeconds(2);
-        Assert.False(cache.TryGet(@"C:\repo", out _));
+        cache.TryGet(@"C:\repo", out _).Must().BeFalse();
     }
 
     [Fact]
@@ -40,7 +39,7 @@ public class GitStatusCacheTests
         var cache = new GitStatusCache(TimeSpan.FromSeconds(5), () => now);
         cache.Store(@"C:\Repo", Snapshot());
 
-        Assert.True(cache.TryGet(@"c:\repo", out _));
+        cache.TryGet(@"c:\repo", out _).Must().BeTrue();
     }
 
     [Fact]
@@ -49,6 +48,6 @@ public class GitStatusCacheTests
         var cache = new GitStatusCache(TimeSpan.FromSeconds(30));
         cache.Store(@"C:\repo", Snapshot());
         cache.Invalidate(@"C:\repo");
-        Assert.False(cache.TryGet(@"C:\repo", out _));
+        cache.TryGet(@"C:\repo", out _).Must().BeFalse();
     }
 }

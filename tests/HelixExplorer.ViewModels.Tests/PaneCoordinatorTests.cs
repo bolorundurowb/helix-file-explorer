@@ -2,7 +2,6 @@ using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Models;
 using HelixExplorer.ViewModels.Pane;
-using Xunit;
 
 namespace HelixExplorer.ViewModels.Tests;
 
@@ -30,9 +29,9 @@ public class PaneSelectionModelTests
         model.SelectSingle(entries[1], entries);
         model.SelectRange(entries[3], entries);
 
-        Assert.Equal(3, model.SelectedCount);
-        Assert.Equal(entries[1], model.SelectedEntries[0]);
-        Assert.Equal(entries[3], model.SelectedEntries[^1]);
+        model.SelectedCount.Must().Be(3);
+        model.SelectedEntries[0].Must().Be(entries[1]);
+        model.SelectedEntries[^1].Must().Be(entries[3]);
     }
 
     [Fact]
@@ -43,10 +42,10 @@ public class PaneSelectionModelTests
         model.SelectSingle(entries[0], entries);
         model.SelectByBounds([entries[2], entries[3]], entries, additive: true);
 
-        Assert.Equal(3, model.SelectedCount);
-        Assert.Contains(entries[0], model.SelectedEntries);
-        Assert.Contains(entries[2], model.SelectedEntries);
-        Assert.Contains(entries[3], model.SelectedEntries);
+        model.SelectedCount.Must().Be(3);
+        model.SelectedEntries.Must().Contain(entries[0]);
+        model.SelectedEntries.Must().Contain(entries[2]);
+        model.SelectedEntries.Must().Contain(entries[3]);
     }
 
     [Fact]
@@ -56,7 +55,7 @@ public class PaneSelectionModelTests
         var model = new PaneSelectionModel();
         model.SelectAll(entries);
 
-        Assert.Equal(3, model.SelectedCount);
+        model.SelectedCount.Must().Be(3);
     }
 
     [Fact]
@@ -68,22 +67,19 @@ public class PaneSelectionModelTests
         model.SelectSingle(entries[1], entries);
         model.Toggle(entries[2], entries);
         model.Toggle(entries[3], entries);
-        Assert.Equal(3, model.SelectedCount);
+        model.SelectedCount.Must().Be(3);
 
-        // Unselecting the middle row must re-anchor off that row (otherwise Shift+click drifts).
         model.Toggle(entries[2], entries);
-        Assert.Equal(2, model.SelectedCount);
-        Assert.DoesNotContain(entries[2], model.SelectedEntries);
+        model.SelectedCount.Must().Be(2);
+        model.SelectedEntries.Must().NotContain(entries[2]);
 
-        // Shift+click to entries[4]. With the drifted anchor bug this would start at index 2 and
-        // drop entries[1]; with the fix it anchors on the first remaining selection (index 1).
         model.SelectRange(entries[4], entries);
 
-        Assert.Equal(4, model.SelectedCount);
-        Assert.Contains(entries[1], model.SelectedEntries);
-        Assert.Contains(entries[2], model.SelectedEntries);
-        Assert.Contains(entries[3], model.SelectedEntries);
-        Assert.Contains(entries[4], model.SelectedEntries);
+        model.SelectedCount.Must().Be(4);
+        model.SelectedEntries.Must().Contain(entries[1]);
+        model.SelectedEntries.Must().Contain(entries[2]);
+        model.SelectedEntries.Must().Contain(entries[3]);
+        model.SelectedEntries.Must().Contain(entries[4]);
     }
 
     [Fact]
@@ -95,12 +91,11 @@ public class PaneSelectionModelTests
         model.SelectSingle(entries[2], entries);
         model.Toggle(entries[2], entries);
 
-        Assert.Equal(0, model.SelectedCount);
+        model.SelectedCount.Must().Be(0);
 
-        // With no anchor, a shift-click should behave like a single selection at the target.
         model.SelectRange(entries[1], entries);
-        Assert.Equal(1, model.SelectedCount);
-        Assert.Contains(entries[1], model.SelectedEntries);
+        model.SelectedCount.Must().Be(1);
+        model.SelectedEntries.Must().Contain(entries[1]);
     }
 }
 
@@ -111,9 +106,9 @@ public class PaneNavigationControllerTests
     {
         var crumbs = PaneNavigationController.BuildBreadcrumbs(ShellPath.RecycleBin);
 
-        Assert.Single(crumbs);
-        Assert.Equal("Recycle Bin", crumbs[0].DisplayName);
-        Assert.True(crumbs[0].IsLast);
+        crumbs.Must().HaveCount(1);
+        crumbs[0].DisplayName.Must().Be("Recycle Bin");
+        crumbs[0].IsLast.Must().BeTrue();
     }
 
     [Fact]
@@ -122,9 +117,9 @@ public class PaneNavigationControllerTests
         var navigation = new PaneNavigationController(new FakeFileSystem(), new FakeArchive());
         var transition = navigation.RecordForward(@"C:\", @"C:\Users\");
 
-        Assert.Equal(@"C:\Users\", transition.Path);
-        Assert.True(transition.CanGoBack);
-        Assert.False(transition.CanGoForward);
+        transition.Path.Must().Be(@"C:\Users\");
+        transition.CanGoBack.Must().BeTrue();
+        transition.CanGoForward.Must().BeFalse();
     }
 
     private sealed class FakeFileSystem : IFileSystemProvider
@@ -177,7 +172,7 @@ public class PaneFileOperationCoordinatorDropTests
             @"C:\workspace\file.txt",
             isCopy: false);
 
-        Assert.True(allowed);
+        allowed.Must().BeTrue();
     }
 
     [Fact]
@@ -188,7 +183,7 @@ public class PaneFileOperationCoordinatorDropTests
             @"C:\workspace\file.txt",
             isCopy: false);
 
-        Assert.False(allowed);
+        allowed.Must().BeFalse();
     }
 
     [Fact]
@@ -199,7 +194,7 @@ public class PaneFileOperationCoordinatorDropTests
             @"C:\workspace\file.txt",
             isCopy: true);
 
-        Assert.True(allowed);
+        allowed.Must().BeTrue();
     }
 
     [Theory]
@@ -212,7 +207,7 @@ public class PaneFileOperationCoordinatorDropTests
             source,
             isCopy: false);
 
-        Assert.False(allowed);
+        allowed.Must().BeFalse();
     }
 }
 
@@ -229,6 +224,6 @@ public class PaneRenameTests
         bool isDirectory,
         int expected)
     {
-        Assert.Equal(expected, PaneViewModel.GetRenameBaseNameLength(name, isDirectory));
+        PaneViewModel.GetRenameBaseNameLength(name, isDirectory).Must().Be(expected);
     }
 }

@@ -5,14 +5,9 @@ using HelixExplorer.ViewModels;
 using HelixExplorer.ViewModels.Pane;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Xunit;
 
 namespace HelixExplorer.ViewModels.Tests;
 
-/// <summary>
-/// Exercises the production composition root (<see cref="HelixServiceRegistration"/>),
-/// not a reimplemented ServiceCollection.
-/// </summary>
 public class ScopedDiWiringTests
 {
     [Fact]
@@ -20,20 +15,19 @@ public class ScopedDiWiringTests
     {
         var services = CreateAppServices();
 
-        // Window-graph ViewModels are scoped per window so multi-window state does not collide.
-        Assert.Equal(ServiceLifetime.Scoped, Descriptor<MainWindowViewModel>(services).Lifetime);
-        Assert.Equal(ServiceLifetime.Scoped, Descriptor<HomePageViewModel>(services).Lifetime);
-        Assert.Equal(ServiceLifetime.Scoped, Descriptor<FileOperationReporter>(services).Lifetime);
-        Assert.Equal(ServiceLifetime.Scoped, Descriptor<IFileOperationReporter>(services).Lifetime);
-        Assert.Equal(ServiceLifetime.Scoped, Descriptor<IPaneCoordinatorFactory>(services).Lifetime);
-        Assert.Equal(ServiceLifetime.Scoped, Descriptor<IPaneViewModelFactory>(services).Lifetime);
-        Assert.Equal(ServiceLifetime.Scoped, Descriptor<AppSettingsCoordinator>(services).Lifetime);
-        Assert.Equal(ServiceLifetime.Scoped, Descriptor<SidebarViewModel>(services).Lifetime);
-        Assert.Equal(ServiceLifetime.Scoped, Descriptor<CommandPaletteService>(services).Lifetime);
-        Assert.Equal(ServiceLifetime.Scoped, Descriptor<TabSessionCoordinator>(services).Lifetime);
-        Assert.Equal(ServiceLifetime.Transient, Descriptor<PaneFileOperationCoordinator>(services).Lifetime);
-        Assert.Equal(ServiceLifetime.Transient, Descriptor<PaneShellActionCoordinator>(services).Lifetime);
-        Assert.Equal(ServiceLifetime.Singleton, Descriptor<IWindowHostService>(services).Lifetime);
+        Descriptor<MainWindowViewModel>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
+        Descriptor<HomePageViewModel>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
+        Descriptor<FileOperationReporter>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
+        Descriptor<IFileOperationReporter>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
+        Descriptor<IPaneCoordinatorFactory>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
+        Descriptor<IPaneViewModelFactory>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
+        Descriptor<AppSettingsCoordinator>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
+        Descriptor<SidebarViewModel>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
+        Descriptor<CommandPaletteService>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
+        Descriptor<TabSessionCoordinator>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
+        Descriptor<PaneFileOperationCoordinator>(services).Lifetime.Must().Be(ServiceLifetime.Transient);
+        Descriptor<PaneShellActionCoordinator>(services).Lifetime.Must().Be(ServiceLifetime.Transient);
+        Descriptor<IWindowHostService>(services).Lifetime.Must().Be(ServiceLifetime.Singleton);
     }
 
     [Fact]
@@ -51,12 +45,10 @@ public class ScopedDiWiringTests
         using var windowB = provider.CreateScope();
         b1 = windowB.ServiceProvider.GetRequiredService<HomePageViewModel>();
 
-        Assert.Same(a1, a2);
-        Assert.NotSame(a1, b1);
+        a1.Must().Be(a2);
+        ReferenceEquals(a1, b1).Must().BeFalse();
 
-        // validateScopes: scoped services must not resolve from the root provider.
-        Assert.Throws<InvalidOperationException>(
-            () => provider.GetRequiredService<HomePageViewModel>());
+        ((Action)(() => provider.GetRequiredService<HomePageViewModel>())).Throws<InvalidOperationException>();
     }
 
     [Fact]
@@ -71,8 +63,8 @@ public class ScopedDiWiringTests
         var coordinator = factory.CreateFileOperationCoordinator();
         var fromCoordinator = GetInjectedReporter(coordinator);
 
-        Assert.Same(fromExplicit, fromCoordinator);
-        Assert.Same(fromExplicit, sp.GetRequiredService<IFileOperationReporter>());
+        fromExplicit.Must().Be(fromCoordinator);
+        fromExplicit.Must().Be(sp.GetRequiredService<IFileOperationReporter>());
     }
 
     [Fact]
@@ -86,14 +78,12 @@ public class ScopedDiWiringTests
 
         using var scope2 = provider.CreateScope();
         var b = scope2.ServiceProvider.GetRequiredService<FileOperationReporter>();
-        Assert.NotSame(a, b);
+        ReferenceEquals(a, b).Must().BeFalse();
     }
 
     [Fact]
     public void FactoryResolvedFromScope_DoesNotCaptureRootReporter()
     {
-        // Regression for singleton factory + root IServiceProvider: coordinators would
-        // resolve a captive reporter that never matches the window-scoped UI reporter.
         using var provider = CreateAppServices().BuildServiceProvider(validateScopes: true);
         using var scope = provider.CreateScope();
 
@@ -101,11 +91,9 @@ public class ScopedDiWiringTests
         var factory = scope.ServiceProvider.GetRequiredService<IPaneCoordinatorFactory>();
         var coordinatorReporter = GetInjectedReporter(factory.CreateFileOperationCoordinator());
 
-        Assert.Same(windowReporter, coordinatorReporter);
+        windowReporter.Must().Be(coordinatorReporter);
 
-        // validateScopes: root must not resolve scoped FileOperationReporter.
-        Assert.Throws<InvalidOperationException>(
-            () => provider.GetRequiredService<FileOperationReporter>());
+        ((Action)(() => provider.GetRequiredService<FileOperationReporter>())).Throws<InvalidOperationException>();
     }
 
     private static ServiceCollection CreateAppServices()
@@ -143,21 +131,17 @@ public class PaneRefreshCoordinatorTests
         }
         catch (ObjectDisposedException)
         {
-            Assert.Fail("Token observation threw ObjectDisposedException after cancel-without-dispose.");
+            Ensure.Fail("Token observation threw ObjectDisposedException after cancel-without-dispose.");
         }
 
         cts.Dispose();
         var cancelled = false;
         try { cancelled = token.IsCancellationRequested; }
         catch (ObjectDisposedException) { cancelled = true; }
-        Assert.True(cancelled);
+        cancelled.Must().BeTrue();
     }
 }
 
-/// <summary>
-/// Calls <see cref="WindowHostService.OnWindowClosed"/> (the same method production uses)
-/// with a scope that fails if <see cref="MainWindowViewModel"/> is re-resolved.
-/// </summary>
 public class WindowCloseSessionPolicyTests
 {
     [Fact]
@@ -175,10 +159,10 @@ public class WindowCloseSessionPolicyTests
         var saved = false;
         host.OnWindowClosed(resolvingScope, () => saved = true);
 
-        Assert.True(saved);
-        Assert.Equal(0, resolvingScope.ResolveAttempts);
-        Assert.True(resolvingScope.IsDisposed);
-        Assert.Equal(0, host.OpenWindowCount);
+        saved.Must().BeTrue();
+        resolvingScope.ResolveAttempts.Must().Be(0);
+        resolvingScope.IsDisposed.Must().BeTrue();
+        host.OpenWindowCount.Must().Be(0);
     }
 
     [Fact]
@@ -197,10 +181,10 @@ public class WindowCloseSessionPolicyTests
         var saved = false;
         host.OnWindowClosed(closing, () => saved = true);
 
-        Assert.False(saved);
-        Assert.Equal(1, host.OpenWindowCount);
-        Assert.True(closing.IsDisposed);
-        Assert.False(remaining.IsDisposed);
+        saved.Must().BeFalse();
+        host.OpenWindowCount.Must().Be(1);
+        closing.IsDisposed.Must().BeTrue();
+        remaining.IsDisposed.Must().BeFalse();
     }
 
     private sealed class ForbiddenResolveScope(Type forbidden) : IServiceScope, IServiceProvider
@@ -232,6 +216,6 @@ public class ShellStrretLayoutTests
     {
         var strretType = typeof(HelixExplorer.Windows.Shell.WinShellFolderEnumerator).Assembly
             .GetType("HelixExplorer.Windows.Shell.STRRET", throwOnError: true)!;
-        Assert.True(System.Runtime.InteropServices.Marshal.SizeOf(strretType) >= 264);
+        System.Runtime.InteropServices.Marshal.SizeOf(strretType).Must().BeGreaterThanOrEqualTo(264);
     }
 }

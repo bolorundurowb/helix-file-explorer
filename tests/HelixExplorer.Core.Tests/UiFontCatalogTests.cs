@@ -1,5 +1,4 @@
 using HelixExplorer.Core.Theming;
-using Xunit;
 
 namespace HelixExplorer.Core.Tests;
 
@@ -8,7 +7,7 @@ public class UiFontCatalogTests
     [Fact]
     public void ResolveFontFamilySource_DmSans_UsesBundledCollection()
     {
-        Assert.Equal("fonts:Helix#DM Sans", UiFontCatalog.ResolveFontFamilySource(UiFontFamily.DmSans));
+        UiFontCatalog.ResolveFontFamilySource(UiFontFamily.DmSans).Must().Be("fonts:Helix#DM Sans");
     }
 
     [Fact]
@@ -17,24 +16,24 @@ public class UiFontCatalogTests
         var source = UiFontCatalog.GetSystemFontFamilySource();
 
         if (OperatingSystem.IsWindows())
-            Assert.Equal("Segoe UI Variable Text, Segoe UI", source);
+            source.Must().Be("Segoe UI Variable Text, Segoe UI");
         else if (OperatingSystem.IsMacOS())
-            Assert.Equal(".AppleSystemUIFont, SF Pro Text, Helvetica Neue", source);
+            source.Must().Be(".AppleSystemUIFont, SF Pro Text, Helvetica Neue");
         else
-            Assert.Equal("Cantarell, Ubuntu, Noto Sans, fonts:Inter#Inter", source);
+            source.Must().Be("Cantarell, Ubuntu, Noto Sans, fonts:Inter#Inter");
     }
 
     [Fact]
     public void Options_ContainSystemDmSansAndInterLabels()
     {
-        Assert.Equal("System default", UiFontCatalog.GetDisplayName(UiFontFamily.System));
-        Assert.Equal("DM Sans", UiFontCatalog.GetDisplayName(UiFontFamily.DmSans));
-        Assert.Equal("Inter", UiFontCatalog.GetDisplayName(UiFontFamily.Inter));
+        UiFontCatalog.GetDisplayName(UiFontFamily.System).Must().Be("System default");
+        UiFontCatalog.GetDisplayName(UiFontFamily.DmSans).Must().Be("DM Sans");
+        UiFontCatalog.GetDisplayName(UiFontFamily.Inter).Must().Be("Inter");
     }
 
     [Fact]
     public void ResolveFontFamilySource_Inter_UsesAvaloniaInterCollection()
     {
-        Assert.Equal("fonts:Inter#Inter", UiFontCatalog.ResolveFontFamilySource(UiFontFamily.Inter));
+        UiFontCatalog.ResolveFontFamilySource(UiFontFamily.Inter).Must().Be("fonts:Inter#Inter");
     }
 }

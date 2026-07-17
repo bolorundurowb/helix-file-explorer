@@ -3,7 +3,6 @@ using System.Text.Json.Serialization;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Settings;
 using HelixExplorer.Core.Theming;
-using Xunit;
 
 namespace HelixExplorer.Core.Tests;
 
@@ -21,18 +20,18 @@ public class AppSettingsTests
     {
         var settings = new AppSettings();
 
-        Assert.Equal(ThemeMode.System, settings.Theme);
-        Assert.Equal(UiFontFamily.System, settings.UiFont);
-        Assert.Equal(200, settings.SidebarWidth);
-        Assert.Equal(SizeDisplayMode.Binary, settings.SizeDisplay);
-        Assert.True(settings.ShowFileExtensions);
-        Assert.Equal(LayoutMode.Details, settings.DefaultViewMode);
-        Assert.Equal(72, settings.DefaultThumbnailSize);
-        Assert.False(settings.DefaultDualPane);
-        Assert.Null(settings.AccentColorArgb);
-        Assert.Empty(settings.PinnedPaths);
-        Assert.Equal("Ctrl+OemTilde", settings.OpenInTerminalGesture);
-        Assert.True(settings.AutoCheckForUpdates);
+        settings.Theme.Must().Be(ThemeMode.System);
+        settings.UiFont.Must().Be(UiFontFamily.System);
+        settings.SidebarWidth.Must().Be(200);
+        settings.SizeDisplay.Must().Be(SizeDisplayMode.Binary);
+        settings.ShowFileExtensions.Must().BeTrue();
+        settings.DefaultViewMode.Must().Be(LayoutMode.Details);
+        settings.DefaultThumbnailSize.Must().Be(72);
+        settings.DefaultDualPane.Must().BeFalse();
+        settings.AccentColorArgb.Must().BeNull();
+        settings.PinnedPaths.Must().BeEmpty();
+        settings.OpenInTerminalGesture.Must().Be("Ctrl+OemTilde");
+        settings.AutoCheckForUpdates.Must().BeTrue();
     }
 
     [Fact]
@@ -62,24 +61,24 @@ public class AppSettingsTests
         var json = JsonSerializer.Serialize(original, Options);
         var loaded = JsonSerializer.Deserialize<AppSettings>(json, Options);
 
-        Assert.NotNull(loaded);
-        Assert.Equal(ThemeMode.Dark, loaded.Theme);
-        Assert.Equal(UiFontFamily.DmSans, loaded.UiFont);
-        Assert.Equal(280, loaded.SidebarWidth);
-        Assert.Equal(SizeDisplayMode.Decimal, loaded.SizeDisplay);
-        Assert.True(loaded.ShowHiddenFiles);
-        Assert.Equal(LayoutMode.Grid, loaded.DefaultViewMode);
-        Assert.Equal(96, loaded.DefaultThumbnailSize);
-        Assert.True(loaded.DefaultDualPane);
-        Assert.Equal(0xFF107C10u, loaded.AccentColorArgb);
-        Assert.Equal(2, loaded.PinnedPaths.Count);
-        Assert.Equal(1440, loaded.WindowWidth);
-        Assert.Equal(900, loaded.WindowHeight);
-        Assert.Equal(120, loaded.WindowX);
-        Assert.Equal(80, loaded.WindowY);
-        Assert.True(loaded.WindowMaximized);
-        Assert.Equal("Ctrl+Shift+T", loaded.OpenInTerminalGesture);
-        Assert.False(loaded.AutoCheckForUpdates);
+        loaded!.Must().NotBeNull();
+        loaded!.Theme.Must().Be(ThemeMode.Dark);
+        loaded!.UiFont.Must().Be(UiFontFamily.DmSans);
+        loaded!.SidebarWidth.Must().Be(280);
+        loaded!.SizeDisplay.Must().Be(SizeDisplayMode.Decimal);
+        loaded!.ShowHiddenFiles.Must().BeTrue();
+        loaded!.DefaultViewMode.Must().Be(LayoutMode.Grid);
+        loaded!.DefaultThumbnailSize.Must().Be(96);
+        loaded!.DefaultDualPane.Must().BeTrue();
+        loaded!.AccentColorArgb.Must().Be(0xFF107C10u);
+        loaded!.PinnedPaths.Count.Must().Be(2);
+        loaded!.WindowWidth!.Value.Must().Be(1440);
+        loaded!.WindowHeight!.Value.Must().Be(900);
+        loaded!.WindowX!.Value.Must().Be(120);
+        loaded!.WindowY!.Value.Must().Be(80);
+        loaded!.WindowMaximized.Must().BeTrue();
+        loaded!.OpenInTerminalGesture.Must().Be("Ctrl+Shift+T");
+        loaded!.AutoCheckForUpdates.Must().BeFalse();
     }
 
     [Fact]
@@ -89,8 +88,8 @@ public class AppSettingsTests
         var json = JsonSerializer.Serialize(original, Options);
         var loaded = JsonSerializer.Deserialize<AppSettings>(json, Options);
 
-        Assert.NotNull(loaded);
-        Assert.Equal(UiFontFamily.Inter, loaded.UiFont);
+        loaded!.Must().NotBeNull();
+        loaded!.UiFont.Must().Be(UiFontFamily.Inter);
     }
 
     [Fact]
@@ -110,14 +109,14 @@ public class AppSettingsTests
             File.WriteAllText(tempFile, json);
             File.Move(tempFile, settingsFile, overwrite: true);
 
-            Assert.True(File.Exists(settingsFile));
-            Assert.False(File.Exists(tempFile));
+            File.Exists(settingsFile).Must().BeTrue();
+            File.Exists(tempFile).Must().BeFalse();
 
             var loaded = JsonSerializer.Deserialize<AppSettings>(
                 File.ReadAllText(settingsFile), Options);
-            Assert.NotNull(loaded);
-            Assert.Equal(ThemeMode.Dark, loaded.Theme);
-            Assert.Equal(300, loaded.SidebarWidth);
+            loaded!.Must().NotBeNull();
+            loaded!.Theme.Must().Be(ThemeMode.Dark);
+            loaded!.SidebarWidth.Must().Be(300);
         }
         finally
         {
@@ -144,11 +143,11 @@ public class AppSettingsTests
             // write succeeds, so the existing settings file stays intact.
             File.WriteAllText(tempFile, "{INVALID-JSON");
 
-            Assert.True(File.Exists(settingsFile));
+            File.Exists(settingsFile).Must().BeTrue();
             var loaded = JsonSerializer.Deserialize<AppSettings>(
                 File.ReadAllText(settingsFile), Options);
-            Assert.NotNull(loaded);
-            Assert.Equal(ThemeMode.Light, loaded.Theme);
+            loaded!.Must().NotBeNull();
+            loaded!.Theme.Must().Be(ThemeMode.Light);
         }
         finally
         {

@@ -1,6 +1,5 @@
 using Avalonia.Input;
 using HelixExplorer.Input;
-using Xunit;
 
 namespace HelixExplorer.ViewModels.Tests;
 
@@ -9,13 +8,13 @@ public class RenameKeyGestureTests
     [Fact]
     public void Enter_Commits()
     {
-        Assert.Equal(RenameKeyAction.Commit, RenameKeyGesture.Resolve(Key.Enter, KeyModifiers.None));
+        RenameKeyGesture.Resolve(Key.Enter, KeyModifiers.None).Must().Be(RenameKeyAction.Commit);
     }
 
     [Fact]
     public void Escape_Cancels()
     {
-        Assert.Equal(RenameKeyAction.Cancel, RenameKeyGesture.Resolve(Key.Escape, KeyModifiers.None));
+        RenameKeyGesture.Resolve(Key.Escape, KeyModifiers.None).Must().Be(RenameKeyAction.Cancel);
     }
 
     [Theory]
@@ -29,7 +28,7 @@ public class RenameKeyGestureTests
     [InlineData(Key.PageDown)]
     public void NavigationKeys_AreContainedInEditor(Key key)
     {
-        Assert.Equal(RenameKeyAction.Contain, RenameKeyGesture.Resolve(key, KeyModifiers.None));
+        RenameKeyGesture.Resolve(key, KeyModifiers.None).Must().Be(RenameKeyAction.Contain);
     }
 
     [Theory]
@@ -38,9 +37,8 @@ public class RenameKeyGestureTests
     [InlineData(KeyModifiers.Control | KeyModifiers.Shift)]
     public void ModifiedNavigationKeys_StayContained(KeyModifiers modifiers)
     {
-        // Shift+Left extends a selection, Ctrl+Left jumps a word: both are text-editing gestures.
-        Assert.Equal(RenameKeyAction.Contain, RenameKeyGesture.Resolve(Key.Left, modifiers));
-        Assert.Equal(RenameKeyAction.Contain, RenameKeyGesture.Resolve(Key.Home, modifiers));
+        RenameKeyGesture.Resolve(Key.Left, modifiers).Must().Be(RenameKeyAction.Contain);
+        RenameKeyGesture.Resolve(Key.Home, modifiers).Must().Be(RenameKeyAction.Contain);
     }
 
     [Theory]
@@ -52,7 +50,6 @@ public class RenameKeyGestureTests
     [InlineData(Key.Delete)]
     public void TypingKeys_BubbleNormally(Key key)
     {
-        // Character/edit keys are handled by the TextBox itself and need no special containment.
-        Assert.Equal(RenameKeyAction.None, RenameKeyGesture.Resolve(key, KeyModifiers.None));
+        RenameKeyGesture.Resolve(key, KeyModifiers.None).Must().Be(RenameKeyAction.None);
     }
 }

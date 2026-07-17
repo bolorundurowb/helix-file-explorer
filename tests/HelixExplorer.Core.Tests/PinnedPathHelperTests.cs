@@ -1,6 +1,5 @@
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Settings;
-using Xunit;
 
 namespace HelixExplorer.Core.Tests;
 
@@ -14,10 +13,10 @@ public class PinnedPathHelperTests
 
         var merged = PinnedPathHelper.MergeUserPins(user, defaults);
 
-        Assert.Equal(3, merged.Count);
-        Assert.Equal(@"D:\Projects", merged[0].Path);
-        Assert.Equal(@"C:\Custom", merged[1].Path);
-        Assert.Equal(@"C:\Users", merged[2].Path);
+        merged.Count.Must().Be(3);
+        merged[0].Path.Must().Be(@"D:\Projects");
+        merged[1].Path.Must().Be(@"C:\Custom");
+        merged[2].Path.Must().Be(@"C:\Users");
     }
 
     [Fact]
@@ -29,8 +28,8 @@ public class PinnedPathHelperTests
 
         var merged = PinnedPathHelper.MergeUserPins(user, defaults, unpinned);
 
-        Assert.Single(merged);
-        Assert.Equal(@"C:\Users", merged[0].Path);
+        merged.Must().HaveCount(1);
+        merged[0].Path.Must().Be(@"C:\Users");
     }
 
     [Fact]
@@ -40,8 +39,8 @@ public class PinnedPathHelperTests
         var unpinned = new List<string> { @"C:\Desktop" };
         var defaults = new[] { @"C:\Desktop", @"C:\Users" };
 
-        Assert.False(PinnedPathHelper.IsPinnedOrDefault(pinned, unpinned, defaults, @"C:\Desktop"));
-        Assert.True(PinnedPathHelper.IsPinnedOrDefault(pinned, unpinned, defaults, @"C:\Users"));
+        PinnedPathHelper.IsPinnedOrDefault(pinned, unpinned, defaults, @"C:\Desktop").Must().BeFalse();
+        PinnedPathHelper.IsPinnedOrDefault(pinned, unpinned, defaults, @"C:\Users").Must().BeTrue();
     }
 
     [Fact]
@@ -51,9 +50,9 @@ public class PinnedPathHelperTests
         var unpinned = new List<string> { @"C:\Desktop" };
         var defaults = new[] { @"C:\Desktop", @"C:\Users" };
 
-        Assert.True(PinnedPathHelper.IsVisibleInSidebar(pinned, unpinned, defaults, @"D:\Work"));
-        Assert.False(PinnedPathHelper.IsVisibleInSidebar(pinned, unpinned, defaults, @"C:\Desktop"));
-        Assert.True(PinnedPathHelper.IsVisibleInSidebar(pinned, unpinned, defaults, @"C:\Users"));
+        PinnedPathHelper.IsVisibleInSidebar(pinned, unpinned, defaults, @"D:\Work").Must().BeTrue();
+        PinnedPathHelper.IsVisibleInSidebar(pinned, unpinned, defaults, @"C:\Desktop").Must().BeFalse();
+        PinnedPathHelper.IsVisibleInSidebar(pinned, unpinned, defaults, @"C:\Users").Must().BeTrue();
     }
 
     [Fact]
@@ -61,8 +60,8 @@ public class PinnedPathHelperTests
     {
         var pins = new List<string> { @"C:\Work" };
 
-        Assert.True(PinnedPathHelper.IsPinned(pins, @"c:\work"));
-        Assert.False(PinnedPathHelper.IsPinned(pins, @"C:\Other"));
+        PinnedPathHelper.IsPinned(pins, @"c:\work").Must().BeTrue();
+        PinnedPathHelper.IsPinned(pins, @"C:\Other").Must().BeFalse();
     }
 }
 
@@ -74,8 +73,8 @@ public class ClipboardCutStateTests
         var clipboard = new InternalClipboardService();
         clipboard.SetCut([@"C:\Work\File.txt"], @"C:\Work");
 
-        Assert.True(ClipboardCutState.IsPathCut(clipboard, @"c:\work\file.txt"));
-        Assert.False(ClipboardCutState.IsPathCut(clipboard, @"C:\Other"));
+        ClipboardCutState.IsPathCut(clipboard, @"c:\work\file.txt").Must().BeTrue();
+        ClipboardCutState.IsPathCut(clipboard, @"C:\Other").Must().BeFalse();
     }
 
     [Fact]
@@ -84,6 +83,6 @@ public class ClipboardCutStateTests
         var clipboard = new InternalClipboardService();
         clipboard.SetCopy([@"C:\Work\File.txt"], @"C:\Work");
 
-        Assert.False(ClipboardCutState.IsPathCut(clipboard, @"C:\Work\File.txt"));
+        ClipboardCutState.IsPathCut(clipboard, @"C:\Work\File.txt").Must().BeFalse();
     }
 }

@@ -1,5 +1,4 @@
 using HelixExplorer.Core.FileSystem;
-using Xunit;
 
 namespace HelixExplorer.Core.Tests;
 
@@ -22,6 +21,6 @@ public class NetworkNoticePolicyTests
             hasLocations,
             isUnavailable: !discoveryAvailable);
 
-        Assert.Equal(expected, actual);
+        actual.Must().Be(expected);
     }
 }

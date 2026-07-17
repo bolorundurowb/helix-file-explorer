@@ -1,7 +1,6 @@
 using HelixExplorer.Core.Filtering;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Session;
-using Xunit;
 
 namespace HelixExplorer.Core.Tests;
 
@@ -21,7 +20,7 @@ public class FileNameFilterTests
     [InlineData("Report.docx", "   ", true)]
     public void Matches_IsCaseInsensitiveSubstring(string name, string query, bool expected)
     {
-        Assert.Equal(expected, FileNameFilter.Matches(Entry(name), query));
+        FileNameFilter.Matches(Entry(name), query).Must().Be(expected);
     }
 
     [Fact]
@@ -32,8 +31,8 @@ public class FileNameFilterTests
 
         var count = FileNameFilter.Apply(source, null, dest);
 
-        Assert.Equal(3, count);
-        Assert.Equal(3, dest.Count);
+        count.Must().Be(3);
+        dest.Count.Must().Be(3);
     }
 
     [Fact]
@@ -44,9 +43,9 @@ public class FileNameFilterTests
 
         FileNameFilter.Apply(source, "txt", dest);
 
-        Assert.Equal(2, dest.Count);
-        Assert.Equal("alpha.txt", dest[0].Name);
-        Assert.Equal("gamma.txt", dest[1].Name);
+        dest.Count.Must().Be(2);
+        dest[0].Name.Must().Be("alpha.txt");
+        dest[1].Name.Must().Be("gamma.txt");
     }
 
     [Fact]
@@ -57,8 +56,8 @@ public class FileNameFilterTests
 
         FileNameFilter.Apply(source, "keep", dest);
 
-        Assert.Single(dest);
-        Assert.Equal("keep.md", dest[0].Name);
+        dest.Must().HaveCount(1);
+        dest[0].Name.Must().Be("keep.md");
     }
 
     [Fact]
@@ -73,8 +72,8 @@ public class FileNameFilterTests
         var count = FileNameFilter.Apply(source, "123", dest);
         sw.Stop();
 
-        Assert.True(count > 0);
-        Assert.True(sw.ElapsedMilliseconds < 500, $"Filter took {sw.ElapsedMilliseconds}ms");
+        count.Must().BeGreaterThan(0);
+        sw.ElapsedMilliseconds.Must().BeLessThan(500);
     }
 
     [Fact]
@@ -85,9 +84,9 @@ public class FileNameFilterTests
 
         FileNameFilter.Apply(source, "*.pdf", dest);
 
-        Assert.Equal(2, dest.Count);
-        Assert.Contains(dest, e => e.Name == "alpha.pdf");
-        Assert.Contains(dest, e => e.Name == "gamma.PDF");
+        dest.Count.Must().Be(2);
+        dest.Must().Contain(e => e.Name == "alpha.pdf");
+        dest.Must().Contain(e => e.Name == "gamma.PDF");
     }
 }
 
@@ -125,26 +124,26 @@ public class SessionStoreTests
             store.Save(document);
             var loaded = new JsonSessionStore(path).Load();
 
-            Assert.Equal(1, loaded.ActiveTabIndex);
-            Assert.Equal(2, loaded.RecentPaths.Count);
-            Assert.Equal(2, loaded.Tabs.Count);
+            loaded.ActiveTabIndex.Must().Be(1);
+            loaded.RecentPaths.Count.Must().Be(2);
+            loaded.Tabs.Count.Must().Be(2);
 
             var first = loaded.Tabs[0];
-            Assert.Equal(@"C:\Users", first.LeftPane.Path);
-            Assert.Equal(LayoutMode.List, first.LeftPane.ViewMode);
-            Assert.Equal(96, first.LeftPane.ThumbnailSize);
-            Assert.False(first.IsDualPane);
-            Assert.Null(first.RightPane);
+            first.LeftPane.Path.Must().Be(@"C:\Users");
+            first.LeftPane.ViewMode.Must().Be(LayoutMode.List);
+            first.LeftPane.ThumbnailSize.Must().Be(96);
+            first.IsDualPane.Must().BeFalse();
+            first.RightPane.Must().BeNull();
 
             var second = loaded.Tabs[1];
-            Assert.True(second.IsDualPane);
-            Assert.True(second.IsRightPaneActive);
-            Assert.Equal(PaneSplitOrientation.Horizontal, second.Orientation);
-            Assert.Equal(0xFF0078D4u, second.TintArgb);
-            Assert.Equal(SortColumn.Size, second.LeftPane.SortColumn);
-            Assert.True(second.LeftPane.SortDescending);
-            Assert.NotNull(second.RightPane);
-            Assert.Equal(@"D:\", second.RightPane!.Path);
+            second.IsDualPane.Must().BeTrue();
+            second.IsRightPaneActive.Must().BeTrue();
+            second.Orientation.Must().Be(PaneSplitOrientation.Horizontal);
+            second.TintArgb.Must().Be(0xFF0078D4u);
+            second.LeftPane.SortColumn.Must().Be(SortColumn.Size);
+            second.LeftPane.SortDescending.Must().BeTrue();
+            second.RightPane.Must().NotBeNull();
+            second.RightPane!.Path.Must().Be(@"D:\");
         }
         finally
         {
@@ -159,8 +158,8 @@ public class SessionStoreTests
         var path = Path.Combine(Path.GetTempPath(), $"helix-missing-{Guid.NewGuid():N}.json");
         var loaded = new JsonSessionStore(path).Load();
 
-        Assert.Empty(loaded.Tabs);
-        Assert.Empty(loaded.RecentPaths);
+        loaded.Tabs.Must().BeEmpty();
+        loaded.RecentPaths.Must().BeEmpty();
     }
 
     [Fact]
@@ -173,8 +172,8 @@ public class SessionStoreTests
             store.Save(new SessionDocument { ActiveTabIndex = 0 });
             store.Save(new SessionDocument { ActiveTabIndex = 5 });
 
-            Assert.Equal(5, new JsonSessionStore(path).Load().ActiveTabIndex);
-            Assert.False(File.Exists(path + ".tmp"));
+            new JsonSessionStore(path).Load().ActiveTabIndex.Must().Be(5);
+            File.Exists(path + ".tmp").Must().BeFalse();
         }
         finally
         {

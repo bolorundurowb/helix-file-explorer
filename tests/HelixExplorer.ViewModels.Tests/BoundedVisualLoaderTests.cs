@@ -1,5 +1,4 @@
 using HelixExplorer.ViewModels.Pane;
-using Xunit;
 
 namespace HelixExplorer.ViewModels.Tests;
 
@@ -31,8 +30,8 @@ public class BoundedVisualLoaderTests
                 current--;
         }, CancellationToken.None);
 
-        Assert.True(peak <= max, $"peak concurrency {peak} exceeded max {max}");
-        Assert.True(peak > 1, "expected some real concurrency");
+        peak.Must().BeLessThanOrEqualTo(max);
+        peak.Must().BeGreaterThan(1);
     }
 
     [Fact]
@@ -52,8 +51,7 @@ public class BoundedVisualLoaderTests
             await Task.Delay(5, ct);
         }, cts.Token);
 
-        // With prompt cancellation we must not have started anywhere near all 1000 items.
-        Assert.True(started < 1000, $"started {started} items despite early cancellation");
+        started.Must().BeLessThan(1000);
     }
 
     [Fact]
@@ -62,14 +60,14 @@ public class BoundedVisualLoaderTests
         var loader = new BoundedVisualLoader(4);
         var ran = false;
         await loader.RunAsync(Array.Empty<int>(), (_, _) => { ran = true; return Task.CompletedTask; }, CancellationToken.None);
-        Assert.False(ran);
+        ran.Must().BeFalse();
     }
 
     [Fact]
     public void Constructor_ClampsMaxConcurrencyToAtLeastOne()
     {
-        Assert.Equal(1, new BoundedVisualLoader(0).MaxConcurrency);
-        Assert.Equal(1, new BoundedVisualLoader(-5).MaxConcurrency);
-        Assert.Equal(8, new BoundedVisualLoader(8).MaxConcurrency);
+        new BoundedVisualLoader(0).MaxConcurrency.Must().Be(1);
+        new BoundedVisualLoader(-5).MaxConcurrency.Must().Be(1);
+        new BoundedVisualLoader(8).MaxConcurrency.Must().Be(8);
     }
 }

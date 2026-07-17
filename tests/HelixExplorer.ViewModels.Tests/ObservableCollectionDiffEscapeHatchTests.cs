@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using HelixExplorer.ViewModels.Pane;
-using Xunit;
 
 namespace HelixExplorer.ViewModels.Tests;
 
@@ -24,9 +23,9 @@ public class ObservableCollectionDiffEscapeHatchTests
 
         ObservableCollectionDiff.Apply(target, desired);
 
-        Assert.Equal(20, target.Count);
-        Assert.Equal("new-0", target[0].Name);
-        Assert.Equal("new-19", target[19].Name);
+        target.Count.Must().Be(20);
+        target[0].Name.Must().Be("new-0");
+        target[19].Name.Must().Be("new-19");
     }
 
     [Fact]
@@ -39,8 +38,8 @@ public class ObservableCollectionDiffEscapeHatchTests
 
         ObservableCollectionDiff.Apply(target, new[] { c, a, b });
 
-        Assert.Same(c, target[0]);
-        Assert.Same(a, target[1]);
-        Assert.Same(b, target[2]);
+        c.Must().Be(target[0]);
+        a.Must().Be(target[1]);
+        b.Must().Be(target[2]);
     }
 }

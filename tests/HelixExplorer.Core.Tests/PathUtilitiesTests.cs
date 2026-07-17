@@ -1,5 +1,4 @@
 using HelixExplorer.Core.FileSystem;
-using Xunit;
 
 namespace HelixExplorer.Core.Tests;
 
@@ -20,7 +19,9 @@ public sealed class PathUtilitiesTests
     [InlineData("archive://C:\\backup.zip!", PathKind.Archive)]
     [InlineData("archive://C:\\backup.zip!docs/readme.txt", PathKind.Archive)]
     public void Classify_identifies_path_kind(string path, PathKind expected)
-        => Assert.Equal(expected, PathUtilities.Classify(path));
+    {
+        PathUtilities.Classify(path).Must().Be(expected);
+    }
 
     [Theory]
     [InlineData(@"C:\foo", @"C:\foo", true)]
@@ -35,7 +36,9 @@ public sealed class PathUtilitiesTests
     [InlineData(@"C:\foo", @"C:\foo\..\bar", false)]
     [InlineData(@"C:\foo", @"C:\foo\bar\..", true)]
     public void IsSameOrChildPath_handles_physical_paths(string directory, string path, bool expected)
-        => Assert.Equal(expected, PathUtilities.IsSameOrChildPath(directory, path));
+    {
+        PathUtilities.IsSameOrChildPath(directory, path).Must().Be(expected);
+    }
 
     [Theory]
     [InlineData(@"\\server\share", @"\\server\share", true)]
@@ -43,7 +46,9 @@ public sealed class PathUtilitiesTests
     [InlineData(@"\\server\share", @"\\server\sharefolder", false)]
     [InlineData(@"\\server\share", @"\\other\share\folder", false)]
     public void IsSameOrChildPath_handles_unc_paths(string directory, string path, bool expected)
-        => Assert.Equal(expected, PathUtilities.IsSameOrChildPath(directory, path));
+    {
+        PathUtilities.IsSameOrChildPath(directory, path).Must().Be(expected);
+    }
 
     [Theory]
     [InlineData("archive://C:\\backup.zip!", "archive://C:\\backup.zip!", true)]
@@ -52,13 +57,15 @@ public sealed class PathUtilitiesTests
     [InlineData("archive://C:\\backup.zip!docs/", "archive://C:\\backup.zip!docs/readme.txt", true)]
     [InlineData("archive://C:\\backup.zip!", "archive://C:\\other.zip!docs/", false)]
     public void IsSameOrChildPath_handles_archive_paths(string directory, string path, bool expected)
-        => Assert.Equal(expected, PathUtilities.IsSameOrChildPath(directory, path));
+    {
+        PathUtilities.IsSameOrChildPath(directory, path).Must().Be(expected);
+    }
 
     [Fact]
     public void IsSameOrChildPath_different_kinds_returns_false()
     {
-        Assert.False(PathUtilities.IsSameOrChildPath(@"C:\folder", "archive://C:\\folder.zip!"));
-        Assert.False(PathUtilities.IsSameOrChildPath(@"C:\folder", "shell:Downloads"));
+        PathUtilities.IsSameOrChildPath(@"C:\folder", "archive://C:\\folder.zip!").Must().BeFalse();
+        PathUtilities.IsSameOrChildPath(@"C:\folder", "shell:Downloads").Must().BeFalse();
     }
 
     [Theory]
@@ -67,7 +74,9 @@ public sealed class PathUtilitiesTests
     [InlineData(@"C:", @"C:\folder", true)]
     [InlineData(@"C:\", @"C:\foo", true)]
     public void IsSameOrChildPath_drive_root(string directory, string path, bool expected)
-        => Assert.Equal(expected, PathUtilities.IsSameOrChildPath(directory, path));
+    {
+        PathUtilities.IsSameOrChildPath(directory, path).Must().Be(expected);
+    }
 
     [Theory]
     [InlineData(@"C:\foo", @"C:\foo", true)]
@@ -75,20 +84,22 @@ public sealed class PathUtilitiesTests
     [InlineData(@"C:\foo\bar", @"C:\foo\bar\baz\..", true)]
     [InlineData(@"C:\foo\bar", @"C:\foo\bar\\baz\\..", true)]
     public void PathsEqual_handles_physical_paths(string a, string b, bool expected)
-        => Assert.Equal(expected, PathUtilities.PathsEqual(a, b));
+    {
+        PathUtilities.PathsEqual(a, b).Must().Be(expected);
+    }
 
     [Fact]
     public void NormalizePath_resolves_relative_segments()
     {
         var normalized = PathUtilities.NormalizePath(@"C:\foo\bar\..\baz");
-        Assert.Equal(@"C:\foo\baz", normalized);
+        normalized.Must().Be(@"C:\foo\baz");
     }
 
     [Fact]
     public void NormalizePath_preserves_drive_root()
     {
         var normalized = PathUtilities.NormalizePath(@"C:\");
-        Assert.Equal(@"C:\", normalized);
+        normalized.Must().Be(@"C:\");
     }
 
     [Theory]
@@ -97,7 +108,9 @@ public sealed class PathUtilitiesTests
     [InlineData(@"C:\folder", false)]
     [InlineData(@"\\server\share", false)]
     public void IsDriveRoot_identifies_drive_roots(string path, bool expected)
-        => Assert.Equal(expected, PathUtilities.IsDriveRoot(path));
+    {
+        PathUtilities.IsDriveRoot(path).Must().Be(expected);
+    }
 
     [Theory]
     [InlineData(@"\\server\share", true)]
@@ -105,5 +118,7 @@ public sealed class PathUtilitiesTests
     [InlineData(@"\\", true)]
     [InlineData(@"C:\folder", false)]
     public void IsUncPath_identifies_unc_paths(string path, bool expected)
-        => Assert.Equal(expected, PathUtilities.IsUncPath(path));
+    {
+        PathUtilities.IsUncPath(path).Must().Be(expected);
+    }
 }

@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using HelixExplorer.ViewModels.Pane;
-using Xunit;
 
 namespace HelixExplorer.ViewModels.Tests;
 
@@ -24,8 +23,8 @@ public class ObservableCollectionDiffTests
 
         ObservableCollectionDiff.Apply(target, new[] { a, b });
 
-        Assert.Equal(0, changes);
-        Assert.Equal(new[] { a, b }, target);
+        changes.Must().Be(0);
+        target.Must().BeSequenceEqual(new[] { a, b });
     }
 
     [Fact]
@@ -38,9 +37,9 @@ public class ObservableCollectionDiffTests
 
         ObservableCollectionDiff.Apply(target, new[] { c, a, b });
 
-        Assert.Same(c, target[0]);
-        Assert.Same(a, target[1]);
-        Assert.Same(b, target[2]);
+        c.Must().Be(target[0]);
+        a.Must().Be(target[1]);
+        b.Must().Be(target[2]);
     }
 
     [Fact]
@@ -53,7 +52,7 @@ public class ObservableCollectionDiffTests
 
         ObservableCollectionDiff.Apply(target, new[] { a, c });
 
-        Assert.Equal(new[] { a, c }, target);
+        target.Must().BeSequenceEqual(new[] { a, c });
     }
 
     [Fact]
@@ -67,7 +66,7 @@ public class ObservableCollectionDiffTests
         var d = new Item("d");
         ObservableCollectionDiff.Apply(target, new[] { a, b, c, d });
 
-        Assert.Equal(new[] { a, b, c, d }, target);
+        target.Must().BeSequenceEqual(new[] { a, b, c, d });
     }
 
     [Fact]
@@ -82,22 +81,21 @@ public class ObservableCollectionDiffTests
         var desired = new[] { d, c, a };
         ObservableCollectionDiff.Apply(target, desired);
 
-        Assert.Equal(desired, target);
+        target.Must().BeSequenceEqual(desired);
     }
 
     [Fact]
     public void Apply_ReusesSurvivingInstances_ForSelectionPreservation()
     {
-        // Simulates a sort: same instances, new order. A selection tracked by instance must survive.
         var a = new Item("a");
         var b = new Item("b");
         var target = new ObservableCollection<Item> { a, b };
-        var selected = target[1]; // b
+        var selected = target[1];
 
         ObservableCollectionDiff.Apply(target, new[] { b, a });
 
-        Assert.Contains(selected, target);
-        Assert.Same(b, target[0]);
+        target.Must().Contain(selected);
+        b.Must().Be(target[0]);
     }
 
     [Fact]
@@ -105,6 +103,6 @@ public class ObservableCollectionDiffTests
     {
         var target = new ObservableCollection<Item> { new("a"), new("b") };
         ObservableCollectionDiff.Apply(target, Array.Empty<Item>());
-        Assert.Empty(target);
+        target.Must().BeEmpty();
     }
 }

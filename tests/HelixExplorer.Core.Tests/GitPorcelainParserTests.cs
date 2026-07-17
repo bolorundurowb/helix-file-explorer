@@ -1,5 +1,4 @@
 using HelixExplorer.Core.Git;
-using Xunit;
 
 namespace HelixExplorer.Core.Tests;
 
@@ -27,15 +26,15 @@ public class GitPorcelainParserTests
     {
         var snapshot = GitPorcelainParser.Parse(Sample, @"C:\repo");
 
-        Assert.True(snapshot.IsRepository);
-        Assert.Equal("main", snapshot.Status.Branch);
-        Assert.Equal(2, snapshot.Status.Ahead);
-        Assert.Equal(1, snapshot.Status.Behind);
-        Assert.True(snapshot.Status.HasRemote);
-        Assert.Equal(3, snapshot.Status.Staged);
-        Assert.Equal(3, snapshot.Status.Unstaged);
-        Assert.Equal(1, snapshot.Status.Untracked);
-        Assert.Equal("main ↑2 ↓1 · 7 modified", snapshot.Status.Display);
+        snapshot.IsRepository.Must().BeTrue();
+        snapshot.Status.Branch.Must().Be("main");
+        snapshot.Status.Ahead.Must().Be(2);
+        snapshot.Status.Behind.Must().Be(1);
+        snapshot.Status.HasRemote.Must().BeTrue();
+        snapshot.Status.Staged.Must().Be(3);
+        snapshot.Status.Unstaged.Must().Be(3);
+        snapshot.Status.Untracked.Must().Be(1);
+        snapshot.Status.Display.Must().Be("main ↑2 ↓1 · 7 modified");
     }
 
     [Fact]
@@ -43,12 +42,12 @@ public class GitPorcelainParserTests
     {
         var snapshot = GitPorcelainParser.Parse(Sample, @"C:\repo");
 
-        Assert.Equal(GitFileStatus.AddedOrStaged, snapshot.GetStatusForPath(@"C:\repo\staged.txt"));
-        Assert.Equal(GitFileStatus.Modified, snapshot.GetStatusForPath(@"C:\repo\modified.txt"));
-        Assert.Equal(GitFileStatus.Modified, snapshot.GetStatusForPath(@"C:\repo\both.txt"));
-        Assert.Equal(GitFileStatus.Conflict, snapshot.GetStatusForPath(@"C:\repo\conflict.txt"));
-        Assert.Equal(GitFileStatus.Untracked, snapshot.GetStatusForPath(@"C:\repo\untracked.txt"));
-        Assert.Equal(GitFileStatus.None, snapshot.GetStatusForPath(@"C:\repo\clean.txt"));
+        snapshot.GetStatusForPath(@"C:\repo\staged.txt").Must().Be(GitFileStatus.AddedOrStaged);
+        snapshot.GetStatusForPath(@"C:\repo\modified.txt").Must().Be(GitFileStatus.Modified);
+        snapshot.GetStatusForPath(@"C:\repo\both.txt").Must().Be(GitFileStatus.Modified);
+        snapshot.GetStatusForPath(@"C:\repo\conflict.txt").Must().Be(GitFileStatus.Conflict);
+        snapshot.GetStatusForPath(@"C:\repo\untracked.txt").Must().Be(GitFileStatus.Untracked);
+        snapshot.GetStatusForPath(@"C:\repo\clean.txt").Must().Be(GitFileStatus.None);
     }
 
     [Fact]
@@ -59,16 +58,16 @@ public class GitPorcelainParserTests
             "1 .M N... 100644 100644 100644 1111111111111111111111111111111111111111 2222222222222222222222222222222222222222 src/a.txt");
 
         var snapshot = GitPorcelainParser.Parse(output, @"C:\repo");
-        Assert.Equal(GitFileStatus.Modified, snapshot.GetStatusForPath(@"C:\repo\src"));
-        Assert.Equal("feature · 1 modified", snapshot.Status.Display);
+        snapshot.GetStatusForPath(@"C:\repo\src").Must().Be(GitFileStatus.Modified);
+        snapshot.Status.Display.Must().Be("feature · 1 modified");
     }
 
     [Fact]
     public void Parse_Empty_ReturnsEmptySnapshot()
     {
         var snapshot = GitPorcelainParser.Parse(string.Empty, null);
-        Assert.False(snapshot.IsRepository);
-        Assert.Equal(GitStatus.Empty, snapshot.Status);
+        snapshot.IsRepository.Must().BeFalse();
+        snapshot.Status.Must().Be(GitStatus.Empty);
     }
 
     [Fact]
@@ -80,7 +79,7 @@ public class GitPorcelainParserTests
 
         var snapshot = GitPorcelainParser.Parse(output, @"C:\repo");
 
-        Assert.Equal(GitFileStatus.Modified, snapshot.GetStatusForPath(@"C:\repo\file with spaces.txt"));
+        snapshot.GetStatusForPath(@"C:\repo\file with spaces.txt").Must().Be(GitFileStatus.Modified);
     }
 
     [Fact]
@@ -92,7 +91,7 @@ public class GitPorcelainParserTests
 
         var snapshot = GitPorcelainParser.Parse(output, @"C:\repo");
 
-        Assert.Equal(GitFileStatus.Untracked, snapshot.GetStatusForPath(@"C:\repo\café.txt"));
+        snapshot.GetStatusForPath(@"C:\repo\café.txt").Must().Be(GitFileStatus.Untracked);
     }
 
     [Fact]
@@ -104,8 +103,8 @@ public class GitPorcelainParserTests
 
         var snapshot = GitPorcelainParser.Parse(output, @"C:\repo");
 
-        Assert.Equal("(detached)", snapshot.Status.Branch);
-        Assert.False(snapshot.Status.HasRemote);
+        snapshot.Status.Branch.Must().Be("(detached)");
+        snapshot.Status.HasRemote.Must().BeFalse();
     }
 
     [Fact]
@@ -117,6 +116,6 @@ public class GitPorcelainParserTests
 
         var snapshot = GitPorcelainParser.Parse(output, @"C:\repo");
 
-        Assert.Equal(GitFileStatus.Modified, snapshot.GetStatusForPath(@"C:\repo\file!name.txt"));
+        snapshot.GetStatusForPath(@"C:\repo\file!name.txt").Must().Be(GitFileStatus.Modified);
     }
 }

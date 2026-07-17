@@ -1,5 +1,4 @@
 using HelixExplorer.Core.FileSystem;
-using Xunit;
 
 namespace HelixExplorer.Core.Tests;
 
@@ -14,10 +13,10 @@ public class InternalClipboardServiceTests
 
         clipboard.SetCopy(["C:\\a.txt", "C:\\b.txt"], @"C:\");
 
-        Assert.True(clipboard.HasPayload);
-        Assert.Equal(ClipboardOperation.Copy, clipboard.Current!.Operation);
-        Assert.Equal(2, clipboard.Current.Paths.Count);
-        Assert.Equal(1, raised);
+        clipboard.HasPayload.Must().BeTrue();
+        clipboard.Current!.Operation.Must().Be(ClipboardOperation.Copy);
+        clipboard.Current.Paths.Count.Must().Be(2);
+        raised.Must().Be(1);
     }
 
     [Fact]
@@ -30,9 +29,9 @@ public class InternalClipboardServiceTests
         clipboard.SetCut(["C:\\a.txt"], @"C:\");
         clipboard.Clear();
 
-        Assert.False(clipboard.HasPayload);
-        Assert.Null(clipboard.Current);
-        Assert.Equal(2, raised);
+        clipboard.HasPayload.Must().BeFalse();
+        clipboard.Current.Must().BeNull();
+        raised.Must().Be(2);
     }
 
     [Fact]
@@ -44,7 +43,7 @@ public class InternalClipboardServiceTests
 
         clipboard.Clear();
 
-        Assert.Equal(0, raised);
+        raised.Must().Be(0);
     }
 }
 
@@ -54,7 +53,7 @@ public class FileOperationPathHelperTests
     public void EnsureUniqueFilePath_ReturnsOriginalWhenMissing()
     {
         var path = Path.Combine(Path.GetTempPath(), $"helix-missing-{Guid.NewGuid():N}.txt");
-        Assert.Equal(path, FileOperationPathHelper.EnsureUniqueFilePath(path));
+        FileOperationPathHelper.EnsureUniqueFilePath(path).Must().Be(path);
     }
 
     [Fact]
@@ -69,7 +68,7 @@ public class FileOperationPathHelperTests
 
             var unique = FileOperationPathHelper.EnsureUniqueFilePath(path);
 
-            Assert.Equal(Path.Combine(dir, "file (1).txt"), unique);
+            unique.Must().Be(Path.Combine(dir, "file (1).txt"));
         }
         finally
         {
@@ -86,7 +85,7 @@ public class FileOperationPathHelperTests
         try
         {
             var unique = FileOperationPathHelper.EnsureUniqueDirectoryPath(path);
-            Assert.Equal(Path.Combine(parent, "Folder (1)"), unique);
+            unique.Must().Be(Path.Combine(parent, "Folder (1)"));
         }
         finally
         {

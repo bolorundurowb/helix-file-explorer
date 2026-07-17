@@ -1,5 +1,4 @@
 using HelixExplorer.Core.Filtering;
-using Xunit;
 
 namespace HelixExplorer.Core.Tests;
 
@@ -15,15 +14,15 @@ public class GlobMatcherTests
     [InlineData("ab.txt", "?.txt", false)]
     public void IsMatch_GlobPatterns(string name, string pattern, bool expected)
     {
-        Assert.Equal(expected, GlobMatcher.IsMatch(name, pattern));
+        GlobMatcher.IsMatch(name, pattern).Must().Be(expected);
     }
 
     [Fact]
     public void HasGlobMetacharacters_DetectsStarsAndQuestions()
     {
-        Assert.True(GlobMatcher.HasGlobMetacharacters("*.cs"));
-        Assert.True(GlobMatcher.HasGlobMetacharacters("file?.txt"));
-        Assert.False(GlobMatcher.HasGlobMetacharacters("readme"));
+        GlobMatcher.HasGlobMetacharacters("*.cs").Must().BeTrue();
+        GlobMatcher.HasGlobMetacharacters("file?.txt").Must().BeTrue();
+        GlobMatcher.HasGlobMetacharacters("readme").Must().BeFalse();
     }
 
     [Theory]
@@ -32,6 +31,6 @@ public class GlobMatcherTests
     [InlineData("Report.docx", "*.pdf", false)]
     public void EntryNameMatcher_SubstringOrGlob(string name, string query, bool expected)
     {
-        Assert.Equal(expected, EntryNameMatcher.Matches(name, query));
+        EntryNameMatcher.Matches(name, query).Must().Be(expected);
     }
 }

@@ -2,7 +2,6 @@ using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Windows.FileSystem;
 using Microsoft.Extensions.Logging.Abstractions;
-using Xunit;
 
 namespace HelixExplorer.ViewModels.Tests;
 
@@ -26,8 +25,8 @@ public class WinSearchRecursiveTests : IDisposable
 
         var result = await _provider.SearchRecursiveAsync(_root, "readme", SearchOptions.Default);
 
-        Assert.Contains(result.Entries, e => e.Name == "ReadMe.TXT");
-        Assert.DoesNotContain(result.Entries, e => e.Name == "other.dat");
+        result.Entries.Must().Contain(e => e.Name == "ReadMe.TXT");
+        result.Entries.Must().NotContain(e => e.Name == "other.dat");
     }
 
     [Fact]
@@ -38,8 +37,8 @@ public class WinSearchRecursiveTests : IDisposable
 
         var result = await _provider.SearchRecursiveAsync(_root, "match", new SearchOptions { MaxResults = 5 });
 
-        Assert.True(result.Capped);
-        Assert.Equal(5, result.Entries.Count);
+        result.Capped.Must().BeTrue();
+        result.Entries.Count.Must().Be(5);
     }
 
     [Fact]
@@ -50,10 +49,10 @@ public class WinSearchRecursiveTests : IDisposable
         File.WriteAllText(Path.Combine(deep, "target.txt"), "x");
 
         var shallow = await _provider.SearchRecursiveAsync(_root, "target", new SearchOptions { MaxDepth = 1 });
-        Assert.DoesNotContain(shallow.Entries, e => e.Name == "target.txt");
+        shallow.Entries.Must().NotContain(e => e.Name == "target.txt");
 
         var deepEnough = await _provider.SearchRecursiveAsync(_root, "target", new SearchOptions { MaxDepth = 5 });
-        Assert.Contains(deepEnough.Entries, e => e.Name == "target.txt");
+        deepEnough.Entries.Must().Contain(e => e.Name == "target.txt");
     }
 
     [Fact]
@@ -62,7 +61,7 @@ public class WinSearchRecursiveTests : IDisposable
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+        await Ensure.ThrowsAsync<OperationCanceledException>(
             async () => await _provider.SearchRecursiveAsync(_root, "x", SearchOptions.Default, cts.Token));
     }
 
@@ -74,8 +73,8 @@ public class WinSearchRecursiveTests : IDisposable
 
         var result = await _provider.SearchRecursiveAsync(_root, "unique-token-helix-42", SearchOptions.Default);
 
-        Assert.Contains(result.Entries, e => e.Name == "notes.txt");
-        Assert.DoesNotContain(result.Entries, e => e.Name == "other.txt");
+        result.Entries.Must().Contain(e => e.Name == "notes.txt");
+        result.Entries.Must().NotContain(e => e.Name == "other.txt");
     }
 
     [Fact]
@@ -86,8 +85,8 @@ public class WinSearchRecursiveTests : IDisposable
 
         var result = await _provider.SearchRecursiveAsync(_root, "*.cs", SearchOptions.Default);
 
-        Assert.Contains(result.Entries, e => e.Name == "code.cs");
-        Assert.DoesNotContain(result.Entries, e => e.Name == "a.txt");
+        result.Entries.Must().Contain(e => e.Name == "code.cs");
+        result.Entries.Must().NotContain(e => e.Name == "a.txt");
     }
 
     [Fact]
@@ -98,13 +97,13 @@ public class WinSearchRecursiveTests : IDisposable
 
         var result = await _provider.SearchRecursiveAsync(_root, "*.pdf", SearchOptions.Default);
 
-        Assert.Contains(result.Entries, e => e.Name == "alpha.pdf");
-        Assert.DoesNotContain(result.Entries, e => e.Name == "beta.txt");
+        result.Entries.Must().Contain(e => e.Name == "alpha.pdf");
+        result.Entries.Must().NotContain(e => e.Name == "beta.txt");
     }
 
     public void Dispose()
     {
-        try { Directory.Delete(_root, recursive: true); } catch { /* best effort */ }
+        try { Directory.Delete(_root, recursive: true); } catch { }
     }
 
     private sealed class StubShellEnumerator : IShellFolderEnumerator

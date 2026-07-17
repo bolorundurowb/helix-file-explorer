@@ -1,5 +1,4 @@
 using HelixExplorer.Core.Collections;
-using Xunit;
 
 namespace HelixExplorer.Core.Tests;
 
@@ -12,7 +11,7 @@ public class ArrayPoolListTests
         list.Add(1);
         list.Add(2);
         list.Add(3);
-        Assert.Equal(3, list.Count);
+        list.Count.Must().Be(3);
     }
 
     [Fact]
@@ -21,8 +20,8 @@ public class ArrayPoolListTests
         using var list = new ArrayPoolList<string>();
         list.Add("hello");
         list.Add("world");
-        Assert.Equal("hello", list[0]);
-        Assert.Equal("world", list[1]);
+        list[0].Must().Be("hello");
+        list[1].Must().Be("world");
     }
 
     [Fact]
@@ -33,9 +32,9 @@ public class ArrayPoolListTests
         list.Add(1);
         list.Add(2);
         list.Sort(Comparer<int>.Default);
-        Assert.Equal(1, list[0]);
-        Assert.Equal(2, list[1]);
-        Assert.Equal(3, list[2]);
+        list[0].Must().Be(1);
+        list[1].Must().Be(2);
+        list[2].Must().Be(3);
     }
 
     [Fact]
@@ -45,7 +44,7 @@ public class ArrayPoolListTests
         list.Add(1);
         list.Add(2);
         list.Clear();
-        Assert.Equal(0, list.Count);
+        list.Count.Must().Be(0);
     }
 
     [Fact]
@@ -55,7 +54,7 @@ public class ArrayPoolListTests
         list.Add(10);
         list.Add(20);
         var array = list.ToArray();
-        Assert.Equal([10, 20], array);
+        array.Must().BeSequenceEqual([10, 20]);
     }
 
     [Fact]
@@ -64,8 +63,8 @@ public class ArrayPoolListTests
         using var list = new ArrayPoolList<int>(initialCapacity: 2);
         for (int i = 0; i < 100; i++)
             list.Add(i);
-        Assert.Equal(100, list.Count);
-        Assert.Equal(99, list[99]);
+        list.Count.Must().Be(100);
+        list[99].Must().Be(99);
     }
 
     [Fact]
@@ -74,8 +73,8 @@ public class ArrayPoolListTests
         using var list = new ArrayPoolList<int>();
         list.Add(1);
         list.AddRange([2, 3, 4]);
-        Assert.Equal(4, list.Count);
-        Assert.Equal(4, list[3]);
+        list.Count.Must().Be(4);
+        list[3].Must().Be(4);
     }
 
     [Fact]
@@ -86,8 +85,8 @@ public class ArrayPoolListTests
         list.Add(10);
         list.Add(15);
         var span = list.AsSpan();
-        Assert.Equal(3, span.Length);
-        Assert.Equal(10, span[1]);
+        span.Length.Must().Be(3);
+        span[1].Must().Be(10);
     }
 
     [Fact]
@@ -98,9 +97,8 @@ public class ArrayPoolListTests
         list.Add(2);
 
         list.Dispose();
-        var ex = Record.Exception(() => list.Dispose());
-
-        Assert.Null(ex);
+        Action act = () => list.Dispose();
+        act.NotThrow();
     }
 
     [Fact]
@@ -122,8 +120,8 @@ public class ArrayPoolListTests
             b.Add(2);
         }
 
-        Assert.All(a.ToArray(), v => Assert.Equal(1, v));
-        Assert.All(b.ToArray(), v => Assert.Equal(2, v));
+        a.ToArray().Must().AllSatisfy(v => v == 1);
+        b.ToArray().Must().AllSatisfy(v => v == 2);
     }
 
     [Fact]
@@ -131,10 +129,10 @@ public class ArrayPoolListTests
     {
         var list = default(ArrayPoolList<int>);
 
-        var ex = Record.Exception(() => list.Clear());
+        Action act = () => list.Clear();
+        act.NotThrow();
 
-        Assert.Null(ex);
-        Assert.Equal(0, list.Count);
+        list.Count.Must().Be(0);
     }
 
     [Fact]
@@ -144,7 +142,7 @@ public class ArrayPoolListTests
 
         var result = list.ToArray();
 
-        Assert.Empty(result);
+        result.Must().BeEmpty();
     }
 
     [Fact]
@@ -154,8 +152,8 @@ public class ArrayPoolListTests
         list.Clear();
         list.Add(42);
 
-        Assert.Equal(1, list.Count);
-        Assert.Equal(42, list[0]);
+        list.Count.Must().Be(1);
+        list[0].Must().Be(42);
         list.Dispose();
     }
 }

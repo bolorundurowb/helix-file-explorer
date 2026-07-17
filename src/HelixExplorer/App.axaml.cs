@@ -3,6 +3,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.Infrastructure;
+using HelixExplorer.Core.Logging;
 using HelixExplorer.Services;
 using HelixExplorer.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,6 +15,7 @@ namespace HelixExplorer;
 public partial class App : Application
 {
     private IHost? _host;
+    private RollingFileLoggerProvider? _fileLoggerProvider;
 
     /// <summary>
     /// Application service provider, exposed so Avalonia-instantiated views (which have parameterless
@@ -31,16 +33,34 @@ public partial class App : Application
     {
         AppPaths.EnsureDirectoriesExist();
 
+        _fileLoggerProvider = new RollingFileLoggerProvider(new RollingFileLoggerOptions
+        {
+            Version = AppVersion.Current,
+#if DEBUG
+            MinLevel = LogLevel.Debug,
+#else
+            MinLevel = LogLevel.Information,
+#endif
+        });
+
         _host = Host.CreateDefaultBuilder()
             .ConfigureLogging(logging =>
             {
                 logging.ClearProviders();
+#if DEBUG
                 logging.AddDebug();
+#endif
+                logging.AddProvider(_fileLoggerProvider);
             })
             .ConfigureServices((_, services) => services.AddHelixApplicationServices())
             .Build();
 
         Services = _host.Services;
+        var startupLogger = _host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("HelixExplorer");
+        startupLogger.LogInformation(
+            "Helix Explorer {Version} starting. Logs: {LogsDirectory}",
+            AppVersion.Current,
+            _fileLoggerProvider.LogsDirectory);
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
@@ -79,5 +99,7 @@ public partial class App : Application
         _host?.Dispose();
         _host = null;
         Services = null;
+        _fileLoggerProvider?.Dispose();
+        _fileLoggerProvider = null;
     }
 }

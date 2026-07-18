@@ -6,6 +6,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
 using Avalonia.Layout;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using HelixExplorer.ViewModels;
 
 namespace HelixExplorer.Controls;
@@ -296,6 +297,76 @@ public sealed class VirtualizingFileGrid : TemplatedControl
             return false;
 
         targetIndex = candidate;
+        return true;
+    }
+
+    /// <summary>
+    /// Collects realized tiles whose bounds intersect <paramref name="rectInGridSpace"/> (this control's
+    /// local space). Walks only horizontal row StackPanel children — not nested EntryVisualView
+    /// descendants — so marquee hit-testing matches painted tile boxes through scroll/virtualization.
+    /// </summary>
+    public void CollectEntriesInRect(Rect rectInGridSpace, List<EntryItemViewModel> hits)
+    {
+        if (_rows is null || rectInGridSpace.Width < 1 || rectInGridSpace.Height < 1)
+            return;
+
+        var viewport = new Rect(Bounds.Size);
+        var clip = rectInGridSpace.Intersect(viewport);
+        if (clip.Width < 1 || clip.Height < 1)
+            return;
+
+        foreach (var descendant in _rows.GetVisualDescendants())
+        {
+            // Row template root is a horizontal StackPanel whose children are the tile Borders.
+            if (descendant is not StackPanel { Orientation: Orientation.Horizontal } row)
+                continue;
+
+            foreach (var child in row.Children)
+            {
+                if (child is not Control { DataContext: EntryItemViewModel entry, IsVisible: true } tile)
+                    continue;
+
+                if (!TryGetBoundsInSpace(tile, this, out var bounds))
+                    continue;
+
+                bounds = bounds.Intersect(viewport);
+                if (bounds.Width < 1 || bounds.Height < 1)
+                    continue;
+
+                if (clip.Intersects(bounds) && !hits.Contains(entry))
+                    hits.Add(entry);
+            }
+        }
+    }
+
+    private static bool TryGetBoundsInSpace(Control control, Visual space, out Rect bounds)
+    {
+        bounds = default;
+        var width = control.Bounds.Width;
+        var height = control.Bounds.Height;
+        if (width < 1 || height < 1 || double.IsNaN(width) || double.IsNaN(height))
+            return false;
+
+        var matrix = control.TransformToVisual(space);
+        if (matrix is null)
+            return false;
+
+        var m = matrix.Value;
+        var p0 = m.Transform(new Point(0, 0));
+        var p1 = m.Transform(new Point(width, 0));
+        var p2 = m.Transform(new Point(0, height));
+        var p3 = m.Transform(new Point(width, height));
+
+        var minX = Math.Min(Math.Min(p0.X, p1.X), Math.Min(p2.X, p3.X));
+        var minY = Math.Min(Math.Min(p0.Y, p1.Y), Math.Min(p2.Y, p3.Y));
+        var maxX = Math.Max(Math.Max(p0.X, p1.X), Math.Max(p2.X, p3.X));
+        var maxY = Math.Max(Math.Max(p0.Y, p1.Y), Math.Max(p2.Y, p3.Y));
+        var w = maxX - minX;
+        var h = maxY - minY;
+        if (w < 1 || h < 1)
+            return false;
+
+        bounds = new Rect(minX, minY, w, h);
         return true;
     }
 

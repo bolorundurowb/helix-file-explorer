@@ -616,7 +616,8 @@
                 </controls:VirtualizingFileGrid.ContextMenu>
                 <controls:VirtualizingFileGrid.ItemTemplate>
                     <DataTemplate x:DataType="vm:EntryItemViewModel" x:CompileBindings="False">
-                        <Border Width="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=controls:VirtualizingFileGrid}}"
+                        <Border Classes="fileTile"
+                                Width="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=controls:VirtualizingFileGrid}}"
                                 Margin="6"
                                 Padding="4"
                                 CornerRadius="6"
@@ -702,6 +703,8 @@
         </ScrollViewer>
 
         <controls:SelectionMarquee x:Name="SelectionMarquee"
+                                   HorizontalAlignment="Stretch"
+                                   VerticalAlignment="Stretch"
                                    IsHitTestVisible="False"
                                    ZIndex="50" />
 

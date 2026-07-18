@@ -38,6 +38,7 @@ public sealed partial class PaneView : UserControl
     private HelixExplorer.Core.Infrastructure.IExternalFileDragService? _externalFileDragService;
     private Point? _pressPoint;
     private PointerPressedEventArgs? _pressArgs;
+    private Control? _pressHost;
     private bool _dragStarted;
     private bool _syncingSelectionToView;
     private PointerInteractionMode _interactionMode;
@@ -83,6 +84,9 @@ public sealed partial class PaneView : UserControl
         AttachDragGestureHandlers(DetailsGrid);
         AttachDragGestureHandlers(ListView);
         AttachDragGestureHandlers(GridView);
+        // Grid's inner ListBox marks presses handled; XAML PointerPressed on GridView never sees blank
+        // clicks without handledEventsToo — arm marquee/clear here instead.
+        GridView.AddHandler(PointerPressedEvent, OnGridBlankPointerPressed, RoutingStrategies.Bubble, handledEventsToo: true);
         AddHandler(PointerPressedEvent, OnBlankAreaPointerPressed, RoutingStrategies.Bubble, handledEventsToo: true);
     }
 
@@ -134,6 +138,12 @@ public sealed partial class PaneView : UserControl
         else if (e.PropertyName == nameof(PaneViewModel.IsSelectionActive))
         {
             UpdateInactiveClass();
+        }
+        else if (e.PropertyName == nameof(PaneViewModel.SelectedCount))
+        {
+            // Keep DataGrid/ListBox chrome in sync when selection changes programmatically
+            // (blank clear, Clear/Invert commands, Select All from the window VM).
+            SyncSelectionToView();
         }
     }
 
@@ -305,6 +315,13 @@ public sealed partial class PaneView : UserControl
             Pane.CancelRenameCommand.Execute(null);
             e.Handled = true;
         }
+        else if (e.Key == Key.Escape && Pane.SelectedCount > 0)
+        {
+            // Lower priority than filter/search/rename; window Escape binding covers other focus cases.
+            Pane.ClearSelection();
+            SyncSelectionToView();
+            e.Handled = true;
+        }
         else if (e.Key == Key.F2 && e.KeyModifiers == KeyModifiers.None)
         {
             Pane.BeginRenameCommand.Execute(null);
@@ -318,6 +335,12 @@ public sealed partial class PaneView : UserControl
         else if (e.Key == Key.A && e.KeyModifiers == KeyModifiers.Control)
         {
             Pane.SelectAll();
+            SyncSelectionToView();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.A && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift))
+        {
+            Pane.InvertSelection();
             SyncSelectionToView();
             e.Handled = true;
         }
@@ -393,6 +416,7 @@ public sealed partial class PaneView : UserControl
         }
 
         grid.SelectedItem = null;
+        grid.SelectedIndex = -1;
 
         if (selected.Count == 0)
             return;
@@ -436,7 +460,8 @@ public sealed partial class PaneView : UserControl
         // Arm a potential drag-out. The grid tile marks the event handled (to stop the underlying
         // ListBox from selecting the row), so the container-level OnListPointerPressed never sees
         // it — record the press state here instead so OnListPointerMoved can start the drag.
-        _pressPoint = e.GetPosition(this);
+        _pressHost = GridView;
+        _pressPoint = e.GetPosition(GridView);
         _pressArgs = e;
         _dragStarted = false;
         _interactionMode = Pane.SelectedEntries.Contains(entry)
@@ -610,14 +635,50 @@ public sealed partial class PaneView : UserControl
         else
         {
             if (!e.KeyModifiers.HasFlag(KeyModifiers.Control))
-                pane.UpdateSelection(Array.Empty<EntryItemViewModel>());
+                ClearSelectionAndSync();
 
             _interactionMode = PointerInteractionMode.MarqueePending;
         }
 
-        _pressPoint = e.GetPosition(this);
+        _pressHost = GetVisibleControl();
+        _pressPoint = _pressHost is null ? e.GetPosition(this) : e.GetPosition(_pressHost);
         _pressArgs = e;
         _dragStarted = false;
+
+        if (_interactionMode == PointerInteractionMode.MarqueePending && _pressHost is not null)
+            e.Pointer.Capture(_pressHost);
+    }
+
+    /// <summary>
+    /// Grid-only blank press with handledEventsToo. The inner ListBox swallows presses, so the
+    /// XAML OnListPointerPressed on VirtualizingFileGrid often never runs for empty-area drags.
+    /// </summary>
+    private void OnGridBlankPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (Pane is null
+            || !Pane.IsGridView
+            || Pane.IsHome
+            || IsTextBoxSource(e.Source)
+            || !e.GetCurrentPoint(GridView).Properties.IsLeftButtonPressed
+            || TryGetEntryFromSource(e.Source) is not null)
+            return;
+
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            return;
+
+        var positionInControl = e.GetPosition(GridView);
+        if (IsPointOnHeaderOrScrollbar(GridView, positionInControl))
+            return;
+
+        if (!e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            ClearSelectionAndSync();
+
+        _pressHost = GridView;
+        _pressPoint = positionInControl;
+        _pressArgs = e;
+        _dragStarted = false;
+        _interactionMode = PointerInteractionMode.MarqueePending;
+        e.Pointer.Capture(GridView);
     }
 
     // Fires even when the DataGrid/ListBox mark the press handled for their own selection (which is
@@ -636,7 +697,8 @@ public sealed partial class PaneView : UserControl
             || TryGetEntryFromSource(e.Source) is not { } entry)
             return;
 
-        _pressPoint = e.GetPosition(this);
+        _pressHost = sender as Control ?? GetVisibleControl();
+        _pressPoint = _pressHost is null ? e.GetPosition(this) : e.GetPosition(_pressHost);
         _pressArgs = e;
         _dragStarted = false;
         _interactionMode = Pane.SelectedEntries.Contains(entry)
@@ -650,6 +712,10 @@ public sealed partial class PaneView : UserControl
     /// </summary>
     private void OnBlankAreaPointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        // Grid blank presses are owned by OnGridBlankPointerPressed (ListBox swallows the XAML path).
+        if (ReferenceEquals(sender, GridView) || Pane?.IsGridView == true)
+            return;
+
         if (Pane is null
             || Pane.IsHome
             || IsTextBoxSource(e.Source)
@@ -660,9 +726,6 @@ public sealed partial class PaneView : UserControl
         // Ctrl-click on blank space extends the existing selection rather than clearing it,
         // matching Explorer's behaviour.
         if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
-            return;
-
-        if (Pane.SelectedEntries.Count == 0)
             return;
 
         // The grid's tile container handles its own press for selection; we still want blank-area
@@ -677,13 +740,27 @@ public sealed partial class PaneView : UserControl
         if (IsPointOnHeaderOrScrollbar(grid, positionInControl))
             return;
 
-        Pane.UpdateSelection(Array.Empty<EntryItemViewModel>());
-        SyncSelectionToView();
+        // Always sync even when the model is already empty — OnListPointerPressed may have cleared
+        // the VM first, leaving DataGrid/ListBox :selected chrome stale.
+        ClearSelectionAndSync();
         // Clear first so marquee doesn't union with stale selection.
-        _pressPoint = e.GetPosition(this);
+        _pressHost = grid;
+        _pressPoint = e.GetPosition(grid);
         _pressArgs = e;
         _dragStarted = false;
         _interactionMode = PointerInteractionMode.MarqueePending;
+        e.Pointer.Capture(grid);
+    }
+
+    private void ClearSelectionAndSync()
+    {
+        if (Pane is null)
+            return;
+
+        if (Pane.SelectedEntries.Count > 0)
+            Pane.UpdateSelection(Array.Empty<EntryItemViewModel>());
+
+        SyncSelectionToView();
     }
 
     private bool IsPointOnHeaderOrScrollbar(Control host, Point position)
@@ -720,20 +797,21 @@ public sealed partial class PaneView : UserControl
         if (_pressPoint is null || Pane is null)
             return;
 
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        var host = _pressHost ?? GetVisibleControl() ?? this;
+        if (!e.GetCurrentPoint(host).Properties.IsLeftButtonPressed)
         {
-            ResetPointerInteraction();
+            ResetPointerInteraction(e);
             return;
         }
 
-        var current = e.GetPosition(this);
+        var current = e.GetPosition(host);
         var delta = current - _pressPoint.Value;
         if (Math.Abs(delta.X) < DragThreshold && Math.Abs(delta.Y) < DragThreshold)
             return;
 
         if (_interactionMode == PointerInteractionMode.MarqueePending)
         {
-            UpdateMarquee(_pressPoint.Value, current, e.KeyModifiers);
+            UpdateMarquee(host, _pressPoint.Value, current, e.KeyModifiers);
             return;
         }
 
@@ -743,61 +821,127 @@ public sealed partial class PaneView : UserControl
 
         _dragStarted = true;
         var pressArgs = _pressArgs;
-        ResetPointerInteraction();
+        ResetPointerInteraction(e);
 
         _ = StartDragOutAsync(pressArgs);
     }
 
-    private void UpdateMarquee(Point start, Point current, KeyModifiers modifiers)
+    private void UpdateMarquee(Control host, Point start, Point current, KeyModifiers modifiers)
     {
         if (Pane is null)
             return;
 
-        var rect = new Rect(
+        var rectInHost = new Rect(
             Math.Min(start.X, current.X),
             Math.Min(start.Y, current.Y),
             Math.Abs(current.X - start.X),
             Math.Abs(current.Y - start.Y));
 
         SelectionMarquee.IsActive = true;
-        SelectionMarquee.SelectionRect = rect;
+        SelectionMarquee.SelectionRect = MapRectToMarquee(host, rectInHost);
 
-        var hits = CollectEntriesInRect(rect);
+        var hits = CollectEntriesInRect(host, rectInHost);
         Pane.SelectByBounds(hits, modifiers.HasFlag(KeyModifiers.Control));
         SyncSelectionToView();
     }
 
-    private List<EntryItemViewModel> CollectEntriesInRect(Rect rect)
+    private Rect MapRectToMarquee(Control host, Rect rectInHost)
+    {
+        var topLeft = host.TranslatePoint(new Point(rectInHost.X, rectInHost.Y), SelectionMarquee);
+        var bottomRight = host.TranslatePoint(
+            new Point(rectInHost.Right, rectInHost.Bottom),
+            SelectionMarquee);
+        if (topLeft is null || bottomRight is null)
+            return rectInHost;
+
+        return new Rect(
+            Math.Min(topLeft.Value.X, bottomRight.Value.X),
+            Math.Min(topLeft.Value.Y, bottomRight.Value.Y),
+            Math.Abs(bottomRight.Value.X - topLeft.Value.X),
+            Math.Abs(bottomRight.Value.Y - topLeft.Value.Y));
+    }
+
+    private List<EntryItemViewModel> CollectEntriesInRect(Control host, Rect rectInHost)
     {
         var hits = new List<EntryItemViewModel>();
         if (Pane is null)
             return hits;
 
-        if (DetailsGrid.IsVisible)
-            CollectFromItemsControl(DetailsGrid, rect, hits);
-        else if (ListView.IsVisible)
-            CollectFromItemsControl(ListView, rect, hits);
-        else if (Pane.IsGridView)
-            CollectFromItemsControl(GridView, rect, hits);
+        if (host is VirtualizingFileGrid grid)
+        {
+            grid.CollectEntriesInRect(rectInHost, hits);
+            return hits;
+        }
 
+        CollectFromItemsControl(host, rectInHost, hits);
         return hits;
     }
 
-    private void CollectFromItemsControl(Control host, Rect rect, List<EntryItemViewModel> hits)
+    private void CollectFromItemsControl(Control host, Rect rectInHost, List<EntryItemViewModel> hits)
     {
+        var hostBounds = new Rect(host.Bounds.Size);
+        var clip = rectInHost.Intersect(hostBounds);
+        if (clip.Width < 1 || clip.Height < 1)
+            return;
+
         foreach (var child in host.GetVisualDescendants())
         {
-            if (child is not Control { DataContext: EntryItemViewModel entry })
+            if (child is not Control control
+                || !control.IsVisible
+                || control.DataContext is not EntryItemViewModel entry
+                || !IsMarqueeHitTarget(control, host)
+                || !TryGetBoundsInSpace(control, host, out var bounds))
                 continue;
 
-            var topLeft = child.TranslatePoint(new Point(0, 0), this);
-            if (topLeft is null)
+            bounds = bounds.Intersect(hostBounds);
+            if (bounds.Width < 1 || bounds.Height < 1)
                 continue;
 
-            var bounds = new Rect(topLeft.Value, child.Bounds.Size);
-            if (rect.Intersects(bounds) && !hits.Contains(entry))
+            if (clip.Intersects(bounds) && !hits.Contains(entry))
                 hits.Add(entry);
         }
+    }
+
+    /// <summary>
+    /// Details/List hit row containers. Grid uses <see cref="VirtualizingFileGrid.CollectEntriesInRect"/>.
+    /// </summary>
+    private static bool IsMarqueeHitTarget(Control control, Control host)
+    {
+        if (host is VirtualizingFileGrid)
+            return false;
+
+        return control is DataGridRow or ListBoxItem;
+    }
+
+    private static bool TryGetBoundsInSpace(Control control, Visual space, out Rect bounds)
+    {
+        bounds = default;
+        var width = control.Bounds.Width;
+        var height = control.Bounds.Height;
+        if (width < 1 || height < 1 || double.IsNaN(width) || double.IsNaN(height))
+            return false;
+
+        var matrix = control.TransformToVisual(space);
+        if (matrix is null)
+            return false;
+
+        var m = matrix.Value;
+        var p0 = m.Transform(new Point(0, 0));
+        var p1 = m.Transform(new Point(width, 0));
+        var p2 = m.Transform(new Point(0, height));
+        var p3 = m.Transform(new Point(width, height));
+
+        var minX = Math.Min(Math.Min(p0.X, p1.X), Math.Min(p2.X, p3.X));
+        var minY = Math.Min(Math.Min(p0.Y, p1.Y), Math.Min(p2.Y, p3.Y));
+        var maxX = Math.Max(Math.Max(p0.X, p1.X), Math.Max(p2.X, p3.X));
+        var maxY = Math.Max(Math.Max(p0.Y, p1.Y), Math.Max(p2.Y, p3.Y));
+        var w = maxX - minX;
+        var h = maxY - minY;
+        if (w < 1 || h < 1)
+            return false;
+
+        bounds = new Rect(minX, minY, w, h);
+        return true;
     }
 
     private async Task StartDragOutAsync(PointerPressedEventArgs pressArgs)
@@ -833,17 +977,25 @@ public sealed partial class PaneView : UserControl
         await DragDrop.DoDragDropAsync(pressArgs, transfer, effects).ConfigureAwait(true);
     }
 
-    private void ResetPointerInteraction()
+    private void ResetPointerInteraction(PointerEventArgs? e = null)
     {
+        if (e is not null)
+            e.Pointer.Capture(null);
+        else if (_pressHost is not null)
+        {
+            // Best-effort release when we don't have the event (e.g. cancelled mid-gesture).
+        }
+
         _pressPoint = null;
         _pressArgs = null;
+        _pressHost = null;
         _dragStarted = false;
         _interactionMode = PointerInteractionMode.None;
         SelectionMarquee.IsActive = false;
     }
 
     private void OnListPointerReleased(object? sender, PointerReleasedEventArgs e)
-        => ResetPointerInteraction();
+        => ResetPointerInteraction(e);
 
     private void FocusRenameEditor()
     {
@@ -950,21 +1102,36 @@ public sealed partial class PaneView : UserControl
 
     private static EntryItemViewModel? HitTestEntry(Control host, Point position)
     {
+        EntryItemViewModel? fallback = null;
         foreach (var child in host.GetVisualDescendants())
         {
-            if (child is not Control { DataContext: EntryItemViewModel entry, IsVisible: true })
+            if (child is not Control { DataContext: EntryItemViewModel entry, IsVisible: true } control)
                 continue;
 
-            var topLeft = child.TranslatePoint(new Point(0, 0), host);
-            if (topLeft is null)
+            var topLeft = control.TranslatePoint(new Point(0, 0), host);
+            var bottomRight = control.TranslatePoint(
+                new Point(control.Bounds.Width, control.Bounds.Height),
+                host);
+            if (topLeft is null || bottomRight is null)
                 continue;
 
-            var bounds = new Rect(topLeft.Value, child.Bounds.Size);
-            if (bounds.Contains(position))
+            var bounds = new Rect(
+                Math.Min(topLeft.Value.X, bottomRight.Value.X),
+                Math.Min(topLeft.Value.Y, bottomRight.Value.Y),
+                Math.Abs(bottomRight.Value.X - topLeft.Value.X),
+                Math.Abs(bottomRight.Value.Y - topLeft.Value.Y));
+            if (!bounds.Contains(position))
+                continue;
+
+            // Prefer tagged grid tiles over nested EntryVisualView descendants.
+            if (control.Classes.Contains("fileTile")
+                || control is DataGridRow or ListBoxItem)
                 return entry;
+
+            fallback ??= entry;
         }
 
-        return null;
+        return fallback;
     }
 
     private async void OnDrop(object? sender, DragEventArgs e)

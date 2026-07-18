@@ -37,12 +37,20 @@ public sealed partial class SidebarItemViewModel : ObservableObject
     public SidebarItemKind Kind { get; }
     public bool IsSectionHeader { get; }
     public bool IsNavigable => !IsSectionHeader && !string.IsNullOrEmpty(Path);
+    public bool IsHomeItem => Kind == SidebarItemKind.Home;
+    public bool IsRecycleBinItem => ShellPath.IsRecycleBin(Path);
+    /// <summary>
+    /// Home and Recycle Bin use branded vector icons; other items prefer shell bitmaps.
+    /// </summary>
+    public bool UsesVectorIcon => IsHomeItem || IsRecycleBinItem;
+    public bool ShowsFolderFallback => !HasIcon && !UsesVectorIcon;
 
     [ObservableProperty]
     private bool _isSelected;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasIcon))]
+    [NotifyPropertyChangedFor(nameof(ShowsFolderFallback))]
     private Bitmap? _icon;
 
     [ObservableProperty]

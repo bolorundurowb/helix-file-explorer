@@ -39,7 +39,7 @@ public sealed class SidebarViewModel(
     {
         foreach (var item in Items)
         {
-            if (!item.IsNavigable || string.IsNullOrEmpty(item.Path))
+            if (!item.IsNavigable || string.IsNullOrEmpty(item.Path) || item.UsesVectorIcon)
                 continue;
 
             try

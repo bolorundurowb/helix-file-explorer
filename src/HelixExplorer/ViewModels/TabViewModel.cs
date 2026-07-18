@@ -108,6 +108,10 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
 
     public bool LeftShowsHome => LeftPane.IsHome;
 
+    public bool ShowsHomeIcon => IsBrowserTab && ActivePane.IsHome;
+
+    public bool ShowsFolderIcon => !IsSettingsTab && !ShowsHomeIcon;
+
     private PaneViewModel CreatePane()
     {
         var pane = _paneFactory.Create();
@@ -283,16 +287,25 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         if (IsSettingsTab)
         {
             Title = "Settings";
+            NotifyTabIconPropertiesChanged();
             return;
         }
 
         if (ActivePane.IsHome)
         {
             Title = "Home";
+            NotifyTabIconPropertiesChanged();
             return;
         }
 
         Title = DescribePath(ActivePane.CurrentPath);
+        NotifyTabIconPropertiesChanged();
+    }
+
+    private void NotifyTabIconPropertiesChanged()
+    {
+        OnPropertyChanged(nameof(ShowsHomeIcon));
+        OnPropertyChanged(nameof(ShowsFolderIcon));
     }
 
     private static string DescribePath(string path)

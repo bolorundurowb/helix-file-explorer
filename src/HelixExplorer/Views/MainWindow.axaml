@@ -153,7 +153,23 @@
                                                           Height="16"
                                                           Margin="10,0,6,0"
                                                           VerticalAlignment="Center"
-                                                          IsVisible="{Binding !HasIcon}"
+                                                          IsVisible="{Binding IsHomeItem}"
+                                                          Data="{DynamicResource HelixHomeIconGeometry}"
+                                                          Foreground="{DynamicResource HelixAccentBrush}" />
+                                                <PathIcon Grid.Column="1"
+                                                          Width="16"
+                                                          Height="16"
+                                                          Margin="10,0,6,0"
+                                                          VerticalAlignment="Center"
+                                                          IsVisible="{Binding IsRecycleBinItem}"
+                                                          Data="{DynamicResource HelixIconRecycleBinGeometry}"
+                                                          Foreground="{DynamicResource HelixAccentBrush}" />
+                                                <PathIcon Grid.Column="1"
+                                                          Width="16"
+                                                          Height="16"
+                                                          Margin="10,0,6,0"
+                                                          VerticalAlignment="Center"
+                                                          IsVisible="{Binding ShowsFolderFallback}"
                                                           Data="{DynamicResource HelixFolderIconGeometry}"
                                                           Foreground="{Binding Path, Converter={StaticResource FolderIconBrushConverter}}" />
                                                 <Image Grid.Column="1"
@@ -294,10 +310,24 @@
                                     <Grid Grid.Row="1"
                                           Margin="12,5,12,10"
                                           ColumnDefinitions="Auto,*,Auto">
-                                        <PathIcon Grid.Column="0" Data="{DynamicResource HelixFolderIconGeometry}"
+                                        <PathIcon Grid.Column="0"
+                                                  Data="{DynamicResource HelixIconSettingsGeometry}"
                                                   Width="14" Height="14"
                                                   VerticalAlignment="Center"
-                                                  Foreground="{DynamicResource HelixAccentBrush}" />
+                                                  Foreground="{DynamicResource HelixAccentBrush}"
+                                                  IsVisible="{Binding IsSettingsTab}" />
+                                        <PathIcon Grid.Column="0"
+                                                  Data="{DynamicResource HelixHomeIconGeometry}"
+                                                  Width="14" Height="14"
+                                                  VerticalAlignment="Center"
+                                                  Foreground="{DynamicResource HelixAccentBrush}"
+                                                  IsVisible="{Binding ShowsHomeIcon}" />
+                                        <PathIcon Grid.Column="0"
+                                                  Data="{DynamicResource HelixFolderIconGeometry}"
+                                                  Width="14" Height="14"
+                                                  VerticalAlignment="Center"
+                                                  Foreground="{DynamicResource HelixAccentBrush}"
+                                                  IsVisible="{Binding ShowsFolderIcon}" />
                                         <TextBlock Grid.Column="1" x:Name="TabTitle"
                                                    Text="{Binding Title}"
                                                    VerticalAlignment="Center"

@@ -40,6 +40,9 @@ public sealed class CommandPaletteService
         _allCommands.Add(new CommandItem("Miller Columns", "View", vm => vm.SetViewModeCommand.Execute(LayoutMode.Miller)));
         _allCommands.Add(new CommandItem("Show Hidden Items", "View", vm => vm.ToggleShowHiddenFilesCommand.Execute(null)));
         _allCommands.Add(new CommandItem("Show File Extensions", "View", vm => vm.ToggleShowFileExtensionsCommand.Execute(null)));
+        _allCommands.Add(new CommandItem("Select All", "Selection", vm => vm.SelectAllCommand.Execute(null), "Ctrl+A"));
+        _allCommands.Add(new CommandItem("Clear Selection", "Selection", vm => vm.ClearSelectionCommand.Execute(null), "Escape"));
+        _allCommands.Add(new CommandItem("Invert Selection", "Selection", vm => vm.InvertSelectionCommand.Execute(null), "Ctrl+Shift+A"));
         _allCommands.Add(new CommandItem("Copy Path", "File", vm => vm.CopyPathCommand.Execute(null), "Ctrl+Shift+C"));
         _allCommands.Add(new CommandItem("Pin Current Folder", "View", vm => vm.PinCurrentFolderCommand.Execute(null)));
         _allCommands.Add(new CommandItem("Cut", "File", vm => vm.CutCommand.Execute(null), "Ctrl+X"));

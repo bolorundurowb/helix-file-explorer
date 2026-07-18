@@ -559,6 +559,12 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     public void SelectAll()
         => _selection.SelectAll(Entries);
 
+    public void ClearSelection()
+        => _selection.Clear();
+
+    public void InvertSelection()
+        => _selection.Invert(Entries);
+
     public bool HasSelectionForOps => CanModifySelection();
 
     public bool HasSelectionForDeletePerm => CanDeletePermanently();
@@ -1432,17 +1438,27 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         }
     }
 
-    [RelayCommand(CanExecute = nameof(HasSelection))]
+    [RelayCommand(CanExecute = nameof(CanCopyPath))]
     private async Task CopyPath()
     {
-        if (SelectedEntries.Count == 0)
+        if (!CanCopyPath())
             return;
 
         try
         {
-            var text = string.Join(Environment.NewLine, SelectedEntries.Select(e => e.FullPath));
+            string text;
+            if (SelectedEntries.Count > 0)
+            {
+                text = string.Join(Environment.NewLine, SelectedEntries.Select(e => e.FullPath));
+                StatusText = SelectedEntries.Count == 1 ? UiStrings.PathCopied : UiStrings.PathsCopied;
+            }
+            else
+            {
+                text = CurrentPath;
+                StatusText = UiStrings.PathCopied;
+            }
+
             await _uiHost.SetClipboardTextAsync(text).ConfigureAwait(true);
-            StatusText = SelectedEntries.Count == 1 ? UiStrings.PathCopied : UiStrings.PathsCopied;
         }
         catch (Exception ex)
         {
@@ -1450,6 +1466,14 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
             StatusText = UiStrings.CopyPathFailed;
         }
     }
+
+    /// <summary>
+    /// Copy Path copies selected item paths, or the current folder path when nothing is selected.
+    /// Disabled on the Home dashboard (no meaningful path).
+    /// </summary>
+    public bool CanCopyPath()
+        => SelectedEntries.Count > 0
+           || (!IsHome && !string.IsNullOrEmpty(CurrentPath));
 
     [RelayCommand(CanExecute = nameof(HasSingleSelection))]
     private async Task ShowProperties()

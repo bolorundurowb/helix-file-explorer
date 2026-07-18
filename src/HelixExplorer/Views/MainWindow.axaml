@@ -46,6 +46,7 @@
         <KeyBinding Gesture="Ctrl+Shift+N" Command="{Binding NewFolderCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+C" Command="{Binding CopyPathCommand}" />
         <KeyBinding Gesture="Ctrl+A" Command="{Binding SelectAllCommand}" />
+        <KeyBinding Gesture="Ctrl+Shift+A" Command="{Binding InvertSelectionCommand}" />
         <KeyBinding Gesture="Ctrl+OemTilde"
                     Command="{Binding OpenInTerminalCommand}" />
     </Window.KeyBindings>
@@ -630,6 +631,44 @@
                     </Button>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
+                    <Button ToolTip.Tip="Selection"
+                            Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
+                        <StackPanel Orientation="Horizontal" Spacing="2">
+                            <PathIcon Data="{DynamicResource HelixIconSelectionGeometry}" Width="14" Height="14" />
+                            <PathIcon Data="{DynamicResource HelixSortDescendingGeometry}"
+                                      Width="8" Height="8"
+                                      Opacity="0.6"
+                                      VerticalAlignment="Center" />
+                        </StackPanel>
+                        <Button.Flyout>
+                            <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                <MenuItem Header="Select all"
+                                          Command="{Binding SelectAllCommand}"
+                                          InputGesture="Ctrl+A">
+                                    <MenuItem.Icon>
+                                        <PathIcon Data="{DynamicResource HelixIconSelectAllGeometry}"
+                                                  Width="16" Height="16" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="Invert selection"
+                                          Command="{Binding InvertSelectionCommand}"
+                                          InputGesture="Ctrl+Shift+A">
+                                    <MenuItem.Icon>
+                                        <PathIcon Data="{DynamicResource HelixIconInvertSelectionGeometry}"
+                                                  Width="16" Height="16" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="Clear selection"
+                                          Command="{Binding ClearSelectionCommand}"
+                                          InputGesture="Escape">
+                                    <MenuItem.Icon>
+                                        <PathIcon Data="{DynamicResource HelixIconClearSelectionGeometry}"
+                                                  Width="16" Height="16" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                            </MenuFlyout>
+                        </Button.Flyout>
+                    </Button>
                     <Button ToolTip.Tip="Layout"
                             Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
                         <PathIcon Data="{DynamicResource HelixIconTableGeometry}" Width="14" Height="14" />

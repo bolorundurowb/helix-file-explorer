@@ -1029,6 +1029,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         RenameCommand.NotifyCanExecuteChanged();
         NewFolderCommand.NotifyCanExecuteChanged();
         SelectAllCommand.NotifyCanExecuteChanged();
+        ClearSelectionCommand.NotifyCanExecuteChanged();
+        InvertSelectionCommand.NotifyCanExecuteChanged();
         CopyPathCommand.NotifyCanExecuteChanged();
         PinCurrentFolderCommand.NotifyCanExecuteChanged();
         OpenInTerminalCommand.NotifyCanExecuteChanged();
@@ -1067,7 +1069,12 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     private bool CanSelectAllEntries() => CanUseGlobalFileShortcuts() && ActivePane?.CanSelectAllHere == true;
 
-    private bool CanCopyPathSelection() => CanUseGlobalFileShortcuts() && ActivePane?.HasSelectionForOps == true;
+    private bool CanClearSelection()
+        => CanUseGlobalFileShortcuts() && ActivePane is { SelectedCount: > 0 };
+
+    private bool CanInvertSelection() => CanSelectAllEntries();
+
+    private bool CanCopyPathSelection() => CanUseGlobalFileShortcuts() && ActivePane?.CanCopyPath() == true;
 
     private bool CanPinCurrentFolder()
     {
@@ -1101,6 +1108,12 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     [RelayCommand(CanExecute = nameof(CanSelectAllEntries))]
     private void SelectAll() => SelectedTab?.ActivePane?.SelectAll();
+
+    [RelayCommand(CanExecute = nameof(CanClearSelection))]
+    private void ClearSelection() => SelectedTab?.ActivePane?.ClearSelection();
+
+    [RelayCommand(CanExecute = nameof(CanInvertSelection))]
+    private void InvertSelection() => SelectedTab?.ActivePane?.InvertSelection();
 
     [RelayCommand(CanExecute = nameof(CanCopyPathSelection))]
     private void CopyPath() => ActivePane?.CopyPathCommand.Execute(null);

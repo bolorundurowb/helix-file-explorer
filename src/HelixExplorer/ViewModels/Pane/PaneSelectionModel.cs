@@ -127,6 +127,19 @@ public sealed class PaneSelectionModel
         UpdateSelection(allEntries.ToList(), allEntries);
     }
 
+    public void Invert(IReadOnlyList<EntryItemViewModel> allEntries)
+    {
+        var selected = new HashSet<EntryItemViewModel>(SelectedEntries);
+        var inverted = new List<EntryItemViewModel>(allEntries.Count);
+        foreach (var entry in allEntries)
+        {
+            if (!selected.Contains(entry))
+                inverted.Add(entry);
+        }
+
+        UpdateSelection(inverted, allEntries);
+    }
+
     public void Clear()
     {
         SelectedEntries.Clear();

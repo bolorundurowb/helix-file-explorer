@@ -94,6 +94,41 @@ public class PaneSelectionModelTests
     }
 
     [Fact]
+    public void Clear_EmptiesSelectionAndResetsAnchor()
+    {
+        var entries = CreateEntries(4);
+        var model = new PaneSelectionModel();
+        model.SelectSingle(entries[1], entries);
+        model.SelectRange(entries[3], entries);
+
+        model.Clear();
+
+        model.SelectedCount.Must().Be(0);
+        model.SelectedEntry.Must().BeNull();
+
+        model.SelectRange(entries[2], entries);
+        model.SelectedCount.Must().Be(1);
+        model.SelectedEntries.Must().Contain(entries[2]);
+    }
+
+    [Fact]
+    public void Invert_SelectsUnselectedEntriesOnly()
+    {
+        var entries = CreateEntries(4);
+        var model = new PaneSelectionModel();
+        model.SelectSingle(entries[0], entries);
+        model.Toggle(entries[2], entries);
+
+        model.Invert(entries);
+
+        model.SelectedCount.Must().Be(2);
+        model.SelectedEntries.Must().Contain(entries[1]);
+        model.SelectedEntries.Must().Contain(entries[3]);
+        model.SelectedEntries.Must().NotContain(entries[0]);
+        model.SelectedEntries.Must().NotContain(entries[2]);
+    }
+
+    [Fact]
     public void Toggle_Off_ReanchorsSoSubsequentShiftClickSelectsFromRemainingSelection()
     {
         var entries = CreateEntries(5);

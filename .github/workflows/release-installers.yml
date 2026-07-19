@@ -64,7 +64,7 @@ jobs:
         if: steps.check.outputs.skip != 'true'
         uses: bolorundurowb/PolyInstall/.github/actions/setup-polyinstall@v2.0.1
         with:
-          version: v2.0.1
+          version: v2.1.1
           rid: win-x64
 
       - name: Validate manifest

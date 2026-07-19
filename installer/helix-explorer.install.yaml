@@ -2,7 +2,7 @@
 metadata:
   name: Helix Explorer
   version: "${HELIX_VERSION:-0.1.0}"
-  id: com.bolorundurowb.helix-explorer
+  id: dev.bolorundurowb.helix-explorer
   publisher: Winner-Timothy Bolorunduro
 
 build:
@@ -12,7 +12,7 @@ build:
   targets:
     - windows-x64
   windows:
-    install_scope: machine
+    install_scope: user
     register_arp: true
 
 ui:
@@ -26,7 +26,7 @@ ui:
       source: LICENSE
     - type: destination
       title: Choose Install Location
-      default_path: "{ProgramFiles}/Helix Explorer"
+      default_path: "{LocalAppData}/Helix Explorer"
     - type: progress
       title: Installing Helix Explorer
     - type: finish

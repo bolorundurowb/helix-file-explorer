@@ -78,7 +78,7 @@ public static class GlobMatcher
                 }
             }
 
-            starBacktrack:
+        starBacktrack:
             if (starPattern < 0)
                 return false;
 

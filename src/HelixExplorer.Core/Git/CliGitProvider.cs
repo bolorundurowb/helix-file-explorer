@@ -15,6 +15,17 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
 
     private static readonly TimeSpan StatusCacheTtl = TimeSpan.FromMilliseconds(750);
 
+    /// <summary>
+    /// Read-only probes must not refresh the index. Without this, cancelling an in-flight
+    /// <c>git status</c> (Process.Kill on navigate/refresh) can leave <c>.git/index.lock</c> behind
+    /// and block subsequent git commands in the user's repo.
+    /// </summary>
+    private static readonly string[] StatusArgs =
+        ["--no-optional-locks", "status", "--porcelain=v2", "-z", "--branch"];
+
+    private static readonly string[] ListBranchesArgs =
+        ["--no-optional-locks", "branch", "--format=%(refname:short)"];
+
     private readonly GitStatusCache _statusCache = new(StatusCacheTtl);
 
     /// <summary>Null roots are stored as empty string so negative lookups stay cached.</summary>
@@ -33,7 +44,7 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
 
         try
         {
-            var output = await RunGitAsync(root, "status --porcelain=v2 -z --branch", cancellationToken)
+            var output = await RunGitWithArgsAsync(root, StatusArgs, cancellationToken)
                 .ConfigureAwait(false);
             var snapshot = GitPorcelainParser.Parse(output, root);
             _statusCache.Store(root, snapshot);
@@ -75,7 +86,7 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
 
         try
         {
-            var output = await RunGitAsync(root, "branch --format=%(refname:short)", cancellationToken)
+            var output = await RunGitWithArgsAsync(root, ListBranchesArgs, cancellationToken)
                 .ConfigureAwait(false);
             var list = new List<string>();
             foreach (var line in output.Split('\n'))
@@ -106,7 +117,9 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
 
         try
         {
-            await RunGitWithArgsAsync(root, ["checkout", branch], cancellationToken).ConfigureAwait(false);
+            // Checkout must update the index; do not Kill on cancel or a mid-write death leaves index.lock.
+            await RunGitWithArgsAsync(root, ["checkout", branch], cancellationToken, killOnCancel: false)
+                .ConfigureAwait(false);
             // Working tree changed: drop any cached status so the next refresh reflects the new branch.
             _statusCache.Invalidate(root);
             return true;
@@ -140,7 +153,11 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
         return null;
     }
 
-    private static async Task<string> RunGitWithArgsAsync(string workingDir, string[] args, CancellationToken token)
+    private static async Task<string> RunGitWithArgsAsync(
+        string workingDir,
+        string[] args,
+        CancellationToken token,
+        bool killOnCancel = true)
     {
         var psi = new ProcessStartInfo(GitExe)
         {
@@ -160,60 +177,33 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
         if (!process.Start())
             return string.Empty;
 
-        await using var reg = token.Register(static state =>
+        CancellationTokenRegistration reg = default;
+        if (killOnCancel)
         {
-            try
+            // Safe for read-only probes that use --no-optional-locks. Do not enable for index writers.
+            reg = token.Register(static state =>
             {
-                ((Process)state!).Kill(entireProcessTree: true);
-            }
-            catch
-            {
-                // Ignore races where the process finished between cancel and Kill.
-            }
-        }, process);
+                try
+                {
+                    ((Process)state!).Kill(entireProcessTree: true);
+                }
+                catch
+                {
+                    // Ignore races where the process finished between cancel and Kill.
+                }
+            }, process);
+        }
 
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(token);
-        var stderrTask = process.StandardError.ReadToEndAsync(token);
-        await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
-        await process.WaitForExitAsync(token).ConfigureAwait(false);
-        return stdoutTask.Result;
-    }
-
-    private static async Task<string> RunGitAsync(string workingDir, string args, CancellationToken token)
-    {
-        using var process = new Process
+        await using (reg)
         {
-            StartInfo = new ProcessStartInfo(GitExe, args)
-            {
-                WorkingDirectory = workingDir,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true,
-                StandardOutputEncoding = Encoding.UTF8
-            },
-            EnableRaisingEvents = false
-        };
-
-        if (!process.Start())
-            return string.Empty;
-
-        await using var reg = token.Register(static state =>
-        {
-            try
-            {
-                ((Process)state!).Kill(entireProcessTree: true);
-            }
-            catch
-            {
-                // Ignore races where the process finished between cancel and Kill.
-            }
-        }, process);
-
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(token);
-        var stderrTask = process.StandardError.ReadToEndAsync(token);
-        await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
-        await process.WaitForExitAsync(token).ConfigureAwait(false);
-        return stdoutTask.Result;
+            // Do not cancel stream reads: a cancelled ReadToEnd can leave the child blocked on a full pipe.
+            var stdoutTask = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
+            var stderrTask = process.StandardError.ReadToEndAsync(CancellationToken.None);
+            await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
+            // Index writers must run to completion; only status/list may abandon via Kill + cancelled wait.
+            var waitToken = killOnCancel ? token : CancellationToken.None;
+            await process.WaitForExitAsync(waitToken).ConfigureAwait(false);
+            return stdoutTask.Result;
+        }
     }
 }

@@ -2,6 +2,8 @@
 
 # Helix Explorer
 
+[![Build and Test](https://github.com/bolorundurowb/helix-file-explorer/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/bolorundurowb/helix-file-explorer/actions/workflows/build-and-test.yml)
+
 A fast, modern file manager for Windows.
 
 ## Overview

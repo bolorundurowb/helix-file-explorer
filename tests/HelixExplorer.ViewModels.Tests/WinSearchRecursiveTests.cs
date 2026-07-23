@@ -14,7 +14,10 @@ public class WinSearchRecursiveTests : IDisposable
     {
         _root = Path.Combine(Path.GetTempPath(), "helix-search-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
-        _provider = new WinFileSystemProvider(new StubShellEnumerator(), NullLogger<WinFileSystemProvider>.Instance);
+        _provider = new WinFileSystemProvider(
+            new StubShellEnumerator(),
+            new NoopNetworkConnectionService(),
+            NullLogger<WinFileSystemProvider>.Instance);
     }
 
     [Fact]
@@ -104,6 +107,12 @@ public class WinSearchRecursiveTests : IDisposable
     public void Dispose()
     {
         try { Directory.Delete(_root, recursive: true); } catch { }
+    }
+
+    private sealed class NoopNetworkConnectionService : INetworkConnectionService
+    {
+        public ValueTask<bool> EnsureConnectedAsync(string uncPath, CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(false);
     }
 
     private sealed class StubShellEnumerator : IShellFolderEnumerator

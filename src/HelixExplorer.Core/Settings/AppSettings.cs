@@ -26,6 +26,12 @@ public sealed class AppSettings
     public List<string> UnpinnedPaths { get; set; } = [];
     public Dictionary<string, uint> FolderColors { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Per-directory view/sort/thumbnail overrides keyed by normalized path.
+    /// </summary>
+    public Dictionary<string, FolderViewPreferences> FolderViewPreferences { get; set; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
     public double? WindowWidth { get; set; }
     public double? WindowHeight { get; set; }
     public int? WindowX { get; set; }

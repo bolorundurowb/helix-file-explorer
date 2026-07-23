@@ -14,11 +14,29 @@
               DragDrop.DragLeave="OnDragLeave">
 
     <UserControl.Styles>
+        <!-- Tile-local hover overlay (row ListBox hover is suppressed on VirtualizingFileGrid). -->
+        <Style Selector="Border.fileTile:pointerover Border.tileHover">
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
+        <Style Selector="TextBox.gridRenameEditor">
+            <Setter Property="ZIndex" Value="10" />
+            <Setter Property="Background" Value="{DynamicResource HelixContentCardBrush}" />
+        </Style>
+        <!-- Exclude VirtualizingFileGrid rows (full-width ListBoxItems) — selection is per-tile. -->
         <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource HelixSelectionFillBrush}" />
         </Style>
         <Style Selector="UserControl.inactive ListBoxItem:selected /template/ ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource HelixSelectionInactiveFillBrush}" />
+        </Style>
+        <Style Selector="controls|VirtualizingFileGrid ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="controls|VirtualizingFileGrid ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="controls|VirtualizingFileGrid ListBoxItem:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
         </Style>
         <Style Selector="DataGrid#DetailsGrid DataGridRow:selected /template/ Rectangle#BackgroundRectangle">
             <Setter Property="Fill" Value="{DynamicResource HelixSelectionFillBrush}" />
@@ -621,12 +639,18 @@
                                 Margin="6"
                                 Padding="4"
                                 CornerRadius="6"
-                                ClipToBounds="True"
+                                ClipToBounds="{Binding IsNotRenaming}"
+                                ZIndex="{Binding TileZIndex}"
                                 PointerPressed="OnGridItemPointerPressed"
                                 DoubleTapped="OnGridItemDoubleTapped">
                              <Panel>
                                 <Border CornerRadius="6"
                                         Background="{Binding FullPath, Converter={StaticResource FolderColorConverter}}" />
+                                <Border Classes="tileHover"
+                                        CornerRadius="6"
+                                        Background="{DynamicResource HelixHoverBrush}"
+                                        IsVisible="False"
+                                        IsHitTestVisible="False" />
                                 <Border CornerRadius="6"
                                         Classes="selectionActive"
                                         Background="{DynamicResource HelixSelectionFillBrush}"
@@ -672,11 +696,15 @@
                                            HorizontalAlignment="Stretch"
                                            Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}"
                                            IsVisible="{Binding IsNotRenaming}" />
-                                <TextBox Text="{Binding RenameText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                <!-- Fixed tile width, wrap downward (Explorer/Files-style) — do not grow sideways. -->
+                                <TextBox Classes="gridRenameEditor"
+                                         Text="{Binding RenameText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                          FontSize="{DynamicResource HelixEntryFontSize}"
                                          TextAlignment="Center"
-                                         MinWidth="120"
-                                         Padding="2,0"
+                                         TextWrapping="Wrap"
+                                         AcceptsReturn="False"
+                                         MinHeight="22"
+                                         Padding="2,1"
                                          BorderThickness="1"
                                          HorizontalAlignment="Stretch"
                                          IsVisible="{Binding IsRenaming}"

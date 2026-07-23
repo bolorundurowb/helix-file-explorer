@@ -76,6 +76,42 @@ public class JsonSettingsStoreTests
     }
 
     [Fact]
+    public void Save_ThenLoad_RoundTripsFolderViewPreferences()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "helix-settings-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var store = new JsonSettingsStore(path);
+            store.Save(new AppSettings
+            {
+                FolderViewPreferences =
+                {
+                    [@"C:\Users\docs"] = new FolderViewPreferences
+                    {
+                        ViewMode = LayoutMode.Grid,
+                        SortColumn = SortColumn.Modified,
+                        SortDescending = true,
+                        DirectorySort = DirectorySortMode.FoldersFirst,
+                        ThumbnailSize = 96
+                    }
+                }
+            });
+
+            var loaded = store.Load();
+            loaded.FolderViewPreferences.TryGetValue(@"C:\Users\docs", out var prefs).Must().BeTrue();
+            prefs!.ViewMode.Must().Be(LayoutMode.Grid);
+            prefs.SortColumn.Must().Be(SortColumn.Modified);
+            prefs.SortDescending.Must().BeTrue();
+            prefs.DirectorySort.Must().Be(DirectorySortMode.FoldersFirst);
+            prefs.ThumbnailSize.Must().Be(96);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+        }
+    }
+
+    [Fact]
     public async Task Save_ConcurrentCalls_DoNotThrowAndLeaveValidJson()
     {
         var path = Path.Combine(Path.GetTempPath(), "helix-settings-" + Guid.NewGuid().ToString("N") + ".json");

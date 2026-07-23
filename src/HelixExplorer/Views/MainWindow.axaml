@@ -43,6 +43,7 @@
         <KeyBinding Gesture="Ctrl+Tab" Command="{Binding SelectNextTabCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+Tab" Command="{Binding SelectPreviousTabCommand}" />
         <KeyBinding Gesture="F2" Command="{Binding RenameCommand}" />
+        <KeyBinding Gesture="Alt+Up" Command="{Binding SelectedTab.ActivePane.GoUpCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+N" Command="{Binding NewFolderCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+C" Command="{Binding CopyPathCommand}" />
         <KeyBinding Gesture="Ctrl+A" Command="{Binding SelectAllCommand}" />

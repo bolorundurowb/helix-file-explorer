@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using Avalonia.Input;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HelixExplorer.Core.Archives;
@@ -26,6 +27,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly IClipboardService _clipboard;
     private readonly IArchiveProvider _archive;
     private readonly IFolderColorService _folderColors;
+    private readonly IVolumeChangeWatcher _volumeWatcher;
     private readonly IPaneViewModelFactory _paneFactory;
     private readonly AppSettingsCoordinator _settingsCoordinator;
     private readonly SidebarViewModel _sidebar;
@@ -56,6 +58,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         IClipboardService clipboard,
         IArchiveProvider archive,
         IFolderColorService folderColors,
+        IVolumeChangeWatcher volumeWatcher,
         IPaneViewModelFactory paneFactory,
         AppSettingsCoordinator settingsCoordinator,
         SidebarViewModel sidebar,
@@ -73,6 +76,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _clipboard = clipboard;
         _archive = archive;
         _folderColors = folderColors;
+        _volumeWatcher = volumeWatcher;
         _paneFactory = paneFactory;
         _settingsCoordinator = settingsCoordinator;
         _sidebar = sidebar;
@@ -113,6 +117,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _ = RefreshNetworkLocationsAsync();
 
         _folderColors.ColorsChanged += OnFolderColorsChanged;
+        _volumeWatcher.VolumesChanged += OnVolumesChanged;
+        _volumeWatcher.Start();
     }
 
     public const string AppDefaultTerminalGesture = "Ctrl+OemTilde";
@@ -383,6 +389,21 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             settings.UnpinnedPaths,
             _lastNetworkLocations,
             ActivePane?.CurrentPath);
+    }
+
+    private void OnVolumesChanged(object? sender, EventArgs e)
+        => Dispatcher.UIThread.Post(RefreshDriveLists);
+
+    /// <summary>
+    /// Re-queries volumes for the sidebar and home dashboard (device plug/unplug or window activation).
+    /// </summary>
+    public void RefreshDriveLists()
+    {
+        if (_disposed)
+            return;
+
+        RebuildSidebar();
+        RefreshHomeDashboard();
     }
 
     [ObservableProperty]
@@ -1268,6 +1289,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
         _networkAvailability.AvailabilityChanged -= OnNetworkAvailabilityChanged;
         _folderColors.ColorsChanged -= OnFolderColorsChanged;
+        _volumeWatcher.VolumesChanged -= OnVolumesChanged;
+        _volumeWatcher.Dispose();
         _themeService.ThemeChanged -= OnThemeServiceChanged;
         _operationReporter.PropertyChanged -= OnOperationReporterPropertyChanged;
         _operationReporter.Dispose();

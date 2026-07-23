@@ -19,7 +19,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        Activated += (_, _) => SetWindowActive(true);
+        Activated += OnActivated;
         Deactivated += (_, _) => SetWindowActive(false);
         Opened += OnOpened;
         Closing += OnClosing;
@@ -29,6 +29,14 @@ public partial class MainWindow : Window
         SidebarSplitter.DragCompleted += OnSidebarDragCompleted;
 
         AttachTabOverflowHandlers();
+    }
+
+    private void OnActivated(object? sender, EventArgs e)
+    {
+        SetWindowActive(true);
+        // Fallback when WM_DEVICECHANGE is missed while the window was inactive.
+        if (DataContext is MainWindowViewModel vm)
+            vm.RefreshDriveLists();
     }
 
     private void OnOpened(object? sender, EventArgs e)

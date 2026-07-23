@@ -64,10 +64,23 @@ public sealed class VirtualizingFileGrid : TemplatedControl
     protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
     {
         base.OnApplyTemplate(e);
+        if (_rows is not null)
+            _rows.SelectionChanged -= OnRowsSelectionChanged;
+
         _rows = e.NameScope.Find<ListBox>("PART_Rows");
+        if (_rows is not null)
+            _rows.SelectionChanged += OnRowsSelectionChanged;
+
         ApplyRowTemplate();
         UpdateItemsSubscription(null, ItemsSource);
         ScheduleRebuildRows();
+    }
+
+    private void OnRowsSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        // Rows are layout containers only; tile selection is owned by EntryItemViewModel.
+        if (_rows?.SelectedItem is not null)
+            _rows.SelectedItem = null;
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -220,6 +233,7 @@ public sealed class VirtualizingFileGrid : TemplatedControl
         if (items.Count == 0)
         {
             _rows.ItemsSource = Array.Empty<GridRow>();
+            _rows.SelectedItem = null;
             _lastColumnCount = -1;
             _lastItemCount = 0;
             _lastItemsPathsKey = string.Empty;
@@ -253,6 +267,8 @@ public sealed class VirtualizingFileGrid : TemplatedControl
         }
 
         _rows.ItemsSource = rows;
+        // Rows are layout-only; never keep ListBox selection chrome after recycle/rebuild.
+        _rows.SelectedItem = null;
         _lastColumnCount = columns;
         _lastItemCount = items.Count;
         _lastItemsPathsKey = pathsKey;

@@ -39,6 +39,7 @@ public static class HelixServiceRegistration
         services.AddSingleton<IGitProvider, CliGitProvider>();
         services.AddSingleton<IArchiveProvider, SharpCompressArchiveProvider>();
         services.AddSingleton<IFolderColorService, FolderColorService>();
+        services.AddSingleton<IFolderViewPreferencesService, FolderViewPreferencesService>();
         services.AddSingleton<FileVisualService>();
         services.AddSingleton(sp =>
         {

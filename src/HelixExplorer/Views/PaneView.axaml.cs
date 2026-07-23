@@ -26,6 +26,12 @@ public sealed partial class PaneView : UserControl
     private const double WheelThumbnailStep = 16;
     private const double DragThreshold = 4;
 
+    /// <summary>
+    /// Delay after a second click on an already-selected item before entering rename (Explorer-like).
+    /// Longer than a typical double-click so open still wins on DoubleTapped.
+    /// </summary>
+    private static readonly TimeSpan RenameClickDelay = TimeSpan.FromMilliseconds(750);
+
     private enum PointerInteractionMode
     {
         None,
@@ -43,6 +49,8 @@ public sealed partial class PaneView : UserControl
     private bool _syncingSelectionToView;
     private PointerInteractionMode _interactionMode;
     private EntryItemViewModel? _dropTargetEntry;
+    private DispatcherTimer? _renameClickTimer;
+    private EntryItemViewModel? _renameClickTarget;
     private readonly List<Control> _millerColumns = new();
     private readonly Dictionary<Control, List<Control>> _headerAndScrollbarCache = new();
     private int _millerRequestVersion;
@@ -92,6 +100,11 @@ public sealed partial class PaneView : UserControl
 
     private void AttachDragGestureHandlers(Control control)
     {
+        // Tunnel runs before DataGrid/ListBox selection, so we can detect Explorer's
+        // "second click on already-selected item" for rename. Grid uses OnGridItemPointerPressed.
+        if (!ReferenceEquals(control, GridView))
+            control.AddHandler(PointerPressedEvent, OnDetailsOrListRenamePointerPressed, RoutingStrategies.Tunnel);
+
         control.AddHandler(PointerPressedEvent, OnItemDragArmPointerPressed, RoutingStrategies.Bubble, handledEventsToo: true);
         control.AddHandler(PointerPressedEvent, OnBlankAreaPointerPressed, RoutingStrategies.Bubble, handledEventsToo: true);
         control.AddHandler(PointerMovedEvent, OnListPointerMoved, RoutingStrategies.Bubble, handledEventsToo: true);
@@ -102,8 +115,12 @@ public sealed partial class PaneView : UserControl
 
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
+        CancelPendingRenameClick();
         if (_pane is not null)
+        {
             _pane.PropertyChanged -= OnPanePropertyChanged;
+            _pane.Navigated -= OnPaneNavigated;
+        }
 
         _pane = DataContext as PaneViewModel;
         if (_pane is null)
@@ -113,8 +130,16 @@ public sealed partial class PaneView : UserControl
         }
 
         _pane.PropertyChanged += OnPanePropertyChanged;
+        _pane.Navigated += OnPaneNavigated;
         UpdateInactiveClass();
         if (_pane.IsMillerView)
+            RebuildMiller();
+    }
+
+    private void OnPaneNavigated(object? sender, EventArgs e)
+    {
+        // Miller columns snapshot Entries; ItemCount alone misses same-count navigations.
+        if (_pane?.IsMillerView == true)
             RebuildMiller();
     }
 
@@ -202,6 +227,7 @@ public sealed partial class PaneView : UserControl
 
     private void OnItemActivated(object? sender, TappedEventArgs e)
     {
+        CancelPendingRenameClick();
         if (ExtractSelected(sender) is { } entry)
             Pane?.ActivateEntry(entry);
     }
@@ -297,7 +323,8 @@ public sealed partial class PaneView : UserControl
         }
         else if (e.Key == Key.Back && e.KeyModifiers == KeyModifiers.None)
         {
-            Pane.GoUpCommand.Execute(null);
+            if (Pane.GoUpCommand.CanExecute(null))
+                Pane.GoUpCommand.Execute(null);
             e.Handled = true;
         }
         else if (e.Key == Key.F5)
@@ -439,6 +466,35 @@ public sealed partial class PaneView : UserControl
         return null;
     }
 
+    /// <summary>
+    /// Details/List: native selection marks PointerPressed handled, so the bubble
+    /// <see cref="OnListPointerPressed"/> path never sees item presses. Tunnel captures
+    /// the pre-selection "already selected alone" state for Explorer-style rename.
+    /// </summary>
+    private void OnDetailsOrListRenamePointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (IsTextBoxSource(e.Source)
+            || Pane is null
+            || Pane.IsHome
+            || Pane.IsGridView
+            || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            return;
+
+        if (e.KeyModifiers != KeyModifiers.None
+            || TryGetEntryFromSource(e.Source) is not { } entry)
+        {
+            CancelPendingRenameClick();
+            return;
+        }
+
+        var alreadySelectedAlone = Pane.SelectedCount == 1
+                                   && ReferenceEquals(Pane.SelectedEntry, entry);
+        if (alreadySelectedAlone)
+            ScheduleRenameClick(entry);
+        else
+            CancelPendingRenameClick();
+    }
+
     private void OnGridItemPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (IsTextBoxSource(e.Source))
@@ -449,13 +505,23 @@ public sealed partial class PaneView : UserControl
 
         if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
         {
+            CancelPendingRenameClick();
             if (!Pane.SelectedEntries.Contains(entry))
                 SelectGridEntry(entry, KeyModifiers.None);
             return;
         }
 
+        var alreadySelectedAlone = Pane.SelectedCount == 1
+                                   && ReferenceEquals(Pane.SelectedEntry, entry)
+                                   && e.KeyModifiers == KeyModifiers.None;
+
         SelectGridEntry(entry, e.KeyModifiers);
         GridView.Focus();
+
+        if (alreadySelectedAlone)
+            ScheduleRenameClick(entry);
+        else
+            CancelPendingRenameClick();
 
         // Arm a potential drag-out. The grid tile marks the event handled (to stop the underlying
         // ListBox from selecting the row), so the container-level OnListPointerPressed never sees
@@ -500,8 +566,45 @@ public sealed partial class PaneView : UserControl
 
     private void OnGridItemDoubleTapped(object? sender, TappedEventArgs e)
     {
+        CancelPendingRenameClick();
         if (sender is Control { DataContext: EntryItemViewModel entry })
             Pane?.ActivateEntry(entry);
+    }
+
+    private void ScheduleRenameClick(EntryItemViewModel entry)
+    {
+        CancelPendingRenameClick();
+        _renameClickTarget = entry;
+        _renameClickTimer = new DispatcherTimer { Interval = RenameClickDelay };
+        _renameClickTimer.Tick += OnRenameClickTimerTick;
+        _renameClickTimer.Start();
+    }
+
+    private void CancelPendingRenameClick()
+    {
+        if (_renameClickTimer is not null)
+        {
+            _renameClickTimer.Stop();
+            _renameClickTimer.Tick -= OnRenameClickTimerTick;
+            _renameClickTimer = null;
+        }
+
+        _renameClickTarget = null;
+    }
+
+    private void OnRenameClickTimerTick(object? sender, EventArgs e)
+    {
+        var target = _renameClickTarget;
+        CancelPendingRenameClick();
+
+        if (Pane is null || target is null || Pane.IsRenaming)
+            return;
+        if (Pane.SelectedCount != 1 || !ReferenceEquals(Pane.SelectedEntry, target))
+            return;
+        if (!Pane.BeginRenameCommand.CanExecute(null))
+            return;
+
+        Pane.BeginRenameCommand.Execute(null);
     }
 
     private void RebuildMiller()
@@ -627,6 +730,7 @@ public sealed partial class PaneView : UserControl
         }
         else if (TryGetEntryFromSource(e.Source) is { } entry)
         {
+            // Rename for Details/List is armed in OnDetailsOrListRenamePointerPressed (tunnel).
             SelectGridEntry(entry, e.KeyModifiers);
             _interactionMode = pane.SelectedEntries.Contains(entry)
                 ? PointerInteractionMode.DragOutPending
@@ -634,6 +738,7 @@ public sealed partial class PaneView : UserControl
         }
         else
         {
+            CancelPendingRenameClick();
             if (!e.KeyModifiers.HasFlag(KeyModifiers.Control))
                 ClearSelectionAndSync();
 
@@ -742,6 +847,7 @@ public sealed partial class PaneView : UserControl
 
         // Always sync even when the model is already empty — OnListPointerPressed may have cleared
         // the VM first, leaving DataGrid/ListBox :selected chrome stale.
+        CancelPendingRenameClick();
         ClearSelectionAndSync();
         // Clear first so marquee doesn't union with stale selection.
         _pressHost = grid;
@@ -820,6 +926,7 @@ public sealed partial class PaneView : UserControl
             return;
 
         _dragStarted = true;
+        CancelPendingRenameClick();
         var pressArgs = _pressArgs;
         ResetPointerInteraction(e);
 
@@ -1016,6 +1123,7 @@ public sealed partial class PaneView : UserControl
         var length = PaneViewModel.GetRenameBaseNameLength(editor.Text ?? string.Empty, entry.IsDirectory);
         editor.SelectionStart = 0;
         editor.SelectionEnd = length;
+        editor.BringIntoView();
     }
 
     private async Task<DataTransfer?> BuildFileTransferAsync(IReadOnlyList<string> paths)

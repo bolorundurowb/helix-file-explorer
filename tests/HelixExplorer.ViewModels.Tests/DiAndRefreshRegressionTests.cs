@@ -1,5 +1,8 @@
 using System.Reflection;
+using HelixExplorer.Core.FileSystem;
+using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Infrastructure;
+using HelixExplorer.Core.Models;
 using HelixExplorer.Services;
 using HelixExplorer.ViewModels;
 using HelixExplorer.ViewModels.Pane;
@@ -139,6 +142,38 @@ public class PaneRefreshCoordinatorTests
         try { cancelled = token.IsCancellationRequested; }
         catch (ObjectDisposedException) { cancelled = true; }
         cancelled.Must().BeTrue();
+    }
+
+    [Fact]
+    public void PublishGate_RejectsStalePath_EvenWhenGenerationMatches()
+    {
+        // Mirrors PaneRefreshCoordinator's apply gate: generation alone is insufficient.
+        var loadedPath = @"C:\documents";
+        var currentPath = @"C:\downloads";
+        PathUtilities.PathsEqual(loadedPath, currentPath).Must().BeFalse();
+    }
+
+    [Fact]
+    public void ListingPublishRequest_EmptyAllEntries_IsDistinctFromMissingPublish()
+    {
+        // Empty listings must be publishable so stale caches can be overwritten.
+        var request = new ListingPublishRequest
+        {
+            AllEntries = Array.Empty<FileSystemEntry>(),
+            GitSnapshot = GitStatusSnapshot.Empty,
+            ShowHiddenFiles = false,
+            ShowFileExtensions = true,
+            IsFilterVisible = false,
+            FilterText = string.Empty,
+            SortColumn = SortColumn.Name,
+            SortDescending = false,
+            DirectorySort = DirectorySortMode.MixedWithFiles
+        };
+
+        var listing = new PaneListingCoordinator().ApplySortAndPublish(request);
+        listing.ItemCount.Must().Be(0);
+        listing.TotalCount.Must().Be(0);
+        listing.Entries.Must().BeEmpty();
     }
 }
 

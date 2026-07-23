@@ -8,7 +8,10 @@ using Microsoft.Extensions.Logging;
 
 namespace HelixExplorer.Windows.FileSystem;
 
-public sealed class WinFileSystemProvider(IShellFolderEnumerator shell, ILogger<WinFileSystemProvider> logger)
+public sealed class WinFileSystemProvider(
+    IShellFolderEnumerator shell,
+    INetworkConnectionService networkConnections,
+    ILogger<WinFileSystemProvider> logger)
     : IFileSystemProvider
 {
     private static readonly EnumerationOptions Options = new()
@@ -38,9 +41,61 @@ public sealed class WinFileSystemProvider(IShellFolderEnumerator shell, ILogger<
             return new DirectoryListing(NetworkPath.Root, NormalizeShellNetworkEntries(shellEntries));
         }
 
-        var entries = await Task.Run(() => Enumerate(resolved, cancellationToken), cancellationToken).ConfigureAwait(false);
+        if (NetworkPath.IsServerRoot(resolved))
+        {
+            var shares = await EnumerateServerSharesAsync(resolved, cancellationToken).ConfigureAwait(false);
+            return new DirectoryListing(resolved, shares);
+        }
+
+        var entries = await EnumeratePathAsync(resolved, cancellationToken).ConfigureAwait(false);
         return new DirectoryListing(resolved, entries);
     }
+
+    private async Task<IReadOnlyList<FileSystemEntry>> EnumerateServerSharesAsync(
+        string serverRoot,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await Task.Run(
+                () => WinNetworkShareEnumerator.EnumerateShares(serverRoot, logger, cancellationToken),
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            if (!await networkConnections.EnsureConnectedAsync(serverRoot, cancellationToken).ConfigureAwait(false))
+                throw;
+
+            return await Task.Run(
+                () => WinNetworkShareEnumerator.EnumerateShares(serverRoot, logger, cancellationToken),
+                cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private async Task<IReadOnlyList<FileSystemEntry>> EnumeratePathAsync(
+        string path,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await Task.Run(() => Enumerate(path, cancellationToken), cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException || IsAccessDeniedIo(ex))
+        {
+            if (!NetworkPath.IsUnc(path))
+                throw;
+
+            if (!await networkConnections.EnsureConnectedAsync(path, cancellationToken).ConfigureAwait(false))
+                throw;
+
+            return await Task.Run(() => Enumerate(path, cancellationToken), cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private static bool IsAccessDeniedIo(Exception ex)
+        => ex is IOException io
+           && (io.Message.Contains("denied", StringComparison.OrdinalIgnoreCase)
+               || io.Message.Contains("access", StringComparison.OrdinalIgnoreCase));
 
     public async ValueTask<SearchResult> SearchRecursiveAsync(
         string path,
@@ -238,6 +293,9 @@ public sealed class WinFileSystemProvider(IShellFolderEnumerator shell, ILogger<
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or DirectoryNotFoundException)
         {
             logger.LogError(ex, "Enumerate failed on '{Path}'", path);
+            // Surface UNC failures so the pane can show Access denied / unavailable instead of an empty folder.
+            if (NetworkPath.IsUnc(path))
+                throw;
         }
 
         var snapshot = entries.ToArray();

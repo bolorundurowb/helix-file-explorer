@@ -91,8 +91,12 @@ public sealed partial class EntryItemViewModel : ObservableObject
 
     public bool IsNotRenaming => !IsRenaming;
 
+    /// <summary>Raise the tile above neighbors while renaming so a vertically growing editor stays readable.</summary>
+    public int TileZIndex => IsRenaming ? 100 : 0;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNotRenaming))]
+    [NotifyPropertyChangedFor(nameof(TileZIndex))]
     private bool _isRenaming;
 
     [ObservableProperty]

@@ -13,8 +13,10 @@ public static class WindowsServiceExtensions
         services.AddSingleton<IFileSystemProvider, FileSystem.WinFileSystemProvider>();
         services.AddSingleton<IQuickAccessProvider, FileSystem.WinQuickAccessProvider>();
         services.AddSingleton<IVolumeProvider, FileSystem.WinVolumeProvider>();
+        services.AddSingleton<IVolumeChangeWatcher, FileSystem.WinVolumeChangeWatcher>();
         services.AddSingleton<INetworkDiscoveryAvailability, FileSystem.WinNetworkDiscoveryAvailability>();
         services.AddSingleton<INetworkLocationProvider, FileSystem.WinNetworkLocationProvider>();
+        services.AddSingleton<INetworkConnectionService, FileSystem.WinNetworkConnectionService>();
         services.AddSingleton<IFileOperationService, FileSystem.WinFileOperationService>();
         services.AddSingleton<IShellContextMenuService, Shell.WinShellContextMenuService>();
         services.AddSingleton<ITerminalLauncher, WinTerminalLauncher>();

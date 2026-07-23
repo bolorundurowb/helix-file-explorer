@@ -123,6 +123,7 @@ public sealed class PaneRefreshCoordinator(
             }
             catch (OperationCanceledException)
             {
+                // A newer generation owns loading state; do not leave a cancelled refresh stuck.
                 return;
             }
             catch (Exception ex)
@@ -142,6 +143,9 @@ public sealed class PaneRefreshCoordinator(
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 if (IsTokenCancelled(token) || host.IsDisposed || generation != _refreshGeneration)
+                    return;
+                // Path must still match: generation alone is not enough if cancel/generation and path diverge.
+                if (!PathsEqual(path, host.CurrentPath))
                     return;
 
                 var result = host.ApplySortAndPublish(new ListingPublishRequest
@@ -169,6 +173,8 @@ public sealed class PaneRefreshCoordinator(
             });
 
             if (IsTokenCancelled(token) || host.IsDisposed || generation != _refreshGeneration)
+                return;
+            if (!PathsEqual(path, host.CurrentPath))
                 return;
 
             StartGitStatusRefresh(host, generation, path);

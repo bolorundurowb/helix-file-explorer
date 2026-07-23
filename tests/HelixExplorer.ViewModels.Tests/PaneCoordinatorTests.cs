@@ -192,6 +192,28 @@ public class PaneNavigationControllerTests
         transition.CanGoForward.Must().BeFalse();
     }
 
+    [Theory]
+    [InlineData(@"C:\", false)]
+    [InlineData(@"C:\Users", true)]
+    [InlineData(@"\\", false)]
+    [InlineData(@"\\server", false)]
+    [InlineData(@"\\server\share", true)]
+    [InlineData(@"\\server\share\folder", true)]
+    public void CanNavigateUp_MatchesFilesystemRoots(string path, bool expected)
+    {
+        PaneNavigationController.CanNavigateUp(path, isHome: false, isShellNamespace: false)
+            .Must().Be(expected);
+    }
+
+    [Fact]
+    public void CanNavigateUp_FalseAtHome_TrueForShellNamespace()
+    {
+        PaneNavigationController.CanNavigateUp(PaneConstants.HomeRoute, isHome: true, isShellNamespace: false)
+            .Must().BeFalse();
+        PaneNavigationController.CanNavigateUp(ShellPath.RecycleBin, isHome: false, isShellNamespace: true)
+            .Must().BeTrue();
+    }
+
     private sealed class FakeFileSystem : IFileSystemProvider
     {
         public string ResolvePath(string path) => path;

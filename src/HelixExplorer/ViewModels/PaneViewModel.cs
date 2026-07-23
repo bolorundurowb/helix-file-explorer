@@ -29,6 +29,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     private readonly IFileSystemProvider _fileSystem;
     private readonly IArchiveProvider _archive;
     private readonly IFolderColorService _folderColors;
+    private readonly IFolderViewPreferencesService _folderViewPrefs;
     private readonly IFileOperationService _fileOps;
     private readonly IClipboardService _clipboard;
     private readonly IUiHost _uiHost;
@@ -64,11 +65,14 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     private bool _commandNotifyPending;
     private bool _isRecycleBinWatcherSubscribed;
     private bool _hasPastePayload;
+    private bool _suppressFolderPrefPersist;
+    private CancellationTokenSource? _folderPrefPersistCts;
 
     public PaneViewModel(
         IFileSystemProvider fileSystem,
         IArchiveProvider archive,
         IFolderColorService folderColors,
+        IFolderViewPreferencesService folderViewPrefs,
         IFileOperationService fileOps,
         IClipboardService clipboard,
         IUiHost uiHost,
@@ -85,6 +89,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         _fileSystem = fileSystem;
         _archive = archive;
         _folderColors = folderColors;
+        _folderViewPrefs = folderViewPrefs;
         _fileOps = fileOps;
         _clipboard = clipboard;
         _uiHost = uiHost;
@@ -231,6 +236,10 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     [NotifyCanExecuteChangedFor(nameof(GoForwardCommand))]
     private bool _canGoForward;
 
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(GoUpCommand))]
+    private bool _canGoUp;
+
     public ObservableCollection<EntryItemViewModel> Entries { get; } = new();
 
     public ObservableCollection<EntryItemViewModel> SelectedEntries => _selection.SelectedEntries;
@@ -249,7 +258,19 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
                 ? PaneLocationKind.ShellNamespace
                 : PaneLocationKind.FileSystem;
 
+        CanGoUp = PaneNavigationController.CanNavigateUp(
+            value,
+            isHome: isHomeRoute,
+            isShellNamespace: LocationKind == PaneLocationKind.ShellNamespace);
+
+        // Drop stale listing state before chrome/filter work so ClearFilter cannot republish
+        // the previous folder's entries under the new CurrentPath.
+        ClearListingState();
         _listing.ClearEntryPool();
+
+        if (!isHomeRoute)
+            ApplyFolderViewPreferences(value);
+
         RebuildBreadcrumbs(isHomeRoute ? string.Empty : value);
         EditablePath = isHomeRoute ? string.Empty : value;
         ClearFilter();
@@ -276,13 +297,6 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         if (isHomeRoute)
         {
             OmnibarMode = OmnibarMode.Home;
-            _allEntries = Array.Empty<FileSystemEntry>();
-            Entries.Clear();
-            SelectedEntries.Clear();
-            SelectedEntry = null;
-            SelectedCount = 0;
-            ItemCount = 0;
-            TotalCount = 0;
             StatusText = string.Empty;
             Navigated?.Invoke(this, EventArgs.Empty);
             return;
@@ -292,6 +306,19 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
             OmnibarMode = OmnibarMode.Path;
 
         FireAndForgetSafe.Run(RefreshAsync(showLoading: true), _logger);
+    }
+
+    private void ClearListingState()
+    {
+        _directoryEntries = Array.Empty<FileSystemEntry>();
+        _allEntries = Array.Empty<FileSystemEntry>();
+        Entries.Clear();
+        SelectedEntries.Clear();
+        SelectedEntry = null;
+        SelectedCount = 0;
+        ItemCount = 0;
+        TotalCount = 0;
+        ListingSizeBytes = 0;
     }
 
     private void UpdateRecycleBinWatcher()
@@ -335,6 +362,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         ApplySortAndPublish();
         NotifySortOptionProperties();
         SortChanged?.Invoke(this, EventArgs.Empty);
+        SchedulePersistFolderViewPreferences();
     }
 
     partial void OnSortDescendingChanged(bool value)
@@ -342,6 +370,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         ApplySortAndPublish();
         NotifySortOptionProperties();
         SortChanged?.Invoke(this, EventArgs.Empty);
+        SchedulePersistFolderViewPreferences();
     }
 
     partial void OnDirectorySortChanged(DirectorySortMode value)
@@ -349,6 +378,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         ApplySortAndPublish();
         NotifySortOptionProperties();
         SortChanged?.Invoke(this, EventArgs.Empty);
+        SchedulePersistFolderViewPreferences();
     }
 
     public bool IsSortByName => SortColumn == SortColumn.Name;
@@ -442,6 +472,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         }
 
         LayoutChanged?.Invoke(this, EventArgs.Empty);
+        SchedulePersistFolderViewPreferences();
     }
 
     partial void OnViewModeChanged(LayoutMode value)
@@ -452,6 +483,86 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
             RequestEntryVisuals();
 
         LayoutChanged?.Invoke(this, EventArgs.Empty);
+        SchedulePersistFolderViewPreferences();
+    }
+
+    private void ApplyFolderViewPreferences(string path)
+    {
+        if (ShellPath.IsShellPath(path) || ArchivePath.IsVirtual(path))
+            return;
+
+        _suppressFolderPrefPersist = true;
+        try
+        {
+            if (_folderViewPrefs.TryGet(path, out var prefs))
+            {
+                ViewMode = prefs.ViewMode;
+                SortColumn = prefs.SortColumn;
+                SortDescending = prefs.SortDescending;
+                DirectorySort = prefs.DirectorySort;
+                ThumbnailSize = Math.Clamp(prefs.ThumbnailSize, MinThumbnailSize, MaxThumbnailSize);
+                return;
+            }
+
+            var settings = _settingsStore.Load();
+            ViewMode = settings.DefaultViewMode;
+            SortColumn = SortColumn.Name;
+            SortDescending = false;
+            DirectorySort = settings.DirectorySort;
+            ThumbnailSize = Math.Clamp(settings.DefaultThumbnailSize, MinThumbnailSize, MaxThumbnailSize);
+        }
+        finally
+        {
+            _suppressFolderPrefPersist = false;
+        }
+    }
+
+    private void SchedulePersistFolderViewPreferences()
+    {
+        if (_suppressFolderPrefPersist || _disposed || IsHome || IsShellNamespace || IsArchive)
+            return;
+
+        var path = CurrentPath;
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+
+        try { _folderPrefPersistCts?.Cancel(); } catch (ObjectDisposedException) { }
+        _folderPrefPersistCts?.Dispose();
+        var cts = new CancellationTokenSource();
+        _folderPrefPersistCts = cts;
+        FireAndForgetSafe.Run(PersistFolderViewPreferencesAsync(path, cts), _logger);
+    }
+
+    private async Task PersistFolderViewPreferencesAsync(string path, CancellationTokenSource cts)
+    {
+        try
+        {
+            await Task.Delay(300, cts.Token).ConfigureAwait(true);
+            if (_disposed || !ReferenceEquals(_folderPrefPersistCts, cts))
+                return;
+            if (!string.Equals(path, CurrentPath, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            _folderViewPrefs.Set(path, new FolderViewPreferences
+            {
+                ViewMode = ViewMode,
+                SortColumn = SortColumn,
+                SortDescending = SortDescending,
+                DirectorySort = DirectorySort,
+                ThumbnailSize = ThumbnailSize
+            });
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            if (ReferenceEquals(_folderPrefPersistCts, cts))
+            {
+                _folderPrefPersistCts = null;
+                cts.Dispose();
+            }
+        }
     }
 
     private void ScheduleDebouncedVisualReload()
@@ -623,10 +734,10 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         CanGoForward = transition.Value.CanGoForward;
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanGoUp))]
     private void GoUp()
     {
-        if (IsHome)
+        if (IsHome || !CanGoUp)
             return;
 
         if (IsShellNamespace)
@@ -671,7 +782,10 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
 
     ListingPublishResult IPaneRefreshHost.ApplySortAndPublish(ListingPublishRequest request)
     {
-        if (request.AllEntries.Count > 0)
+        // Always replace the directory cache (including empty listings) so a failed/empty
+        // refresh cannot leave a previous folder's entries to be republished later.
+        // Search overlays must not clobber the underlying directory listing.
+        if (!IsSearchActive)
         {
             _directoryEntries = request.AllEntries;
             if (!IsFilterActive)
@@ -1109,15 +1223,19 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
 
     private void ClearRenameState()
     {
-        if (_renamingEntry is not null)
-        {
-            _renamingEntry.IsRenaming = false;
-            _renamingEntry.RenameText = string.Empty;
-        }
-
+        // Null the field and clear pane IsRenaming before mutating the entry. Setting
+        // entry.IsRenaming=false collapses the TextBox and raises LostFocus, which can
+        // re-enter CommitRename/ClearRenameState and otherwise NRE on _renamingEntry.
+        var entry = _renamingEntry;
         _renamingEntry = null;
-        RenameText = string.Empty;
         IsRenaming = false;
+        RenameText = string.Empty;
+
+        if (entry is not null)
+        {
+            entry.IsRenaming = false;
+            entry.RenameText = string.Empty;
+        }
     }
 
     public static int GetRenameBaseNameLength(string name, bool isDirectory)
@@ -1761,6 +1879,9 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         try { _thumbnailVisualCts?.Cancel(); } catch (ObjectDisposedException) { }
         _thumbnailVisualCts?.Dispose();
         _thumbnailVisualCts = null;
+        try { _folderPrefPersistCts?.Cancel(); } catch (ObjectDisposedException) { }
+        _folderPrefPersistCts?.Dispose();
+        _folderPrefPersistCts = null;
         _selection.SelectionChanged -= OnSelectionModelChanged;
         _selection.SelectedEntries.CollectionChanged -= OnSelectedEntriesChanged;
         _clipboard.Changed -= OnClipboardChanged;

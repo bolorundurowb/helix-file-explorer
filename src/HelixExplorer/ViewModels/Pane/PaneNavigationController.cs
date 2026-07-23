@@ -12,6 +12,34 @@ public sealed class PaneNavigationController(IFileSystemProvider fileSystem, IAr
 
     public bool CanGoForward => _forwardStack.Count > 0;
 
+    /// <summary>
+    /// Whether Up should be enabled for the current location (drive/network/server roots cannot go up).
+    /// </summary>
+    public static bool CanNavigateUp(string? path, bool isHome, bool isShellNamespace)
+    {
+        if (isHome || string.IsNullOrEmpty(path))
+            return false;
+
+        // Shell namespaces (e.g. Recycle Bin) navigate Home on Up.
+        if (isShellNamespace)
+            return true;
+
+        if (ArchivePath.IsVirtual(path))
+            return true;
+
+        if (PathUtilities.IsDriveRoot(path))
+            return false;
+
+        if (NetworkPath.IsNetworkRoot(path) || NetworkPath.IsServerRoot(path))
+            return false;
+
+        if (NetworkPath.IsUnc(path))
+            return NetworkPath.HasShare(path);
+
+        var trimmed = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return Directory.GetParent(trimmed) is not null;
+    }
+
     public string ResolveDestination(string path, string currentPath)
     {
         if (ArchivePath.IsVirtual(path))

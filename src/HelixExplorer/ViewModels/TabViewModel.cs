@@ -189,11 +189,10 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
 
     private void OnPaneNavigated(object? sender, EventArgs e)
     {
+        // Dual-pane titles need either pane; single-pane chrome still keys off ActivePane.
+        UpdateTitle();
         if (ReferenceEquals(sender, ActivePane))
-        {
-            UpdateTitle();
             Navigated?.Invoke(this, EventArgs.Empty);
-        }
     }
 
     partial void OnActivePaneChanged(PaneViewModel? oldValue, PaneViewModel newValue)
@@ -211,7 +210,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     {
     }
 
-    partial void OnIsDualPaneChanged(bool value) { }
+    partial void OnIsDualPaneChanged(bool value) => UpdateTitle();
 
     partial void OnTintChanged(Color? value) { }
 
@@ -287,6 +286,13 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         if (IsSettingsTab)
         {
             Title = "Settings";
+            NotifyTabIconPropertiesChanged();
+            return;
+        }
+
+        if (IsDualPane && RightPane is not null)
+        {
+            Title = $"{DescribePath(LeftPane.CurrentPath)} | {DescribePath(RightPane.CurrentPath)}";
             NotifyTabIconPropertiesChanged();
             return;
         }

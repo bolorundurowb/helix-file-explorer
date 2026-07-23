@@ -123,7 +123,10 @@ public sealed class RollingFileLoggerProvider : ILoggerProvider
 
     private void PruneOldFiles()
     {
+        // RetainedFileCount applies to rolled segments only; never prune the active daily file.
+        var activePath = _currentFilePath ?? GetActiveFilePath(DateTime.Today);
         var files = Directory.EnumerateFiles(_directory, "helix-explorer-*.log")
+            .Where(path => !string.Equals(path, activePath, StringComparison.OrdinalIgnoreCase))
             .Select(path => new FileInfo(path))
             .OrderByDescending(info => info.LastWriteTimeUtc)
             .Skip(_options.RetainedFileCount)

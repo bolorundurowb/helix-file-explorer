@@ -926,10 +926,13 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(IsSettingsTab));
         OnPropertyChanged(nameof(ShowFileToolbar));
         OnPropertyChanged(nameof(ShowBrowserChrome));
+        OnPropertyChanged(nameof(IsRecycleBinActive));
         NotifyGlobalFileCommandsCanExecuteChanged();
         NotifySortChrome();
         NotifyLayoutChrome();
     }
+
+    public bool IsRecycleBinActive => ActivePane?.IsRecycleBin == true;
 
     public bool IsDetailsViewActive => ActivePane?.IsDetailsView == true;
     public bool IsListViewActive => ActivePane?.IsListView == true;
@@ -1034,6 +1037,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         CopyPathCommand.NotifyCanExecuteChanged();
         PinCurrentFolderCommand.NotifyCanExecuteChanged();
         OpenInTerminalCommand.NotifyCanExecuteChanged();
+        RestoreFromRecycleBinCommand.NotifyCanExecuteChanged();
+        EmptyRecycleBinCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand]
@@ -1099,6 +1104,18 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     [RelayCommand(CanExecute = nameof(CanDeletePermanentlySelection))]
     private void DeletePermanently() => SelectedTab?.ActivePane?.DeletePermanentlyCommand.Execute(null);
+
+    private bool CanRestoreFromRecycleBin()
+        => CanUseGlobalFileShortcuts() && ActivePane?.RestoreFromRecycleBinCommand.CanExecute(null) == true;
+
+    private bool CanEmptyRecycleBin()
+        => CanUseGlobalFileShortcuts() && ActivePane?.EmptyRecycleBinCommand.CanExecute(null) == true;
+
+    [RelayCommand(CanExecute = nameof(CanRestoreFromRecycleBin))]
+    private void RestoreFromRecycleBin() => ActivePane?.RestoreFromRecycleBinCommand.Execute(null);
+
+    [RelayCommand(CanExecute = nameof(CanEmptyRecycleBin))]
+    private void EmptyRecycleBin() => ActivePane?.EmptyRecycleBinCommand.Execute(null);
 
     [RelayCommand(CanExecute = nameof(CanRenameSelection))]
     private void Rename() => SelectedTab?.ActivePane?.BeginRenameCommand.Execute(null);

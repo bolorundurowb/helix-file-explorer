@@ -74,4 +74,36 @@ public class JsonSettingsStoreTests
             try { File.Delete(path); } catch { }
         }
     }
+
+    [Fact]
+    public async Task Save_ConcurrentCalls_DoNotThrowAndLeaveValidJson()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "helix-settings-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var store = new JsonSettingsStore(path);
+            var tasks = Enumerable.Range(0, 20).Select(i => Task.Run(() =>
+            {
+                store.Save(new AppSettings
+                {
+                    Theme = i % 2 == 0 ? ThemeMode.Dark : ThemeMode.Light,
+                    SidebarWidth = 200 + i
+                });
+            }));
+
+            await Task.WhenAll(tasks);
+
+            var loaded = store.Load();
+            loaded.SidebarWidth.Must().BeGreaterThan(199);
+            File.Exists(path).Must().BeTrue();
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+            foreach (var leftover in Directory.EnumerateFiles(Path.GetDirectoryName(path)!, Path.GetFileName(path) + ".*.tmp"))
+            {
+                try { File.Delete(leftover); } catch { }
+            }
+        }
+    }
 }

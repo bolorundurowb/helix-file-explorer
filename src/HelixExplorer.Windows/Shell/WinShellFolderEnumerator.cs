@@ -256,36 +256,7 @@ public sealed class WinShellFolderEnumerator : IShellFolderEnumerator, IDisposab
         if (!File.Exists(iPath))
             return null;
 
-        try
-        {
-            using var fs = new FileStream(iPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-            using var reader = new BinaryReader(fs, Encoding.Unicode);
-
-            var header = reader.ReadBytes(8);
-            if (header.Length < 8 || header[0] != (byte)'$' || header[1] != (byte)'I')
-                return null;
-
-            var fileSize = reader.ReadInt64();
-            var fileTime = reader.ReadInt64();
-            var deletedAt = DateTime.FromFileTimeUtc(fileTime);
-
-            var pathLength = reader.ReadInt32();
-            if (pathLength <= 0 || pathLength > 32 * 1024)
-                return null;
-
-            var pathBytes = reader.ReadBytes(pathLength * 2);
-            var originalPath = Encoding.Unicode.GetString(pathBytes);
-
-            return (fileSize, deletedAt, originalPath);
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return null;
-        }
-        catch (IOException)
-        {
-            return null;
-        }
+        return RecycleBinMetadataParser.TryParseFile(iPath);
     }
 
     /// <summary>

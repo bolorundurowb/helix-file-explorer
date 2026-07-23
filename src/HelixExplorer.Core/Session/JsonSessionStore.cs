@@ -16,6 +16,8 @@ public sealed class JsonSessionStore(string path) : ISessionStore
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
+    private readonly object _gate = new();
+
     public JsonSessionStore() : this(AppPaths.SessionFile)
     {
     }
@@ -27,7 +29,9 @@ public sealed class JsonSessionStore(string path) : ISessionStore
 
         try
         {
-            var json = File.ReadAllText(path);
+            string json;
+            lock (_gate)
+                json = File.ReadAllText(path);
             return JsonSerializer.Deserialize<SessionDocument>(json, Options) ?? new SessionDocument();
         }
         catch
@@ -43,9 +47,21 @@ public sealed class JsonSessionStore(string path) : ISessionStore
             Directory.CreateDirectory(directory);
 
         var json = JsonSerializer.Serialize(document, Options);
-        var tempPath = path + ".tmp";
+        // Unique temp name avoids cross-call clobber of a shared *.tmp; lock serializes replace.
+        var tempPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
 
-        File.WriteAllText(tempPath, json);
-        File.Move(tempPath, path, overwrite: true);
+        lock (_gate)
+        {
+            try
+            {
+                File.WriteAllText(tempPath, json);
+                File.Move(tempPath, path, overwrite: true);
+            }
+            catch
+            {
+                try { File.Delete(tempPath); } catch { /* best-effort */ }
+                throw;
+            }
+        }
     }
 }

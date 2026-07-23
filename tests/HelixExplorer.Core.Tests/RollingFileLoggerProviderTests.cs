@@ -90,6 +90,41 @@ public class RollingFileLoggerProviderTests
         }
     }
 
+    [Fact]
+    public void Write_RetainsConfiguredRolledFileCountBesideActive()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            using var provider = new RollingFileLoggerProvider(new RollingFileLoggerOptions
+            {
+                Version = "0.2.1",
+                LogsDirectory = directory,
+                MinLevel = LogLevel.Information,
+                MaxFileSizeBytes = 1024,
+                RetainedFileCount = 1,
+            });
+
+            var logger = provider.CreateLogger("Retain");
+            for (var i = 0; i < 80; i++)
+                logger.LogInformation(new string('x', 80));
+
+            var files = Directory.GetFiles(directory, "helix-explorer-*.log");
+            // Active: helix-explorer-yyyyMMdd.log; rolled: helix-explorer-yyyyMMdd.N.log
+            var rolled = files
+                .Where(path => Path.GetFileNameWithoutExtension(path).Contains('.', StringComparison.Ordinal))
+                .ToArray();
+
+            files.Length.Must().BeGreaterThan(1);
+            (files.Length - rolled.Length).Must().Be(1);
+            rolled.Length.Must().Be(1);
+        }
+        finally
+        {
+            TryDeleteDirectory(directory);
+        }
+    }
+
     private static string CreateTempDirectory()
         => Directory.CreateTempSubdirectory("helix-logger-tests-").FullName;
 

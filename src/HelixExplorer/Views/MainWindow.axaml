@@ -569,6 +569,27 @@
                         <PathIcon Data="{DynamicResource HelixIconDeleteGeometry}" Width="14" Height="14"
                               Foreground="{DynamicResource HelixIconDeleteBrush}" />
                     </Button>
+                    <StackPanel Orientation="Horizontal" Spacing="2"
+                                IsVisible="{Binding IsRecycleBinActive}">
+                        <Border Width="1" Background="{DynamicResource HelixBorderColor}" Margin="4,4" />
+                        <Button ToolTip.Tip="Restore"
+                                Command="{Binding RestoreFromRecycleBinCommand}"
+                                Padding="6,4" Background="Transparent" BorderThickness="0" Cursor="Hand">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <PathIcon Data="{DynamicResource HelixIconArrowClockwiseGeometry}" Width="14" Height="14" />
+                                <TextBlock Text="Restore" VerticalAlignment="Center" FontSize="12" />
+                            </StackPanel>
+                        </Button>
+                        <Button ToolTip.Tip="Empty Recycle Bin"
+                                Command="{Binding EmptyRecycleBinCommand}"
+                                Padding="6,4" Background="Transparent" BorderThickness="0" Cursor="Hand">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <PathIcon Data="{DynamicResource HelixIconRecycleBinGeometry}" Width="14" Height="14"
+                                          Foreground="{DynamicResource HelixIconDeleteBrush}" />
+                                <TextBlock Text="Empty" VerticalAlignment="Center" FontSize="12" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
                     <Border Width="1" Background="{DynamicResource HelixBorderColor}" Margin="4,4" />
                     <Button ToolTip.Tip="Sort"
                             Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">

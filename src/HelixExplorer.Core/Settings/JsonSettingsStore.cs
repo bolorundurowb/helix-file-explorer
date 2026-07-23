@@ -14,6 +14,8 @@ public sealed class JsonSettingsStore(string path) : ISettingsStore
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
+    private readonly object _gate = new();
+
     public JsonSettingsStore() : this(AppPaths.SettingsFile)
     {
     }
@@ -25,7 +27,9 @@ public sealed class JsonSettingsStore(string path) : ISettingsStore
 
         try
         {
-            var json = File.ReadAllText(path);
+            string json;
+            lock (_gate)
+                json = File.ReadAllText(path);
             return JsonSerializer.Deserialize<AppSettings>(json, Options) ?? new AppSettings();
         }
         catch
@@ -41,17 +45,21 @@ public sealed class JsonSettingsStore(string path) : ISettingsStore
             Directory.CreateDirectory(directory);
 
         var json = JsonSerializer.Serialize(settings, Options);
-        var tempPath = path + ".tmp";
+        // Unique temp name avoids cross-call clobber of a shared *.tmp; lock serializes replace.
+        var tempPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
 
-        try
+        lock (_gate)
         {
-            File.WriteAllText(tempPath, json);
-            File.Move(tempPath, path, overwrite: true);
-        }
-        catch (Exception ex)
-        {
-            try { File.Delete(tempPath); } catch { /* best-effort */ }
-            throw new IOException($"Failed to save settings to {path}", ex);
+            try
+            {
+                File.WriteAllText(tempPath, json);
+                File.Move(tempPath, path, overwrite: true);
+            }
+            catch (Exception ex)
+            {
+                try { File.Delete(tempPath); } catch { /* best-effort */ }
+                throw new IOException($"Failed to save settings to {path}", ex);
+            }
         }
     }
 }

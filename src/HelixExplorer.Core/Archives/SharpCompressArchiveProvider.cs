@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using HelixExplorer.Core.Collections;
+using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Models;
 using Microsoft.Extensions.Logging;
 using SharpCompress.Archives;
@@ -84,7 +85,9 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
 
                     var tempDir = GetArchiveTempDir(archivePath);
                     Directory.CreateDirectory(tempDir);
-                    var dest = Path.Combine(tempDir, Path.GetFileName(wanted));
+                    // Key the temp file on the full inner path so equal basenames in different
+                    // folders (e.g. one/readme.txt vs two/readme.txt) do not clobber each other.
+                    var dest = Path.Combine(tempDir, MakeUniqueTempFileName(wanted));
 
                     await using var src = await entry.OpenEntryStreamAsync(token).ConfigureAwait(false);
                     await using var fs = File.Create(dest);
@@ -141,11 +144,18 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
         {
             Directory.CreateDirectory(destinationDirectory);
             using var archive = ArchiveFactory.OpenArchive(new FileInfo(archivePath));
-            archive.WriteToDirectory(destinationDirectory, new ExtractionOptions
+            foreach (var entry in archive.Entries)
             {
-                ExtractFullPath = true,
-                Overwrite = true
-            });
+                token.ThrowIfCancellationRequested();
+                if (entry.IsDirectory)
+                    continue;
+
+                var key = (entry.Key ?? string.Empty).Replace('\\', '/').TrimStart('/').TrimEnd('/');
+                if (string.IsNullOrEmpty(key))
+                    continue;
+
+                ExtractEntryToDestination(entry, key, destinationDirectory);
+            }
         }, token).ConfigureAwait(false);
     }
 
@@ -197,23 +207,40 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
                     if (!prefixes.Any(prefix => EntryMatches(key, prefix)))
                         continue;
 
-                    var destPath = Path.Combine(
-                        destinationDirectory,
-                        key.Replace('/', Path.DirectorySeparatorChar));
-
-                    var fullDest = Path.GetFullPath(destPath);
-                    var fullBase = Path.GetFullPath(destinationDirectory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-                    if (!fullDest.StartsWith(fullBase, StringComparison.OrdinalIgnoreCase))
-                        continue;
-
-                    var destDir = Path.GetDirectoryName(destPath);
-                    if (!string.IsNullOrEmpty(destDir))
-                        Directory.CreateDirectory(destDir);
-
-                    entry.WriteToFile(destPath, new ExtractionOptions { Overwrite = true });
+                    ExtractEntryToDestination(entry, key, destinationDirectory);
                 }
             }
         }, token).ConfigureAwait(false);
+    }
+
+    private static void ExtractEntryToDestination(IArchiveEntry entry, string key, string destinationDirectory)
+    {
+        var destPath = Path.Combine(
+            destinationDirectory,
+            key.Replace('/', Path.DirectorySeparatorChar));
+
+        var fullDest = Path.GetFullPath(destPath);
+        var fullBase = Path.GetFullPath(destinationDirectory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        if (!fullDest.StartsWith(fullBase, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        if (File.Exists(destPath))
+            destPath = FileOperationPathHelper.EnsureUniqueFilePath(destPath);
+
+        var destDir = Path.GetDirectoryName(destPath);
+        if (!string.IsNullOrEmpty(destDir))
+            Directory.CreateDirectory(destDir);
+
+        entry.WriteToFile(destPath, new ExtractionOptions { Overwrite = false });
+    }
+
+    private static string MakeUniqueTempFileName(string innerKey)
+    {
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(innerKey)))[..16];
+        var fileName = Path.GetFileName(innerKey);
+        if (string.IsNullOrEmpty(fileName))
+            fileName = "entry";
+        return $"{hash}_{fileName}";
     }
 
     private static void AddSourceToArchive(IWritableArchive<ZipWriterOptions> archive, string source)

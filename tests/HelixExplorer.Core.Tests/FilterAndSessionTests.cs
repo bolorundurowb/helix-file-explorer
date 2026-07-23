@@ -181,4 +181,33 @@ public class SessionStoreTests
                 File.Delete(path);
         }
     }
+
+    [Fact]
+    public async Task Save_ConcurrentSessionCalls_DoNotThrowAndLeaveValidJson()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"helix-session-concurrent-{Guid.NewGuid():N}.json");
+        try
+        {
+            var store = new JsonSessionStore(path);
+            var tasks = Enumerable.Range(0, 20).Select(i => Task.Run(() =>
+            {
+                store.Save(new SessionDocument { ActiveTabIndex = i });
+            }));
+
+            await Task.WhenAll(tasks);
+
+            var loaded = new JsonSessionStore(path).Load();
+            loaded.ActiveTabIndex.Must().BeGreaterThan(-1);
+            File.Exists(path).Must().BeTrue();
+        }
+        finally
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+            foreach (var leftover in Directory.EnumerateFiles(Path.GetDirectoryName(path)!, Path.GetFileName(path) + ".*.tmp"))
+            {
+                try { File.Delete(leftover); } catch { }
+            }
+        }
+    }
 }

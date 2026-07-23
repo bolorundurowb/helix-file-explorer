@@ -40,6 +40,7 @@ public sealed class RecycleBinWatcher : IDisposable
                 watcher.Created += OnChanged;
                 watcher.Deleted += OnChanged;
                 watcher.Renamed += OnChanged;
+                watcher.Error += OnWatcherError;
                 _watchers.Add(watcher);
             }
             catch (UnauthorizedAccessException)
@@ -61,6 +62,7 @@ public sealed class RecycleBinWatcher : IDisposable
             watcher.Created -= OnChanged;
             watcher.Deleted -= OnChanged;
             watcher.Renamed -= OnChanged;
+            watcher.Error -= OnWatcherError;
             watcher.Dispose();
         }
 
@@ -71,6 +73,12 @@ public sealed class RecycleBinWatcher : IDisposable
     private void OnChanged(object sender, FileSystemEventArgs e)
     {
         // $I files are metadata-only; we still raise so the UI can decide whether to refresh.
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnWatcherError(object sender, ErrorEventArgs e)
+    {
+        // Buffer overflow (and other watcher failures) drop change notifications; force a refresh.
         Changed?.Invoke(this, EventArgs.Empty);
     }
 

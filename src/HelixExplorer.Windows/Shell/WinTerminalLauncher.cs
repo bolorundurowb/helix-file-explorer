@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using HelixExplorer.Core.Infrastructure;
 using Microsoft.Win32;
 
@@ -35,7 +36,9 @@ public sealed class WinTerminalLauncher : ITerminalLauncher
     private static bool TryOpenWindowsTerminalNewTab(string directoryPath)
     {
         // "wt.exe" with UseShellExecute resolves via PATH / AppExecutionAlias without locating the binary.
-        var args = $"-w 0 new-tab -d \"{directoryPath}\"";
+        // The directory path is escaped per Windows command-line rules so a path containing
+        // a literal " cannot break out of the quoted argument and inject flags.
+        var args = $"-w 0 new-tab -d {QuoteForWindowsCommandLine(directoryPath)}";
 
         return TryStart(new ProcessStartInfo
         {
@@ -108,9 +111,56 @@ public sealed class WinTerminalLauncher : ITerminalLauncher
         return TryStart(new ProcessStartInfo
         {
             FileName = gitBash,
-            Arguments = $"--cd=\"{directoryPath}\"",
+            Arguments = $"--cd={QuoteForWindowsCommandLine(directoryPath)}",
             UseShellExecute = true
         });
+    }
+
+    /// <summary>
+    /// Wraps a single argument for the Windows command-line parser used when
+    /// <see cref="ProcessStartInfo.UseShellExecute"/> is true. Doubles backslashes that
+    /// precede a closing quote and escapes literal quotes so an untrusted path cannot
+    /// terminate the quoted region and inject additional arguments.
+    /// </summary>
+    private static string QuoteForWindowsCommandLine(string value)
+    {
+        var sb = new StringBuilder(value.Length + 2);
+        sb.Append('"');
+        var backslashes = 0;
+        foreach (var c in value)
+        {
+            if (c == '\\')
+            {
+                backslashes++;
+                continue;
+            }
+
+            if (c == '"')
+            {
+                // Backslashes preceding a literal quote must be doubled so the parser
+                // treats them as escaped backslashes rather than as escape characters
+                // for this quote.
+                sb.Append('\\', backslashes * 2 + 1);
+                sb.Append('"');
+            }
+            else if (backslashes > 0)
+            {
+                sb.Append('\\', backslashes);
+                sb.Append(c);
+            }
+            else
+            {
+                sb.Append(c);
+            }
+
+            backslashes = 0;
+        }
+
+        // Any trailing backslashes must be doubled or the closing quote below is
+        // consumed as an escape rather than terminating the quoted region.
+        sb.Append('\\', backslashes * 2);
+        sb.Append('"');
+        return sb.ToString();
     }
 
     private static string? ResolveGitBashPath()

@@ -9,8 +9,13 @@ using HelixExplorer.Core.Theming;
 using HelixExplorer.ViewModels;
 using HelixExplorer.ViewModels.Pane;
 using HelixExplorer.Views;
+#if MACOS
+using HelixExplorer.macOS;
+using HelixExplorer.macOS.Theming;
+#else
 using HelixExplorer.Windows;
 using HelixExplorer.Windows.Theming;
+#endif
 using Microsoft.Extensions.DependencyInjection;
 
 namespace HelixExplorer.Services;
@@ -23,7 +28,11 @@ public static class HelixServiceRegistration
 {
     public static IServiceCollection AddHelixApplicationServices(this IServiceCollection services)
     {
+#if MACOS
+        services.AddHelixMacServices();
+#else
         services.AddHelixWindowsServices();
+#endif
         services.AddSingleton<ISettingsStore, JsonSettingsStore>();
         services.AddSingleton<ISessionStore, JsonSessionStore>();
         services.AddSingleton<IThemeService, AvaloniaThemeService>();
@@ -41,6 +50,25 @@ public static class HelixServiceRegistration
         services.AddSingleton<IFolderColorService, FolderColorService>();
         services.AddSingleton<IFolderViewPreferencesService, FolderViewPreferencesService>();
         services.AddSingleton<FileVisualService>();
+        services.AddTransient<IFileChangeWatcher, FileChangeWatcherService>();
+        services.AddScoped<Func<IFileChangeWatcher>>(sp => () => sp.GetRequiredService<IFileChangeWatcher>());
+
+#if MACOS
+        services.AddSingleton(sp =>
+        {
+            var themes = sp.GetRequiredService<IThemeService>();
+            var store = sp.GetRequiredService<ISettingsStore>();
+            return new MacThemeWatcher(
+                mode =>
+                {
+                    if (Dispatcher.UIThread.CheckAccess())
+                        themes.ApplyTheme(mode);
+                    else
+                        Dispatcher.UIThread.Post(() => themes.ApplyTheme(mode));
+                },
+                () => store.Load().Theme);
+        });
+#else
         services.AddSingleton(sp =>
         {
             var themes = sp.GetRequiredService<IThemeService>();
@@ -55,6 +83,8 @@ public static class HelixServiceRegistration
                 },
                 () => store.Load().Theme);
         });
+#endif
+
         services.AddTransient<PaneRefreshCoordinator>();
         services.AddTransient<PaneFileOperationCoordinator>();
         services.AddTransient<PaneSearchCoordinator>();
@@ -66,8 +96,6 @@ public static class HelixServiceRegistration
         services.AddScoped<CommandPaletteService>();
         services.AddScoped<TabSessionCoordinator>();
         services.AddSingleton<ApplicationStartupCoordinator>();
-        // Window-graph ViewModels are scoped per window (see WindowHostService), so each window gets its
-        // own MainWindowViewModel and a single HomePageViewModel shared across that window's tabs.
         services.AddScoped<HomePageViewModel>();
         services.AddScoped<FileOperationReporter>();
         services.AddScoped<IFileOperationReporter>(sp => sp.GetRequiredService<FileOperationReporter>());

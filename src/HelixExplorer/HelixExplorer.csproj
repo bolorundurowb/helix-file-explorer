@@ -1,12 +1,22 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
-    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
-    <ApplicationIcon>..\..\assets\helix-explorer-icon.ico</ApplicationIcon>
+    <TargetFrameworks>net10.0-windows;net10.0-macos</TargetFrameworks>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <Product>Helix Explorer</Product>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\..\assets\helix-explorer-icon.ico</ApplicationIcon>
+    <OutputType>WinExe</OutputType>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-macos'">
+    <ApplicationIcon>..\..\assets\helix-explorer-icon.png</ApplicationIcon>
+    <OutputType>Exe</OutputType>
+    <BuiltInComInteropSupport>false</BuiltInComInteropSupport>
+    <SupportedOSPlatformVersion>10.15</SupportedOSPlatformVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -28,7 +38,14 @@
 
   <ItemGroup>
     <ProjectReference Include="..\HelixExplorer.Core\HelixExplorer.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
     <ProjectReference Include="..\HelixExplorer.Windows\HelixExplorer.Windows.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-macos'">
+    <ProjectReference Include="..\HelixExplorer.macOS\HelixExplorer.macOS.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,20 +1,34 @@
 # AGENTS.md
 
-Instructions for coding agents working in **Helix Explorer** — a Windows file manager (Avalonia + .NET 10). Prefer this file over inventing project conventions. Humans should still use `README.md` and `CONTRIBUTING.md`.
+Instructions for coding agents working in **Helix Explorer** — a cross-platform file manager (Avalonia + .NET 10). Prefer this file over inventing project conventions. Humans should still use `README.md` and `CONTRIBUTING.md`.
 
 **Speed and performance are the priority.** Prefer efficient enumeration, allocation-conscious code, and UI that stays responsive under large folders and heavy file ops. Do not trade away responsiveness for convenience abstractions.
 
 ## Setup and commands
 
+### Windows (primary)
+
 Requires Windows 10/11 and the .NET 10 SDK.
 
 ```powershell
-dotnet restore HelixExplorer.sln
-dotnet build HelixExplorer.sln -c Release
-dotnet test HelixExplorer.sln -c Release
+dotnet restore HelixExplorer.slnx
+dotnet build HelixExplorer.slnx -c Release
+dotnet test HelixExplorer.slnx -c Release
 dotnet run --project src/HelixExplorer
 dotnet run --project src/HelixExplorer -- --path "C:\Users"
 ```
+
+### macOS
+
+Requires macOS 10.15+, Xcode (full install from App Store), and the .NET 10 SDK with macOS workload:
+
+```bash
+sudo dotnet workload install macos
+dotnet build src/HelixExplorer/HelixExplorer.csproj -c Release -f net10.0-macos -p:EnableWindowsTargeting=true
+dotnet run --project src/HelixExplorer -f net10.0-macos
+```
+
+Build the solution only on Windows. On macOS, build the entry project directly (the solution includes Windows-only and test projects that don't target macOS).
 
 Release installer publish (matches CI):
 
@@ -30,12 +44,14 @@ Bump product version only in `Directory.Build.props` (release workflow reads it 
 |---------|------|
 | `src/HelixExplorer.Core` | Domain, models, interfaces, settings/session, archives, git CLI, logging — **no** Avalonia/WinForms/COM |
 | `src/HelixExplorer.Windows` | `Win*` implementations of Core contracts; shell/FS/COM |
+| `src/HelixExplorer.macOS` | `Mac*` implementations of Core contracts; AppKit/Foundation |
 | `src/HelixExplorer` | Avalonia UI, ViewModels, UI adapters (`Avalonia*`), DI composition root |
 
-- Register Windows services via `AddHelixWindowsServices()`, then app services via `AddHelixApplicationServices()` (`HelixServiceRegistration`).
+- Register platform services via `AddHelixWindowsServices()` or `AddHelixMacServices()`, then app services via `AddHelixApplicationServices()` (`HelixServiceRegistration`).
+- The composition root picks the platform at build time via `#if MACOS` / `#if WINDOWS`; the UI project multi-targets `net10.0-windows;net10.0-macos`.
 - Do **not** fork DI registration for tests — exercise the real composition root.
 - **Per-window scopes:** `WindowHostService` creates one `IServiceScope` per window. Scoped VMs (`MainWindowViewModel`, `HomePageViewModel`, …) are window-local. On window close, use the **captured** VM instance; never re-resolve `MainWindowViewModel` from the scope.
-- Prefer Core `I*` interfaces from UI/ViewModels; put Win32/shell details in `HelixExplorer.Windows`.
+- Prefer Core `I*` interfaces from UI/ViewModels; put platform-specific details in `HelixExplorer.Windows` or `HelixExplorer.macOS`.
 
 ## Coding conventions
 

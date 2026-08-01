@@ -8,5 +8,6 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Copyright>Copyright © 2026 Winner-Timothy Bolorunduro</Copyright>
     <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
+    <EnableWindowsTargeting Condition="$([MSBuild]::IsOSPlatform('OSX'))">true</EnableWindowsTargeting>
   </PropertyGroup>
 </Project>

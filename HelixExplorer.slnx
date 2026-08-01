@@ -8,6 +8,7 @@
     <Project Path="src/HelixExplorer.Core/HelixExplorer.Core.csproj" />
     <Project Path="src/HelixExplorer.Windows/HelixExplorer.Windows.csproj" />
     <Project Path="src/HelixExplorer/HelixExplorer.csproj" />
+    <Project Path="src/HelixExplorer.macOS/HelixExplorer.macOS.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/HelixExplorer.Core.Tests/HelixExplorer.Core.Tests.csproj" />

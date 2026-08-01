@@ -22,8 +22,6 @@ public static class WindowsServiceExtensions
         services.AddSingleton<ITerminalLauncher, WinTerminalLauncher>();
         services.AddSingleton<IExternalFileDragService, WinFormsExternalFileDragService>();
         services.AddSingleton<IFileVisualProvider, Shell.WinFileVisualProvider>();
-        services.AddTransient<IFileChangeWatcher, FileSystem.FileChangeWatcherService>();
-        services.AddScoped<Func<IFileChangeWatcher>>(sp => () => sp.GetRequiredService<IFileChangeWatcher>());
         return services;
     }
 }

@@ -1,0 +1,16 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/src/">
+    <Project Path="src/HelixExplorer.Core/HelixExplorer.Core.csproj" />
+    <Project Path="src/HelixExplorer.Windows/HelixExplorer.Windows.csproj" />
+    <Project Path="src/HelixExplorer/HelixExplorer.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/HelixExplorer.Core.Tests/HelixExplorer.Core.Tests.csproj" />
+    <Project Path="tests/HelixExplorer.ViewModels.Tests/HelixExplorer.ViewModels.Tests.csproj" />
+  </Folder>
+</Solution>

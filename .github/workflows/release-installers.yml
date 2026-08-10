@@ -46,7 +46,7 @@ jobs:
 
       - name: Restore dependencies
         if: steps.check.outputs.skip != 'true'
-        run: dotnet restore HelixExplorer.sln
+        run: dotnet restore HelixExplorer.slnx
 
       - name: Publish application
         if: steps.check.outputs.skip != 'true'

@@ -107,7 +107,7 @@ public class SessionStoreTests
                 {
                     new TabSnapshot
                     {
-                        LeftPane = new PaneSnapshot { Path = @"C:\Users", ViewMode = LayoutMode.List, ThumbnailSize = 96 }
+                        LeftPane = new PaneSnapshot { Path = @"C:\Users", ViewMode = LayoutMode.List, ThumbnailSize = 96, GroupBy = GroupByMode.Type }
                     },
                     new TabSnapshot
                     {
@@ -132,6 +132,9 @@ public class SessionStoreTests
             first.LeftPane.Path.Must().Be(@"C:\Users");
             first.LeftPane.ViewMode.Must().Be(LayoutMode.List);
             first.LeftPane.ThumbnailSize.Must().Be(96);
+            first.LeftPane.GroupBy.Must().Be(GroupByMode.Type);
+            // Panes that never opted into grouping must come back ungrouped.
+            loaded.Tabs[1].LeftPane.GroupBy.Must().Be(GroupByMode.None);
             first.IsDualPane.Must().BeFalse();
             first.RightPane.Must().BeNull();
 

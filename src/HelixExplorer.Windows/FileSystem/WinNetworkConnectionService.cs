@@ -78,35 +78,60 @@ public sealed class WinNetworkConnectionService(ILogger<WinNetworkConnectionServ
                 RemoteName = remoteName
             };
 
-            var connectResult = WNetAddConnection2(
-                resource,
-                password.ToString(),
-                username.Length > 0 ? username.ToString() : null,
-                ConnectInteractive | ConnectPrompt);
-
-            if (connectResult is 0 or ErrorAlreadyAssigned)
+            // Copy the password into an unmanaged buffer instead of forming a managed
+            // string via StringBuilder.ToString(); the latter produces an immutable copy
+            // that cannot be zeroed and lingers on the GC heap.
+            var passwordBuffer = new char[password.Length];
+            password.CopyTo(0, passwordBuffer, 0, password.Length);
+            var passwordPtr = Marshal.AllocCoTaskMem((passwordBuffer.Length + 1) * sizeof(short));
+            try
             {
-                CredUIConfirmCredentials(remoteName, true);
-                logger.LogInformation("Connected to '{Remote}'", remoteName);
-                return true;
-            }
+                for (var i = 0; i < passwordBuffer.Length; i++)
+                    Marshal.WriteInt16(passwordPtr, i * sizeof(short), (short)passwordBuffer[i]);
+                Marshal.WriteInt16(passwordPtr, passwordBuffer.Length * sizeof(short), 0);
 
-            if (connectResult == ErrorSessionCredentialConflict)
-            {
-                // Existing conflicting session — still try browsing; caller may succeed.
-                logger.LogDebug("Credential conflict for '{Remote}' ({Error})", remoteName, connectResult);
+                var connectResult = WNetAddConnection2(
+                    resource,
+                    passwordPtr,
+                    username.Length > 0 ? username.ToString() : null,
+                    ConnectInteractive | ConnectPrompt);
+
+                if (connectResult is 0 or ErrorAlreadyAssigned)
+                {
+                    CredUIConfirmCredentials(remoteName, true);
+                    logger.LogInformation("Connected to '{Remote}'", remoteName);
+                    return true;
+                }
+
+                if (connectResult == ErrorSessionCredentialConflict)
+                {
+                    // Existing conflicting session — still try browsing; caller may succeed.
+                    logger.LogDebug("Credential conflict for '{Remote}' ({Error})", remoteName, connectResult);
+                    CredUIConfirmCredentials(remoteName, false);
+                    return false;
+                }
+
                 CredUIConfirmCredentials(remoteName, false);
+                logger.LogWarning("WNetAddConnection2 failed ({Error}) for '{Remote}'", connectResult, remoteName);
                 return false;
             }
-
-            CredUIConfirmCredentials(remoteName, false);
-            logger.LogWarning("WNetAddConnection2 failed ({Error}) for '{Remote}'", connectResult, remoteName);
-            return false;
+            finally
+            {
+                Array.Clear(passwordBuffer);
+                ZeroCoTaskMemBuffer(passwordPtr, passwordBuffer.Length);
+                Marshal.FreeCoTaskMem(passwordPtr);
+            }
         }
         finally
         {
             password.Clear();
         }
+    }
+
+    private static void ZeroCoTaskMemBuffer(IntPtr ptr, int charCount)
+    {
+        for (var i = 0; i < charCount; i++)
+            Marshal.WriteInt16(ptr, i * sizeof(short), 0);
     }
 
     private static string? ResolveConnectTarget(string uncPath)
@@ -142,7 +167,7 @@ public sealed class WinNetworkConnectionService(ILogger<WinNetworkConnectionServ
     private static extern void CredUIConfirmCredentials(string pszTargetName, bool bConfirm);
 
     [DllImport("mpr.dll", CharSet = CharSet.Unicode)]
-    private static extern int WNetAddConnection2(NetResource lpNetResource, string? lpPassword, string? lpUsername, int dwFlags);
+    private static extern int WNetAddConnection2(NetResource lpNetResource, IntPtr lpPassword, string? lpUsername, int dwFlags);
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct CredUiInfo

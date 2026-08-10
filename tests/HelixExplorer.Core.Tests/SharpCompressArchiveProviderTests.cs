@@ -62,6 +62,34 @@ public class SharpCompressArchiveProviderTests
         }
     }
 
+    [Theory]
+    [InlineData("../escape.txt")]
+    [InlineData("../../outside/file.txt")]
+    [InlineData("sub/../../escape.txt")]
+    public async Task ExtractEntryAsync_TraversalInRequestedPath_StaysInsideTempDir(string maliciousInner)
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var archivePath = Path.Combine(root, "traversal.zip");
+            var entryKey = maliciousInner.Replace('\\', '/');
+            CreateZip(archivePath, (entryKey, "payload"));
+
+            var provider = CreateProvider();
+            var result = await provider.ExtractEntryAsync(ArchivePath.Combine(archivePath, entryKey));
+
+            result.Must().NotBeNull();
+            var tempRoot = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "HelixExplorer"));
+            result!.Must().StartWith(tempRoot);
+            File.Exists(result!).Must().BeTrue();
+            (await File.ReadAllTextAsync(result!)).Must().Be("payload");
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
     private static SharpCompressArchiveProvider CreateProvider()
         => new(NullLogger<SharpCompressArchiveProvider>.Instance);
 

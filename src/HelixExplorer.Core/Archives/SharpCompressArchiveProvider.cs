@@ -89,6 +89,15 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
                     // folders (e.g. one/readme.txt vs two/readme.txt) do not clobber each other.
                     var dest = Path.Combine(tempDir, MakeUniqueTempFileName(wanted));
 
+                    // Defense in depth: MakeUniqueTempFileName uses Path.GetFileName, so the
+                    // basename is always safe, but mirror the ExtractEntryToDestination bound
+                    // check so any future refactor that changes that pattern still rejects
+                    // entries that escape the per-archive temp directory.
+                    var fullDest = Path.GetFullPath(dest);
+                    var fullBase = Path.GetFullPath(tempDir).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                    if (!fullDest.StartsWith(fullBase, StringComparison.OrdinalIgnoreCase))
+                        return null;
+
                     await using var src = await entry.OpenEntryStreamAsync(token).ConfigureAwait(false);
                     await using var fs = File.Create(dest);
                     await src.CopyToAsync(fs, token).ConfigureAwait(false);

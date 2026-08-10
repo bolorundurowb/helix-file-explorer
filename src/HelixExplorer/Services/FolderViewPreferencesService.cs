@@ -77,7 +77,9 @@ public sealed class FolderViewPreferencesService : IFolderViewPreferencesService
         SortColumn = source.SortColumn,
         SortDescending = source.SortDescending,
         DirectorySort = source.DirectorySort,
-        ThumbnailSize = source.ThumbnailSize
+        ThumbnailSize = source.ThumbnailSize,
+        GroupBy = source.GroupBy,
+        CollapsedGroupKeys = [.. source.CollapsedGroupKeys]
     };
 
     private static string? Normalize(string path)

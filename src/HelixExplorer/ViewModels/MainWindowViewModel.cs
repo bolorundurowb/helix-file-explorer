@@ -983,8 +983,19 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     public bool IsFilesFirst => ActivePane?.IsFilesFirst == true;
     public bool IsMixedFolderSort => ActivePane?.IsMixedFolderSort == true;
 
+    public bool IsGroupByNone => ActivePane?.IsGroupByNone != false;
+    public bool IsGroupByName => ActivePane?.IsGroupByName == true;
+    public bool IsGroupByDate => ActivePane?.IsGroupByDate == true;
+    public bool IsGroupByType => ActivePane?.IsGroupByType == true;
+    public bool IsGroupBySize => ActivePane?.IsGroupBySize == true;
+
     private void NotifySortChrome()
     {
+        OnPropertyChanged(nameof(IsGroupByNone));
+        OnPropertyChanged(nameof(IsGroupByName));
+        OnPropertyChanged(nameof(IsGroupByDate));
+        OnPropertyChanged(nameof(IsGroupByType));
+        OnPropertyChanged(nameof(IsGroupBySize));
         OnPropertyChanged(nameof(IsSortByName));
         OnPropertyChanged(nameof(IsSortByDate));
         OnPropertyChanged(nameof(IsSortByType));
@@ -1020,6 +1031,10 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void SetDirectorySort(DirectorySortMode mode)
         => ActivePane?.SetDirectorySortCommand.Execute(mode);
+
+    [RelayCommand]
+    private void SetGroupBy(GroupByMode mode)
+        => ActivePane?.SetGroupByCommand.Execute(mode);
 
     private void RefreshHomeDashboard()
     {

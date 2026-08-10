@@ -645,6 +645,41 @@
                             </MenuFlyout>
                         </Button.Flyout>
                     </Button>
+                    <Button ToolTip.Tip="Group"
+                            IsVisible="{Binding IsGridViewActive}"
+                            Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">
+                        <PathIcon Data="{DynamicResource HelixIconGroupGeometry}" Width="14" Height="14" />
+                        <Button.Flyout>
+                            <MenuFlyout>
+                                <MenuItem Header="None"
+                                          ToggleType="Radio"
+                                          IsChecked="{Binding IsGroupByNone}"
+                                          Command="{Binding SetGroupByCommand}"
+                                          CommandParameter="{x:Static models:GroupByMode.None}" />
+                                <Separator />
+                                <MenuItem Header="Name"
+                                          ToggleType="Radio"
+                                          IsChecked="{Binding IsGroupByName}"
+                                          Command="{Binding SetGroupByCommand}"
+                                          CommandParameter="{x:Static models:GroupByMode.Name}" />
+                                <MenuItem Header="Date modified"
+                                          ToggleType="Radio"
+                                          IsChecked="{Binding IsGroupByDate}"
+                                          Command="{Binding SetGroupByCommand}"
+                                          CommandParameter="{x:Static models:GroupByMode.Modified}" />
+                                <MenuItem Header="Type"
+                                          ToggleType="Radio"
+                                          IsChecked="{Binding IsGroupByType}"
+                                          Command="{Binding SetGroupByCommand}"
+                                          CommandParameter="{x:Static models:GroupByMode.Type}" />
+                                <MenuItem Header="Size"
+                                          ToggleType="Radio"
+                                          IsChecked="{Binding IsGroupBySize}"
+                                          Command="{Binding SetGroupByCommand}"
+                                          CommandParameter="{x:Static models:GroupByMode.Size}" />
+                            </MenuFlyout>
+                        </Button.Flyout>
+                    </Button>
                     <Button ToolTip.Tip="Copy path (Ctrl+Shift+C)"
                             Command="{Binding CopyPathCommand}"
                             Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">

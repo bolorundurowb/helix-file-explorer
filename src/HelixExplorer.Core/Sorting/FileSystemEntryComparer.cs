@@ -1,9 +1,26 @@
+using HelixExplorer.Core.Grouping;
 using HelixExplorer.Core.Models;
 
 namespace HelixExplorer.Core.Sorting;
 
 public static class FileSystemEntryComparer
 {
+    /// <summary>
+    /// Dual-level ordering used whenever Group By is active: bucket order first, then the pane's
+    /// normal sort inside each bucket. Applying it for every layout (not just Grid) keeps items from
+    /// reshuffling when the user toggles between Grid and the flat views.
+    /// </summary>
+    public static IComparer<FileSystemEntry> ForGrouped(
+        GroupByMode groupBy,
+        DateTime utcNow,
+        SortColumn column,
+        bool descending,
+        DirectorySortMode directorySort = DirectorySortMode.FoldersFirst)
+    {
+        var inner = For(column, descending, directorySort);
+        return groupBy == GroupByMode.None ? inner : new GroupedBucketComparer(groupBy, utcNow, inner);
+    }
+
     /// <summary>
     /// Directory sort mode defaults to <see cref="DirectorySortMode.FoldersFirst"/> to preserve
     /// historical behavior for callers that have not been updated yet.
@@ -64,6 +81,42 @@ public static class FileSystemEntryComparer
             return cmp;
 
         return StringComparer.OrdinalIgnoreCase.Compare(x.Name, y.Name);
+    }
+
+    /// <summary>
+    /// Type grouping is the only mode whose bucket depends on a string, so its buckets are cached per
+    /// extension. Without the cache a sort would rebuild the same label O(n log n) times.
+    /// </summary>
+    private sealed class GroupedBucketComparer(
+        GroupByMode groupBy,
+        DateTime utcNow,
+        IComparer<FileSystemEntry> inner) : IComparer<FileSystemEntry>
+    {
+        private readonly Dictionary<string, FileGroupBucket> _typeBuckets =
+            groupBy == GroupByMode.Type ? new Dictionary<string, FileGroupBucket>(StringComparer.OrdinalIgnoreCase) : null!;
+
+        public int Compare(FileSystemEntry x, FileSystemEntry y)
+        {
+            var cmp = FileGrouping.CompareBuckets(Resolve(in x), Resolve(in y));
+            return cmp != 0 ? cmp : inner.Compare(x, y);
+        }
+
+        private FileGroupBucket Resolve(in FileSystemEntry entry)
+        {
+            if (groupBy != GroupByMode.Type)
+                return FileGrouping.GetBucket(in entry, groupBy, utcNow);
+
+            if (entry.IsDirectory)
+                return FileGrouping.TypeFolders;
+
+            var extension = string.IsNullOrEmpty(entry.Extension) ? string.Empty : entry.Extension;
+            if (_typeBuckets.TryGetValue(extension, out var cached))
+                return cached;
+
+            var bucket = FileGrouping.GetTypeBucket(in entry);
+            _typeBuckets[extension] = bucket;
+            return bucket;
+        }
     }
 
     private sealed class GroupedComparer(SortColumn column, bool descending, bool filesFirst)

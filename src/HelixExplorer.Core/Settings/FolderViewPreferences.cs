@@ -16,4 +16,13 @@ public sealed class FolderViewPreferences
     public DirectorySortMode DirectorySort { get; set; } = DirectorySortMode.MixedWithFiles;
 
     public double ThumbnailSize { get; set; } = 72;
+
+    /// <summary>Grid-only grouping. Other layouts ignore this and stay flat.</summary>
+    public GroupByMode GroupBy { get; set; } = GroupByMode.None;
+
+    /// <summary>
+    /// Stable <see cref="FileGroupBucket.Key"/> values the user has collapsed. Kept per folder rather
+    /// than per session so a collapsed group is still collapsed when the path is revisited.
+    /// </summary>
+    public List<string> CollapsedGroupKeys { get; set; } = [];
 }

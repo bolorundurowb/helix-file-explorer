@@ -68,6 +68,15 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     private bool _suppressFolderPrefPersist;
     private CancellationTokenSource? _folderPrefPersistCts;
 
+    private readonly HashSet<string> _collapsedGroupKeys = new(StringComparer.Ordinal);
+    private readonly GridGroupPresenter _gridPresenter = new();
+
+    /// <summary>
+    /// Instant the current listing was bucketed against. Reused when rebuilding <see cref="GridItems"/>
+    /// so headers cannot disagree with the sort about where "today" ends.
+    /// </summary>
+    private DateTime _groupingUtcNow = DateTime.UtcNow;
+
     public PaneViewModel(
         IFileSystemProvider fileSystem,
         IArchiveProvider archive,
@@ -240,7 +249,19 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     [NotifyCanExecuteChangedFor(nameof(GoUpCommand))]
     private bool _canGoUp;
 
+    /// <summary>
+    /// Flat, filtered, sorted source of truth. File operations, selection, and the non-grid layouts
+    /// always read this — never <see cref="GridItems"/>.
+    /// </summary>
     public ObservableCollection<EntryItemViewModel> Entries { get; } = new();
+
+    /// <summary>
+    /// Presentation projection consumed by Grid view only: the same
+    /// <see cref="EntryItemViewModel"/> instances as <see cref="Entries"/>, interleaved with
+    /// <see cref="GroupHeaderViewModel"/> bands when grouping is on. Left empty for other layouts so
+    /// large listings do not pay for a mirror nobody renders.
+    /// </summary>
+    public ObservableCollection<object> GridItems { get; } = new();
 
     public ObservableCollection<EntryItemViewModel> SelectedEntries => _selection.SelectedEntries;
 
@@ -313,6 +334,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         _directoryEntries = Array.Empty<FileSystemEntry>();
         _allEntries = Array.Empty<FileSystemEntry>();
         Entries.Clear();
+        GridItems.Clear();
+        _gridPresenter.Reset();
         SelectedEntries.Clear();
         SelectedEntry = null;
         SelectedCount = 0;
@@ -403,6 +426,68 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     [RelayCommand]
     private void SetDirectorySort(DirectorySortMode mode) => DirectorySort = mode;
 
+    [ObservableProperty] private GroupByMode _groupBy = GroupByMode.None;
+
+    public bool IsGroupByNone => GroupBy == GroupByMode.None;
+    public bool IsGroupByName => GroupBy == GroupByMode.Name;
+    public bool IsGroupByDate => GroupBy == GroupByMode.Modified;
+    public bool IsGroupByType => GroupBy == GroupByMode.Type;
+    public bool IsGroupBySize => GroupBy == GroupByMode.Size;
+
+    /// <summary>Grouping is a Grid-only feature; menus bind to this to stay hidden elsewhere.</summary>
+    public bool IsGroupingActive => IsGridView && GroupBy != GroupByMode.None;
+
+    partial void OnGroupByChanged(GroupByMode value)
+    {
+        NotifyGroupOptionProperties();
+
+        // Bucket order is the primary sort key, so a mode change reorders the flat listing too.
+        ApplySortAndPublish();
+        SortChanged?.Invoke(this, EventArgs.Empty);
+        SchedulePersistFolderViewPreferences();
+    }
+
+    [RelayCommand]
+    private void SetGroupBy(GroupByMode mode) => GroupBy = mode;
+
+    [RelayCommand]
+    private void ToggleGroupCollapsed(string? key)
+    {
+        if (string.IsNullOrEmpty(key))
+            return;
+
+        if (!_collapsedGroupKeys.Remove(key))
+            _collapsedGroupKeys.Add(key);
+
+        RebuildGridItems();
+        SchedulePersistFolderViewPreferences();
+    }
+
+    private void NotifyGroupOptionProperties()
+    {
+        OnPropertyChanged(nameof(IsGroupByNone));
+        OnPropertyChanged(nameof(IsGroupByName));
+        OnPropertyChanged(nameof(IsGroupByDate));
+        OnPropertyChanged(nameof(IsGroupByType));
+        OnPropertyChanged(nameof(IsGroupBySize));
+        OnPropertyChanged(nameof(IsGroupingActive));
+    }
+
+    private void RebuildGridItems()
+    {
+        if (!IsGridView)
+        {
+            // Nothing renders GridItems outside Grid view; drop the references so they can be collected.
+            if (GridItems.Count > 0)
+                GridItems.Clear();
+            return;
+        }
+
+        ObservableCollectionDiff.Apply(
+            GridItems,
+            _gridPresenter.Build(Entries, GroupBy, _groupingUtcNow, _collapsedGroupKeys));
+    }
+
     private void NotifySortOptionProperties()
     {
         OnPropertyChanged(nameof(IsSortByName));
@@ -482,6 +567,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         else
             RequestEntryVisuals();
 
+        RebuildGridItems();
+        NotifyGroupOptionProperties();
         LayoutChanged?.Invoke(this, EventArgs.Empty);
         SchedulePersistFolderViewPreferences();
     }
@@ -501,6 +588,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
                 SortDescending = prefs.SortDescending;
                 DirectorySort = prefs.DirectorySort;
                 ThumbnailSize = Math.Clamp(prefs.ThumbnailSize, MinThumbnailSize, MaxThumbnailSize);
+                ApplyGroupingPreferences(prefs.GroupBy, prefs.CollapsedGroupKeys);
                 return;
             }
 
@@ -510,11 +598,31 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
             SortDescending = false;
             DirectorySort = settings.DirectorySort;
             ThumbnailSize = Math.Clamp(settings.DefaultThumbnailSize, MinThumbnailSize, MaxThumbnailSize);
+            ApplyGroupingPreferences(GroupByMode.None, null);
         }
         finally
         {
             _suppressFolderPrefPersist = false;
         }
+    }
+
+    private void ApplyGroupingPreferences(GroupByMode mode, IReadOnlyList<string>? collapsedKeys)
+    {
+        _collapsedGroupKeys.Clear();
+        if (collapsedKeys is not null)
+        {
+            foreach (var key in collapsedKeys)
+            {
+                if (!string.IsNullOrEmpty(key))
+                    _collapsedGroupKeys.Add(key);
+            }
+        }
+
+        _gridPresenter.Reset();
+        GroupBy = mode;
+
+        // Assigning the same mode does not raise OnGroupByChanged, so mirror its notifications here.
+        NotifyGroupOptionProperties();
     }
 
     private void SchedulePersistFolderViewPreferences()
@@ -549,7 +657,9 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
                 SortColumn = SortColumn,
                 SortDescending = SortDescending,
                 DirectorySort = DirectorySort,
-                ThumbnailSize = ThumbnailSize
+                ThumbnailSize = ThumbnailSize,
+                GroupBy = GroupBy,
+                CollapsedGroupKeys = [.. _collapsedGroupKeys]
             });
         }
         catch (OperationCanceledException)
@@ -777,7 +887,9 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
             FilterText = FilterText,
             SortColumn = SortColumn,
             SortDescending = SortDescending,
-            DirectorySort = DirectorySort
+            DirectorySort = DirectorySort,
+            GroupBy = GroupBy,
+            GroupingUtcNow = DateTime.UtcNow
         });
 
     ListingPublishResult IPaneRefreshHost.ApplySortAndPublish(ListingPublishRequest request)
@@ -800,10 +912,12 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
 
         var result = _listing.ApplySortAndPublish(request);
 
+        _groupingUtcNow = request.GroupingUtcNow;
         TotalCount = result.TotalCount;
         ListingSizeBytes = result.ListingSizeBytes;
         ClearRenameState();
         SyncEntriesCollection(result.Entries);
+        RebuildGridItems();
         RefreshCutState();
         ItemCount = result.ItemCount;
         RestoreSelection(result.Entries, previouslySelected, previousSelectedEntryPath);
@@ -1781,7 +1895,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         SortColumn = SortColumn,
         SortDescending = SortDescending,
         DirectorySort = DirectorySort,
-        ThumbnailSize = ThumbnailSize
+        ThumbnailSize = ThumbnailSize,
+        GroupBy = GroupBy
     };
 
     public void RestoreFrom(PaneSnapshot snapshot)
@@ -1791,6 +1906,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         SortDescending = snapshot.SortDescending;
         DirectorySort = snapshot.DirectorySort;
         ThumbnailSize = Math.Clamp(snapshot.ThumbnailSize, MinThumbnailSize, MaxThumbnailSize);
+        GroupBy = snapshot.GroupBy;
 
         if (!string.IsNullOrWhiteSpace(snapshot.Path))
             NavigateTo(snapshot.Path);
@@ -1828,6 +1944,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     bool IPaneRefreshHost.SortDescending => SortDescending;
 
     DirectorySortMode IPaneRefreshHost.DirectorySort => DirectorySort;
+
+    GroupByMode IPaneRefreshHost.GroupBy => GroupBy;
 
     bool IPaneRefreshHost.IsGridView => IsGridView;
 

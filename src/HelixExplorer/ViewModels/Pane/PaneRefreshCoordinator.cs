@@ -28,6 +28,7 @@ public interface IPaneRefreshHost
     SortColumn SortColumn { get; }
     bool SortDescending { get; }
     DirectorySortMode DirectorySort { get; }
+    GroupByMode GroupBy { get; }
     bool IsGridView { get; }
     double ThumbnailSize { get; }
     LayoutMode ViewMode { get; }
@@ -158,7 +159,9 @@ public sealed class PaneRefreshCoordinator(
                     FilterText = host.FilterText,
                     SortColumn = host.SortColumn,
                     SortDescending = host.SortDescending,
-                    DirectorySort = host.DirectorySort
+                    DirectorySort = host.DirectorySort,
+                    GroupBy = host.GroupBy,
+                    GroupingUtcNow = DateTime.UtcNow
                 });
 
                 if (!string.IsNullOrEmpty(errorMessage))

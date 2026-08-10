@@ -22,12 +22,21 @@ public sealed class VirtualizingFileGrid : TemplatedControl
     public static readonly StyledProperty<IDataTemplate?> ItemTemplateProperty =
         AvaloniaProperty.Register<VirtualizingFileGrid, IDataTemplate?>(nameof(ItemTemplate));
 
+    /// <summary>
+    /// Template for <see cref="GroupHeaderViewModel"/> bands. Header rows are laid out full width
+    /// instead of being packed into the uniform tile columns.
+    /// </summary>
+    public static readonly StyledProperty<IDataTemplate?> HeaderTemplateProperty =
+        AvaloniaProperty.Register<VirtualizingFileGrid, IDataTemplate?>(nameof(HeaderTemplate));
+
     private ListBox? _rows;
     private INotifyCollectionChanged? _itemsSubscription;
     private bool _rebuildScheduled;
     private int _lastColumnCount = -1;
     private int _lastItemCount;
     private string _lastItemsPathsKey = string.Empty;
+    private List<object> _lastItems = [];
+    private List<GridRow> _lastRows = [];
 
     static VirtualizingFileGrid()
     {
@@ -38,6 +47,10 @@ public sealed class VirtualizingFileGrid : TemplatedControl
         });
         ItemSizeProperty.Changed.AddClassHandler<VirtualizingFileGrid>((g, _) => g.ScheduleRebuildRows());
         ItemTemplateProperty.Changed.AddClassHandler<VirtualizingFileGrid>((g, _) =>
+        {
+            g.ApplyRowTemplate();
+        });
+        HeaderTemplateProperty.Changed.AddClassHandler<VirtualizingFileGrid>((g, _) =>
         {
             g.ApplyRowTemplate();
         });
@@ -59,6 +72,12 @@ public sealed class VirtualizingFileGrid : TemplatedControl
     {
         get => GetValue(ItemTemplateProperty);
         set => SetValue(ItemTemplateProperty, value);
+    }
+
+    public IDataTemplate? HeaderTemplate
+    {
+        get => GetValue(HeaderTemplateProperty);
+        set => SetValue(HeaderTemplateProperty, value);
     }
 
     protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
@@ -142,7 +161,12 @@ public sealed class VirtualizingFileGrid : TemplatedControl
 
         _rows.ItemTemplate = new FuncDataTemplate<GridRow>((row, _) =>
         {
+            // One container serves both row kinds: a header band swaps in the (stretched) header
+            // content, a tile row swaps in the horizontal stack. Swapping inside a single container
+            // keeps ListBox recycling working across mixed rows.
+            var host = new Panel { HorizontalAlignment = HorizontalAlignment.Stretch };
             var stack = new StackPanel { Orientation = Orientation.Horizontal };
+            Control? headerContent = null;
 
             void UpdateStackChildren(StackPanel s, GridRow? gridRow)
             {
@@ -195,32 +219,66 @@ public sealed class VirtualizingFileGrid : TemplatedControl
                 }
             }
 
-            stack.DataContextChanged += (sender, e) =>
+            void UpdateHost(GridRow? gridRow)
             {
-                if (sender is StackPanel s)
+                if (gridRow?.Header is { } header)
                 {
-                    UpdateStackChildren(s, s.DataContext as GridRow);
-                }
-            };
-
-            stack.DetachedFromVisualTree += (sender, e) =>
-            {
-                if (sender is StackPanel s)
-                {
-                    foreach (var child in s.Children)
+                    UpdateStackChildren(stack, null);
+                    headerContent ??= HeaderTemplate?.Build(header);
+                    if (headerContent is null)
                     {
-                        if (child is Control c)
-                        {
-                            c.DataContext = null;
-                        }
+                        host.Children.Clear();
+                        return;
                     }
-                    s.Children.Clear();
+
+                    headerContent.DataContext = header;
+                    headerContent.HorizontalAlignment = HorizontalAlignment.Stretch;
+                    if (!ReferenceEquals(host.Children.FirstOrDefault(), headerContent))
+                    {
+                        host.Children.Clear();
+                        host.Children.Add(headerContent);
+                    }
+
+                    return;
+                }
+
+                if (headerContent is not null)
+                    headerContent.DataContext = null;
+
+                UpdateStackChildren(stack, gridRow);
+                if (!ReferenceEquals(host.Children.FirstOrDefault(), stack))
+                {
+                    host.Children.Clear();
+                    host.Children.Add(stack);
+                }
+            }
+
+            host.DataContextChanged += (sender, e) =>
+            {
+                if (sender is Panel p)
+                {
+                    UpdateHost(p.DataContext as GridRow);
                 }
             };
 
-            UpdateStackChildren(stack, row);
+            host.DetachedFromVisualTree += (sender, e) =>
+            {
+                if (headerContent is not null)
+                    headerContent.DataContext = null;
 
-            return stack;
+                foreach (var child in stack.Children)
+                {
+                    if (child is Control c)
+                    {
+                        c.DataContext = null;
+                    }
+                }
+                stack.Children.Clear();
+            };
+
+            UpdateHost(row);
+
+            return host;
         });
     }
 
@@ -237,6 +295,8 @@ public sealed class VirtualizingFileGrid : TemplatedControl
             _lastColumnCount = -1;
             _lastItemCount = 0;
             _lastItemsPathsKey = string.Empty;
+            _lastItems = [];
+            _lastRows = [];
             return;
         }
 
@@ -245,26 +305,14 @@ public sealed class VirtualizingFileGrid : TemplatedControl
             viewportWidth = 800;
 
         var columns = GetColumnCount(viewportWidth);
-        var rowCount = (items.Count + columns - 1) / columns;
-        if (columns == _lastColumnCount && items.Count == _lastItemCount)
-        {
-            var currentPathsKey = BuildItemsPathsKey(items);
-            if (currentPathsKey == _lastItemsPathsKey
-                && _rows.ItemsSource is IList<GridRow> existing
-                && existing.Count == rowCount)
-                return;
-        }
-
         var pathsKey = BuildItemsPathsKey(items);
+        if (columns == _lastColumnCount
+            && items.Count == _lastItemCount
+            && pathsKey == _lastItemsPathsKey
+            && _rows.ItemsSource is IList<GridRow>)
+            return;
 
-        var rows = new List<GridRow>(rowCount);
-        for (var i = 0; i < items.Count; i += columns)
-        {
-            var count = Math.Min(columns, items.Count - i);
-            // Slice view over the shared flat list instead of GetRange, which allocated and copied a
-            // new List<object> per row on every rebuild (once per resize / selection refresh).
-            rows.Add(new GridRow(items, i, count));
-        }
+        var rows = BuildRows(items, columns);
 
         _rows.ItemsSource = rows;
         // Rows are layout-only; never keep ListBox selection chrome after recycle/rebuild.
@@ -272,6 +320,42 @@ public sealed class VirtualizingFileGrid : TemplatedControl
         _lastColumnCount = columns;
         _lastItemCount = items.Count;
         _lastItemsPathsKey = pathsKey;
+        _lastItems = items;
+        _lastRows = rows;
+    }
+
+    /// <summary>
+    /// Packs a heterogeneous item list into rows: group headers get their own full-width band and
+    /// flush any partially filled tile row, entries pack into uniform columns.
+    /// </summary>
+    private static List<GridRow> BuildRows(List<object> items, int columns)
+    {
+        var rows = new List<GridRow>((items.Count + columns - 1) / columns);
+        var index = 0;
+        while (index < items.Count)
+        {
+            if (items[index] is GroupHeaderViewModel)
+            {
+                rows.Add(new GridRow(items, index, 1));
+                index++;
+                continue;
+            }
+
+            var runEnd = index;
+            while (runEnd < items.Count && items[runEnd] is not GroupHeaderViewModel)
+                runEnd++;
+
+            for (var start = index; start < runEnd; start += columns)
+            {
+                // Slice view over the shared flat list instead of GetRange, which allocated and copied a
+                // new List<object> per row on every rebuild (once per resize / selection refresh).
+                rows.Add(new GridRow(items, start, Math.Min(columns, runEnd - start)));
+            }
+
+            index = runEnd;
+        }
+
+        return rows;
     }
 
     private static string BuildItemsPathsKey(IReadOnlyList<object> items)
@@ -282,8 +366,12 @@ public sealed class VirtualizingFileGrid : TemplatedControl
         return string.Join('\n', items.Select(GetItemPathKey));
     }
 
-    private static string GetItemPathKey(object item)
-        => item is EntryItemViewModel entry ? entry.FullPath : item.GetHashCode().ToString();
+    private static string GetItemPathKey(object item) => item switch
+    {
+        EntryItemViewModel entry => entry.FullPath,
+        GroupHeaderViewModel header => " group:" + header.Key,
+        _ => item.GetHashCode().ToString()
+    };
 
     public int GetColumnCount(double viewportWidth)
     {
@@ -293,27 +381,78 @@ public sealed class VirtualizingFileGrid : TemplatedControl
         return Math.Max(1, (int)(viewportWidth / Math.Max(48, ItemSize + 12)));
     }
 
+    /// <summary>
+    /// Directional navigation over the presentation list. Indices address <see cref="ItemsSource"/>,
+    /// which may interleave <see cref="GroupHeaderViewModel"/> bands; those are never a landing spot.
+    /// Vertical moves use the packed row geometry so collapsed groups and short trailing rows behave.
+    /// </summary>
     public bool TryGetAdjacentIndex(int currentIndex, int itemCount, Avalonia.Input.Key direction, out int targetIndex)
     {
         targetIndex = currentIndex;
         if ((uint)currentIndex >= (uint)itemCount)
             return false;
 
-        var columns = GetColumnCount(Bounds.Width);
-        var candidate = direction switch
-        {
-            Avalonia.Input.Key.Left => currentIndex - 1,
-            Avalonia.Input.Key.Right => currentIndex + 1,
-            Avalonia.Input.Key.Up => currentIndex - columns,
-            Avalonia.Input.Key.Down => currentIndex + columns,
-            _ => currentIndex
-        };
+        // The cached layout only applies when it describes the list the caller is indexing into.
+        var items = _lastItems.Count == itemCount ? _lastItems : null;
 
-        if ((uint)candidate >= (uint)itemCount)
+        if (direction is Avalonia.Input.Key.Left or Avalonia.Input.Key.Right)
+        {
+            var step = direction == Avalonia.Input.Key.Left ? -1 : 1;
+            var candidate = currentIndex + step;
+            while ((uint)candidate < (uint)itemCount && items?[candidate] is GroupHeaderViewModel)
+                candidate += step;
+
+            if ((uint)candidate >= (uint)itemCount)
+                return false;
+
+            targetIndex = candidate;
+            return true;
+        }
+
+        if (direction is not (Avalonia.Input.Key.Up or Avalonia.Input.Key.Down))
             return false;
 
-        targetIndex = candidate;
-        return true;
+        if (items is null || _lastRows.Count == 0)
+        {
+            var columns = GetColumnCount(Bounds.Width);
+            var fallback = direction == Avalonia.Input.Key.Up ? currentIndex - columns : currentIndex + columns;
+            if ((uint)fallback >= (uint)itemCount)
+                return false;
+
+            targetIndex = fallback;
+            return true;
+        }
+
+        var rowIndex = FindRowIndex(currentIndex);
+        if (rowIndex < 0)
+            return false;
+
+        var column = currentIndex - _lastRows[rowIndex].Start;
+        var rowStep = direction == Avalonia.Input.Key.Up ? -1 : 1;
+
+        for (var next = rowIndex + rowStep; (uint)next < (uint)_lastRows.Count; next += rowStep)
+        {
+            var row = _lastRows[next];
+            if (row.Header is not null)
+                continue;
+
+            targetIndex = row.Start + Math.Min(column, row.Count - 1);
+            return true;
+        }
+
+        return false;
+    }
+
+    private int FindRowIndex(int itemIndex)
+    {
+        for (var i = 0; i < _lastRows.Count; i++)
+        {
+            var row = _lastRows[i];
+            if (itemIndex >= row.Start && itemIndex < row.Start + row.Count)
+                return i;
+        }
+
+        return -1;
     }
 
     /// <summary>
@@ -335,6 +474,10 @@ public sealed class VirtualizingFileGrid : TemplatedControl
         {
             // Row template root is a horizontal StackPanel whose children are the tile Borders.
             if (descendant is not StackPanel { Orientation: Orientation.Horizontal } row)
+                continue;
+
+            // Group header bands are not selectable surfaces; keep them out of marquee hit-testing.
+            if (row.DataContext is GroupHeaderViewModel)
                 continue;
 
             foreach (var child in row.Children)
@@ -393,6 +536,12 @@ public sealed class VirtualizingFileGrid : TemplatedControl
     private sealed class GridRow(IReadOnlyList<object> source, int start, int count) : IReadOnlyList<object>
     {
         public IReadOnlyList<object> Items => this;
+
+        public int Start => start;
+
+        /// <summary>Non-null for a full-width band row; such rows never contain tiles.</summary>
+        public GroupHeaderViewModel? Header =>
+            count == 1 ? source[start] as GroupHeaderViewModel : null;
 
         public int Count => count;
 

@@ -31,7 +31,12 @@ public sealed class PaneListingCoordinator
         var totalCount = _visibleBuffer.Count;
 
         FileNameFilter.Apply(_visibleBuffer, request.IsFilterVisible ? request.FilterText : null, _viewBuffer);
-        _viewBuffer.Sort(FileSystemEntryComparer.For(request.SortColumn, request.SortDescending, request.DirectorySort));
+        _viewBuffer.Sort(FileSystemEntryComparer.ForGrouped(
+            request.GroupBy,
+            request.GroupingUtcNow,
+            request.SortColumn,
+            request.SortDescending,
+            request.DirectorySort));
 
         long listingSizeBytes = 0;
         foreach (var entry in _viewBuffer)
@@ -95,6 +100,14 @@ public sealed class ListingPublishRequest
     public required bool SortDescending { get; init; }
 
     public DirectorySortMode DirectorySort { get; init; } = DirectorySortMode.FoldersFirst;
+
+    public GroupByMode GroupBy { get; init; } = GroupByMode.None;
+
+    /// <summary>
+    /// Instant used to resolve relative date buckets. Carried on the request so the sort and the
+    /// presentation rebuild that follows it agree on where "today" ends.
+    /// </summary>
+    public DateTime GroupingUtcNow { get; init; } = DateTime.UtcNow;
 }
 
 public readonly record struct ListingPublishResult(

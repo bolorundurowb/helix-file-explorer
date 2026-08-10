@@ -20,10 +20,10 @@ jobs:
           dotnet-version: "10.0.x"
 
       - name: Restore dependencies
-        run: dotnet restore HelixExplorer.sln
+        run: dotnet restore HelixExplorer.slnx
 
       - name: Build
-        run: dotnet build HelixExplorer.sln --no-restore -c Release
+        run: dotnet build HelixExplorer.slnx --no-restore -c Release
 
       - name: Run tests
-        run: dotnet test HelixExplorer.sln --no-build -c Release --verbosity normal
+        run: dotnet test HelixExplorer.slnx --no-build -c Release --verbosity normal

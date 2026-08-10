@@ -18,6 +18,9 @@
         <Style Selector="Border.fileTile:pointerover Border.tileHover">
             <Setter Property="IsVisible" Value="True" />
         </Style>
+        <Style Selector="Border.groupHeader:pointerover">
+            <Setter Property="Background" Value="{DynamicResource HelixHoverBrush}" />
+        </Style>
         <Style Selector="TextBox.gridRenameEditor">
             <Setter Property="ZIndex" Value="10" />
             <Setter Property="Background" Value="{DynamicResource HelixContentCardBrush}" />
@@ -210,6 +213,37 @@
                           Command="{Binding SetDirectorySortCommand}"
                           CommandParameter="{x:Static models:DirectorySortMode.MixedWithFiles}" />
             </MenuItem>
+            <MenuItem Header="Group by" IsVisible="{Binding IsGridView}">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconGroupGeometry}" />
+                </MenuItem.Icon>
+                <MenuItem Header="None"
+                          ToggleType="Radio"
+                          IsChecked="{Binding IsGroupByNone}"
+                          Command="{Binding SetGroupByCommand}"
+                          CommandParameter="{x:Static models:GroupByMode.None}" />
+                <Separator />
+                <MenuItem Header="Name"
+                          ToggleType="Radio"
+                          IsChecked="{Binding IsGroupByName}"
+                          Command="{Binding SetGroupByCommand}"
+                          CommandParameter="{x:Static models:GroupByMode.Name}" />
+                <MenuItem Header="Date modified"
+                          ToggleType="Radio"
+                          IsChecked="{Binding IsGroupByDate}"
+                          Command="{Binding SetGroupByCommand}"
+                          CommandParameter="{x:Static models:GroupByMode.Modified}" />
+                <MenuItem Header="Type"
+                          ToggleType="Radio"
+                          IsChecked="{Binding IsGroupByType}"
+                          Command="{Binding SetGroupByCommand}"
+                          CommandParameter="{x:Static models:GroupByMode.Type}" />
+                <MenuItem Header="Size"
+                          ToggleType="Radio"
+                          IsChecked="{Binding IsGroupBySize}"
+                          Command="{Binding SetGroupByCommand}"
+                          CommandParameter="{x:Static models:GroupByMode.Size}" />
+            </MenuItem>
             <Separator />
             <MenuItem Header="Restore" Command="{Binding RestoreFromRecycleBinCommand}">
                 <MenuItem.Icon>
@@ -383,6 +417,37 @@
                           IsChecked="{Binding IsMixedFolderSort}"
                           Command="{Binding SetDirectorySortCommand}"
                           CommandParameter="{x:Static models:DirectorySortMode.MixedWithFiles}" />
+            </MenuItem>
+            <MenuItem Header="Group by" IsVisible="{Binding IsGridView}">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconGroupGeometry}" />
+                </MenuItem.Icon>
+                <MenuItem Header="None"
+                          ToggleType="Radio"
+                          IsChecked="{Binding IsGroupByNone}"
+                          Command="{Binding SetGroupByCommand}"
+                          CommandParameter="{x:Static models:GroupByMode.None}" />
+                <Separator />
+                <MenuItem Header="Name"
+                          ToggleType="Radio"
+                          IsChecked="{Binding IsGroupByName}"
+                          Command="{Binding SetGroupByCommand}"
+                          CommandParameter="{x:Static models:GroupByMode.Name}" />
+                <MenuItem Header="Date modified"
+                          ToggleType="Radio"
+                          IsChecked="{Binding IsGroupByDate}"
+                          Command="{Binding SetGroupByCommand}"
+                          CommandParameter="{x:Static models:GroupByMode.Modified}" />
+                <MenuItem Header="Type"
+                          ToggleType="Radio"
+                          IsChecked="{Binding IsGroupByType}"
+                          Command="{Binding SetGroupByCommand}"
+                          CommandParameter="{x:Static models:GroupByMode.Type}" />
+                <MenuItem Header="Size"
+                          ToggleType="Radio"
+                          IsChecked="{Binding IsGroupBySize}"
+                          Command="{Binding SetGroupByCommand}"
+                          CommandParameter="{x:Static models:GroupByMode.Size}" />
             </MenuItem>
             <Separator />
             <MenuItem Header="Layout">
@@ -622,7 +687,7 @@
 
         <controls:VirtualizingFileGrid x:Name="GridView"
                  IsVisible="{Binding IsGridView}"
-                 ItemsSource="{Binding Entries}"
+                 ItemsSource="{Binding GridItems}"
                  ItemSize="{Binding ThumbnailSize}"
                  Background="Transparent"
                  BorderThickness="0"
@@ -632,6 +697,40 @@
                 <controls:VirtualizingFileGrid.ContextMenu>
                     <StaticResource ResourceKey="EntryContextMenu" />
                 </controls:VirtualizingFileGrid.ContextMenu>
+                <controls:VirtualizingFileGrid.HeaderTemplate>
+                    <DataTemplate x:DataType="vm:GroupHeaderViewModel" x:CompileBindings="False">
+                        <Border Classes="groupHeader"
+                                Background="Transparent"
+                                Margin="6,10,6,2"
+                                Padding="4,4,6,4"
+                                CornerRadius="4"
+                                Cursor="Hand"
+                                HorizontalAlignment="Stretch"
+                                PointerPressed="OnGroupHeaderPointerPressed">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <PathIcon Data="{DynamicResource HelixIconChevronDownGeometry}"
+                                          Width="10" Height="10"
+                                          Opacity="0.6"
+                                          VerticalAlignment="Center"
+                                          IsVisible="{Binding IsExpanded}" />
+                                <PathIcon Data="{DynamicResource HelixIconChevronRightGeometry}"
+                                          Width="10" Height="10"
+                                          Opacity="0.6"
+                                          VerticalAlignment="Center"
+                                          IsVisible="{Binding IsCollapsed}" />
+                                <TextBlock Text="{Binding Title}"
+                                           VerticalAlignment="Center"
+                                           FontWeight="SemiBold"
+                                           Opacity="0.75"
+                                           FontSize="{DynamicResource HelixSidebarSectionFontSize}" />
+                                <TextBlock Text="{Binding ItemCount}"
+                                           VerticalAlignment="Center"
+                                           Opacity="0.45"
+                                           FontSize="{DynamicResource HelixSidebarSectionFontSize}" />
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </controls:VirtualizingFileGrid.HeaderTemplate>
                 <controls:VirtualizingFileGrid.ItemTemplate>
                     <DataTemplate x:DataType="vm:EntryItemViewModel" x:CompileBindings="False">
                         <Border Classes="fileTile"

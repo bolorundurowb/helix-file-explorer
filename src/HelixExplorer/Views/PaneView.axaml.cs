@@ -385,10 +385,15 @@ public sealed partial class PaneView : UserControl
         if (current is null)
             return;
 
-        var currentIndex = Pane.Entries.IndexOf(current);
-        if (GridView.TryGetAdjacentIndex(currentIndex, Pane.Entries.Count, e.Key, out var targetIndex))
+        // Navigate the presentation list, not the flat listing: with Group By on it carries the
+        // header bands and hides collapsed entries, so it is the only accurate index space.
+        var items = Pane.GridItems;
+        var currentIndex = items.IndexOf(current);
+        if (currentIndex >= 0
+            && GridView.TryGetAdjacentIndex(currentIndex, items.Count, e.Key, out var targetIndex)
+            && items[targetIndex] is EntryItemViewModel target)
         {
-            Pane.SelectGridNavigationTarget(Pane.Entries[targetIndex], e.KeyModifiers);
+            Pane.SelectGridNavigationTarget(target, e.KeyModifiers);
             SyncSelectionToView();
         }
 
@@ -495,6 +500,25 @@ public sealed partial class PaneView : UserControl
             CancelPendingRenameClick();
     }
 
+    /// <summary>
+    /// Toggling a group must not disturb the selection — collapsing a band the user has items
+    /// selected in should leave those items selected for the next file operation.
+    /// </summary>
+    private void OnGroupHeaderPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (Pane is null || sender is not Control { DataContext: GroupHeaderViewModel header })
+            return;
+
+        if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
+            return;
+
+        CancelPendingRenameClick();
+        // Drop any armed drag/marquee so the collapse gesture cannot bleed into one.
+        ResetPointerInteraction(null);
+        Pane.ToggleGroupCollapsedCommand.Execute(header.Key);
+        e.Handled = true;
+    }
+
     private void OnGridItemPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (IsTextBoxSource(e.Source))
@@ -540,6 +564,17 @@ public sealed partial class PaneView : UserControl
     private void SelectGridEntry(EntryItemViewModel entry, KeyModifiers modifiers)
     {
         Pane?.SelectEntry(entry, modifiers);
+    }
+
+    private static GroupHeaderViewModel? TryGetGroupHeaderFromSource(object? source)
+    {
+        for (var control = source as Control; control is not null; control = control.Parent as Control)
+        {
+            if (control.DataContext is GroupHeaderViewModel header)
+                return header;
+        }
+
+        return null;
     }
 
     private static EntryItemViewModel? TryGetEntryFromSource(object? source)
@@ -765,7 +800,10 @@ public sealed partial class PaneView : UserControl
             || Pane.IsHome
             || IsTextBoxSource(e.Source)
             || !e.GetCurrentPoint(GridView).Properties.IsLeftButtonPressed
-            || TryGetEntryFromSource(e.Source) is not null)
+            || TryGetEntryFromSource(e.Source) is not null
+            // Registered with handledEventsToo, so the header's own handler cannot suppress this:
+            // a band press must not clear the selection or arm a marquee.
+            || TryGetGroupHeaderFromSource(e.Source) is not null)
             return;
 
         if (e.KeyModifiers.HasFlag(KeyModifiers.Control))

@@ -31,4 +31,10 @@ public sealed class PaneSnapshot
     public bool SortDescending { get; set; }
     public DirectorySortMode DirectorySort { get; set; } = DirectorySortMode.MixedWithFiles;
     public double ThumbnailSize { get; set; } = 72;
+
+    /// <summary>
+    /// Grouping is restored with the session so a reopened window shows the same grid immediately,
+    /// without waiting for the per-folder preferences lookup that follows navigation.
+    /// </summary>
+    public GroupByMode GroupBy { get; set; } = GroupByMode.None;
 }

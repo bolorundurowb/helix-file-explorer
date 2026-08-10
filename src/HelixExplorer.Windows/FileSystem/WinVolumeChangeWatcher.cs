@@ -7,7 +7,7 @@ namespace HelixExplorer.Windows.FileSystem;
 /// <summary>
 /// Listens for <c>WM_DEVICECHANGE</c> volume arrival/removal on a message-only HWND.
 /// </summary>
-public sealed class WinVolumeChangeWatcher(ILogger<WinVolumeChangeWatcher> logger) : IVolumeChangeWatcher
+public sealed partial class WinVolumeChangeWatcher(ILogger<WinVolumeChangeWatcher> logger) : IVolumeChangeWatcher
 {
     private const int WmDeviceChange = 0x0219;
     private const int DbtDeviceArrival = 0x8000;
@@ -193,14 +193,15 @@ public sealed class WinVolumeChangeWatcher(ILogger<WinVolumeChangeWatcher> logge
         public IntPtr HIconSm;
     }
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern ushort RegisterClassEx(ref WndClassEx lpwcx);
+    [LibraryImport("user32.dll", SetLastError = true)]
+    private static partial ushort RegisterClassEx(ref WndClassEx lpwcx);
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern bool UnregisterClass(string lpClassName, IntPtr hInstance);
+    [LibraryImport("user32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool UnregisterClass(string lpClassName, IntPtr hInstance);
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern IntPtr CreateWindowEx(
+    [LibraryImport("user32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    private static partial IntPtr CreateWindowEx(
         int dwExStyle,
         string lpClassName,
         string lpWindowName,
@@ -214,12 +215,13 @@ public sealed class WinVolumeChangeWatcher(ILogger<WinVolumeChangeWatcher> logge
         IntPtr hInstance,
         IntPtr lpParam);
 
-    [DllImport("user32.dll")]
-    private static extern bool DestroyWindow(IntPtr hWnd);
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool DestroyWindow(IntPtr hWnd);
 
-    [DllImport("user32.dll")]
-    private static extern IntPtr DefWindowProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+    [LibraryImport("user32.dll")]
+    private static partial IntPtr DefWindowProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
-    private static extern IntPtr GetModuleHandle(string? lpModuleName);
+    [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    private static partial IntPtr GetModuleHandle(string? lpModuleName);
 }

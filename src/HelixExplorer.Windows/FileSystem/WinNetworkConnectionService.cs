@@ -8,7 +8,7 @@ namespace HelixExplorer.Windows.FileSystem;
 /// <summary>
 /// Prompts for SMB credentials via CredUI and connects with <c>WNetAddConnection2</c>.
 /// </summary>
-public sealed class WinNetworkConnectionService(ILogger<WinNetworkConnectionService> logger) : INetworkConnectionService
+public sealed partial class WinNetworkConnectionService(ILogger<WinNetworkConnectionService> logger) : INetworkConnectionService
 {
     private const int CredUiFlagsGeneric = 0x0001;
     private const int CredUiFlagsAlwaysShowUi = 0x0080;
@@ -163,11 +163,11 @@ public sealed class WinNetworkConnectionService(ILogger<WinNetworkConnectionServ
         ref bool pfSave,
         int dwFlags);
 
-    [DllImport("credui.dll", CharSet = CharSet.Unicode)]
-    private static extern void CredUIConfirmCredentials(string pszTargetName, bool bConfirm);
+    [LibraryImport("credui.dll", StringMarshalling = StringMarshalling.Utf16)]
+    private static partial void CredUIConfirmCredentials(string pszTargetName, [MarshalAs(UnmanagedType.Bool)] bool bConfirm);
 
-    [DllImport("mpr.dll", CharSet = CharSet.Unicode)]
-    private static extern int WNetAddConnection2(NetResource lpNetResource, IntPtr lpPassword, string? lpUsername, int dwFlags);
+    [LibraryImport("mpr.dll", StringMarshalling = StringMarshalling.Utf16)]
+    private static partial int WNetAddConnection2(NetResource lpNetResource, IntPtr lpPassword, string? lpUsername, int dwFlags);
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct CredUiInfo

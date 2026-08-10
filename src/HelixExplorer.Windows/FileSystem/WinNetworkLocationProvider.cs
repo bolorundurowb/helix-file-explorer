@@ -11,7 +11,7 @@ namespace HelixExplorer.Windows.FileSystem;
 /// back to the legacy WNet APIs. Shares under a server are enumerated lazily by the file system provider
 /// when the user opens the server, so startup does not deep-scan every host.
 /// </summary>
-public sealed class WinNetworkLocationProvider(
+public sealed partial class WinNetworkLocationProvider(
     IShellFolderEnumerator shell,
     ILogger<WinNetworkLocationProvider> logger) : INetworkLocationProvider
 {
@@ -297,14 +297,14 @@ public sealed class WinNetworkLocationProvider(
         return index >= 0 && index < trimmed.Length - 1 ? trimmed[(index + 1)..] : trimmed;
     }
 
-    [DllImport("mpr.dll", CharSet = CharSet.Unicode)]
-    private static extern int WNetOpenEnum(int dwScope, int dwType, int dwUsage, NetResource? lpNetResource, out IntPtr lphEnum);
+    [LibraryImport("mpr.dll")]
+    private static partial int WNetOpenEnum(int dwScope, int dwType, int dwUsage, NetResource? lpNetResource, out IntPtr lphEnum);
 
-    [DllImport("mpr.dll", CharSet = CharSet.Unicode)]
-    private static extern int WNetEnumResource(IntPtr hEnum, ref int lpcCount, IntPtr lpBuffer, ref int lpBufferSize);
+    [LibraryImport("mpr.dll")]
+    private static partial int WNetEnumResource(IntPtr hEnum, ref int lpcCount, IntPtr lpBuffer, ref int lpBufferSize);
 
-    [DllImport("mpr.dll")]
-    private static extern int WNetCloseEnum(IntPtr hEnum);
+    [LibraryImport("mpr.dll")]
+    private static partial int WNetCloseEnum(IntPtr hEnum);
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private sealed class NetResource
@@ -331,7 +331,7 @@ public static class NetworkEnumBuffer
     public static int Grow(int currentSize)
         => Grow(currentSize, requestedSize: 0);
 
-    /// <summary>Honors Windows' requested size on <c>ERROR_MORE_DATA</c> when larger than a simple doubling.</summary>
+    /// <summary>Honours Windows' requested size on <c>ERROR_MORE_DATA</c> when larger than a simple doubling.</summary>
     public static int Grow(int currentSize, int requestedSize)
     {
         if (currentSize <= 0)

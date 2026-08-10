@@ -10,7 +10,7 @@ namespace HelixExplorer.Windows.FileSystem;
 /// <summary>
 /// Enumerates SMB disk shares under a <c>\\server</c> root via WNet.
 /// </summary>
-internal static class WinNetworkShareEnumerator
+internal static partial class WinNetworkShareEnumerator
 {
     private const int ResourceGlobalNet = 0x00000002;
     private const int ResourceTypeDisk = 0x00000001;
@@ -30,10 +30,7 @@ internal static class WinNetworkShareEnumerator
 
         var parent = new NetResource
         {
-            Scope = ResourceGlobalNet,
-            Type = ResourceTypeDisk,
             DisplayType = 0,
-            Usage = 0,
             RemoteName = normalized
         };
 
@@ -129,22 +126,19 @@ internal static class WinNetworkShareEnumerator
         return new IOException($"Failed to enumerate shares at '{path}': {message}", new Win32Exception(errorCode));
     }
 
-    [DllImport("mpr.dll", CharSet = CharSet.Unicode)]
-    private static extern int WNetOpenEnum(int dwScope, int dwType, int dwUsage, NetResource? lpNetResource, out IntPtr lphEnum);
+    [LibraryImport("mpr.dll")]
+    private static partial int WNetOpenEnum(int dwScope, int dwType, int dwUsage, NetResource? lpNetResource, out IntPtr lphEnum);
 
-    [DllImport("mpr.dll", CharSet = CharSet.Unicode)]
-    private static extern int WNetEnumResource(IntPtr hEnum, ref int lpcCount, IntPtr lpBuffer, ref int lpBufferSize);
+    [LibraryImport("mpr.dll")]
+    private static partial int WNetEnumResource(IntPtr hEnum, ref int lpcCount, IntPtr lpBuffer, ref int lpBufferSize);
 
-    [DllImport("mpr.dll")]
-    private static extern int WNetCloseEnum(IntPtr hEnum);
+    [LibraryImport("mpr.dll")]
+    private static partial int WNetCloseEnum(IntPtr hEnum);
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private sealed class NetResource
     {
-        public int Scope;
-        public int Type;
         public int DisplayType;
-        public int Usage;
         public string? LocalName;
         public string? RemoteName;
         public string? Comment;

@@ -48,12 +48,12 @@ internal struct ShellFileInfo
     public string szTypeName;
 }
 
-internal static class ShellIconNative
+internal static partial class ShellIconNative
 {
     public static readonly Guid IID_IImageList = new("46EB5926-582E-4017-9FDF-E8998DAA0950");
 
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    public static extern IntPtr SHGetFileInfo(
+    [LibraryImport("shell32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    public static partial IntPtr SHGetFileInfo(
         string pszPath,
         ShellFileAttributes dwFileAttributes,
         ref ShellFileInfo psfi,
@@ -66,8 +66,9 @@ internal static class ShellIconNative
         ref Guid riid,
         [MarshalAs(UnmanagedType.Interface)] out IImageList? ppv);
 
-    [DllImport("user32.dll", SetLastError = true)]
-    public static extern bool DestroyIcon(IntPtr hIcon);
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool DestroyIcon(IntPtr hIcon);
 }
 
 [ComImport]

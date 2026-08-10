@@ -6,11 +6,9 @@ internal static class ShellIID
 {
     public static readonly Guid IID_IShellFolder = new("000214E6-0000-0000-C000-000000000046");
     public static readonly Guid IID_IContextMenu = new("000214E4-0000-0000-C000-000000000046");
-    public static readonly Guid IID_IContextMenu2 = new("000214F4-0000-0000-C000-000000000046");
-    public static readonly Guid IID_IContextMenu3 = new("BCFCE0C0-EC17-11D0-8D10-00A0C90F2719");
 }
 
-internal static class Shell32Native
+internal static partial class Shell32Native
 {
     public const uint CMF_NORMAL = 0;
     public const uint TPM_LEFTALIGN = 0x0000;
@@ -22,11 +20,11 @@ internal static class Shell32Native
     public const uint SHERB_NOCONFIRMATION = 0x00000001;
     public const uint SHERB_NOPROGRESSUI = 0x00000002;
 
-    [DllImport("shell32.dll")]
-    public static extern int SHGetDesktopFolder(out IShellFolder ppshf);
+    [LibraryImport("shell32.dll")]
+    public static partial int SHGetDesktopFolder(out IShellFolder ppshf);
 
-    [DllImport("shell32.dll")]
-    public static extern void SHFree(IntPtr pidl);
+    [LibraryImport("shell32.dll")]
+    public static partial void SHFree(IntPtr pidl);
 
     /// <summary>
     /// Caller must <see cref="Marshal.ReleaseComObject(object)"/> the returned desktop folder
@@ -44,23 +42,25 @@ internal static class Shell32Native
         return false;
     }
 
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    public static extern int TrackPopupMenuEx(IntPtr hmenu, uint uFlags, int x, int y, IntPtr hwnd, IntPtr lptpm);
+    [LibraryImport("user32.dll")]
+    public static partial int TrackPopupMenuEx(IntPtr hmenu, uint uFlags, int x, int y, IntPtr hwnd, IntPtr lptpm);
 
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    public static extern bool DestroyMenu(IntPtr hMenu);
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool DestroyMenu(IntPtr hMenu);
 
-    [DllImport("user32.dll")]
-    public static extern IntPtr CreatePopupMenu();
+    [LibraryImport("user32.dll")]
+    public static partial IntPtr CreatePopupMenu();
 
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    public static extern bool ShellExecuteEx(ref SHELLEXECUTEINFO lpExecInfo);
+    [LibraryImport("shell32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool ShellExecuteEx(ref SHELLEXECUTEINFO lpExecInfo);
 
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = false)]
-    public static extern int SHQueryRecycleBin(string? pszRootPath, ref SHQUERYRBINFO pSHQueryRBInfo);
+    [LibraryImport("shell32.dll", SetLastError = false, StringMarshalling = StringMarshalling.Utf16)]
+    public static partial int SHQueryRecycleBin(string? pszRootPath, ref SHQUERYRBINFO pSHQueryRBInfo);
 
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = false)]
-    public static extern int SHEmptyRecycleBin(IntPtr hwnd, string? pszRootPath, uint dwFlags);
+    [LibraryImport("shell32.dll", SetLastError = false, StringMarshalling = StringMarshalling.Utf16)]
+    public static partial int SHEmptyRecycleBin(IntPtr hwnd, string? pszRootPath, uint dwFlags);
 
     [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)]
     public static extern int StrRetToBuf(ref STRRET pstr, IntPtr pidl, [MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder pszBuf, int cchBuf);

@@ -7,7 +7,7 @@ using HelixExplorer.Core.Infrastructure;
 
 namespace HelixExplorer.Services;
 
-public sealed class AvaloniaUiHost(IWindowOwnerContext ownerContext) : IUiHost
+public sealed partial class AvaloniaUiHost(IWindowOwnerContext ownerContext) : IUiHost
 {
     public nint GetMainWindowHandle()
     {
@@ -63,9 +63,9 @@ public sealed class AvaloniaUiHost(IWindowOwnerContext ownerContext) : IUiHost
         return null;
     }
 
-    [DllImport("user32.dll")]
+    [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetCursorPos(out POINT lpPoint);
+    private static partial bool GetCursorPos(out POINT lpPoint);
 
     private static bool TryGetCursorPos(out (int X, int Y) point)
     {

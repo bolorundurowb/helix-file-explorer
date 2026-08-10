@@ -7,7 +7,7 @@ namespace HelixExplorer.Windows.Shell;
 /// <summary>
 /// Explorer-compatible shell context menu. COM failures must not break Helix's own menus.
 /// </summary>
-public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuService> logger) : IShellContextMenuService
+public sealed partial class WinShellContextMenuService(ILogger<WinShellContextMenuService> logger) : IShellContextMenuService
 {
     private const uint IdCmdFirst = 100;
     private const uint IdCmdLast = 0x7FFF;
@@ -290,7 +290,7 @@ public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuServic
             or NativeMethods.WM_DRAWITEM
             or NativeMethods.WM_MENUCHAR;
 
-    private static class NativeMethods
+    private static partial class NativeMethods
     {
         public const int WH_MSGFILTER = -1;
         public const int MSGF_MENU = 2;
@@ -301,18 +301,18 @@ public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuServic
 
         public delegate IntPtr HookProc(int code, IntPtr wParam, IntPtr lParam);
 
-        [DllImport("user32.dll", SetLastError = true)]
-        public static extern IntPtr SetWindowsHookEx(int idHook, HookProc lpfn, IntPtr hMod, uint dwThreadId);
+        [LibraryImport("user32.dll", SetLastError = true)]
+        public static partial IntPtr SetWindowsHookEx(int idHook, HookProc lpfn, IntPtr hMod, uint dwThreadId);
 
-        [DllImport("user32.dll", SetLastError = true)]
+        [LibraryImport("user32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
-        public static extern bool UnhookWindowsHookEx(IntPtr hhk);
+        public static partial bool UnhookWindowsHookEx(IntPtr hhk);
 
-        [DllImport("user32.dll")]
-        public static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+        [LibraryImport("user32.dll")]
+        public static partial IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
 
-        [DllImport("kernel32.dll")]
-        public static extern uint GetCurrentThreadId();
+        [LibraryImport("kernel32.dll")]
+        public static partial uint GetCurrentThreadId();
 
         [StructLayout(LayoutKind.Sequential)]
         public struct MSG
@@ -342,11 +342,12 @@ public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuServic
         }
     }
 
-    [DllImport("user32.dll")]
-    private static extern bool GetCursorPos(out POINT lpPoint);
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GetCursorPos(out POINT lpPoint);
 
-    [DllImport("user32.dll")]
-    private static extern IntPtr GetDesktopWindow();
+    [LibraryImport("user32.dll")]
+    private static partial IntPtr GetDesktopWindow();
 
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT

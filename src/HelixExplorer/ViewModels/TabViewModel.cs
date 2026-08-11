@@ -3,10 +3,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
-using HelixExplorer.Core.Infrastructure;
 using System.Diagnostics;
 using HelixExplorer.Core.Models;
-using HelixExplorer.Core.Settings;
 using HelixExplorer.Core.Session;
 using HelixExplorer.ViewModels.Pane;
 

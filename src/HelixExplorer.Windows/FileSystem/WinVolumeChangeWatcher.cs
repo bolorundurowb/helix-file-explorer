@@ -1,20 +1,17 @@
 using System.Runtime.InteropServices;
 using HelixExplorer.Core.FileSystem;
 using Microsoft.Extensions.Logging;
+using Vanara.PInvoke;
+using static Vanara.PInvoke.Kernel32;
+using static Vanara.PInvoke.User32;
 
 namespace HelixExplorer.Windows.FileSystem;
 
 /// <summary>
 /// Listens for <c>WM_DEVICECHANGE</c> volume arrival/removal on a message-only HWND.
 /// </summary>
-public sealed partial class WinVolumeChangeWatcher(ILogger<WinVolumeChangeWatcher> logger) : IVolumeChangeWatcher
+public sealed class WinVolumeChangeWatcher(ILogger<WinVolumeChangeWatcher> logger) : IVolumeChangeWatcher
 {
-    private const int WmDeviceChange = 0x0219;
-    private const int DbtDeviceArrival = 0x8000;
-    private const int DbtDeviceRemoveComplete = 0x8004;
-    private const int DbtDevTypVolume = 0x00000002;
-    private static readonly IntPtr HwndMessage = new(-3);
-
     private readonly TimeSpan _debounce = TimeSpan.FromMilliseconds(400);
     private readonly object _gate = new();
     private NativeWindow? _window;
@@ -43,13 +40,16 @@ public sealed partial class WinVolumeChangeWatcher(ILogger<WinVolumeChangeWatche
         }
     }
 
-    private IntPtr WndProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam)
+    private IntPtr WndProc(HWND hwnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
-        if (msg == WmDeviceChange)
+        if (msg == (uint)WindowMessage.WM_DEVICECHANGE)
         {
-            var eventType = wParam.ToInt32();
-            if (eventType is DbtDeviceArrival or DbtDeviceRemoveComplete && IsVolumeEvent(lParam))
+            var eventType = (DeviceBroadcastEvent)wParam.ToInt32();
+            if (eventType is DeviceBroadcastEvent.DBT_DEVICEARRIVAL or DeviceBroadcastEvent.DBT_DEVICEREMOVECOMPLETE
+                && IsVolumeEvent(lParam))
+            {
                 ScheduleNotify();
+            }
         }
 
         return DefWindowProc(hwnd, msg, wParam, lParam);
@@ -62,8 +62,8 @@ public sealed partial class WinVolumeChangeWatcher(ILogger<WinVolumeChangeWatche
 
         try
         {
-            var hdr = Marshal.PtrToStructure<DevBroadcastHdr>(lParam);
-            return hdr.DeviceType == DbtDevTypVolume || hdr.DeviceType == 0;
+            var hdr = Marshal.PtrToStructure<DEV_BROADCAST_HDR>(lParam);
+            return hdr.dbch_devicetype is DBT_DEVTYPE.DBT_DEVTYP_VOLUME or 0;
         }
         catch
         {
@@ -114,36 +114,30 @@ public sealed partial class WinVolumeChangeWatcher(ILogger<WinVolumeChangeWatche
         }
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct DevBroadcastHdr
-    {
-        public int Size;
-        public int DeviceType;
-        public int Reserved;
-    }
-
     private sealed class NativeWindow : IDisposable
     {
-        private readonly WndProcDelegate _wndProc;
-        private readonly IntPtr _hwnd;
+        private readonly WindowProc _wndProc;
+        private readonly HWND _hwnd;
         private readonly string _className;
+        private readonly HINSTANCE _hInstance;
         private bool _disposed;
 
-        public NativeWindow(WndProcDelegate handler)
+        public NativeWindow(WindowProc handler)
         {
             _wndProc = handler;
             _className = "HelixVolumeWatcher_" + Guid.NewGuid().ToString("N");
+            _hInstance = GetModuleHandle();
 
-            var wc = new WndClassEx
+            var wc = new WNDCLASSEX
             {
-                Size = (uint)Marshal.SizeOf<WndClassEx>(),
-                LpfnWndProc = _wndProc,
-                HInstance = GetModuleHandle(null),
-                LpszClassName = _className
+                cbSize = (uint)Marshal.SizeOf<WNDCLASSEX>(),
+                lpfnWndProc = _wndProc,
+                hInstance = _hInstance,
+                lpszClassName = _className
             };
 
-            var atom = RegisterClassEx(ref wc);
-            if (atom == 0)
+            var atom = RegisterClassEx(wc);
+            if (atom.IsInvalid)
                 throw new InvalidOperationException($"RegisterClassEx failed: {Marshal.GetLastWin32Error()}");
 
             _hwnd = CreateWindowEx(
@@ -152,12 +146,12 @@ public sealed partial class WinVolumeChangeWatcher(ILogger<WinVolumeChangeWatche
                 string.Empty,
                 0,
                 0, 0, 0, 0,
-                HwndMessage,
-                IntPtr.Zero,
-                wc.HInstance,
+                HWND.HWND_MESSAGE,
+                HMENU.NULL,
+                _hInstance,
                 IntPtr.Zero);
 
-            if (_hwnd == IntPtr.Zero)
+            if (_hwnd.IsNull)
                 throw new InvalidOperationException($"CreateWindowEx failed: {Marshal.GetLastWin32Error()}");
         }
 
@@ -167,61 +161,10 @@ public sealed partial class WinVolumeChangeWatcher(ILogger<WinVolumeChangeWatche
                 return;
             _disposed = true;
 
-            if (_hwnd != IntPtr.Zero)
+            if (!_hwnd.IsNull)
                 DestroyWindow(_hwnd);
 
-            UnregisterClass(_className, GetModuleHandle(null));
+            UnregisterClass(_className, _hInstance);
         }
     }
-
-    private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct WndClassEx
-    {
-        public uint Size;
-        public uint Style;
-        public WndProcDelegate LpfnWndProc;
-        public int CbClsExtra;
-        public int CbWndExtra;
-        public IntPtr HInstance;
-        public IntPtr HIcon;
-        public IntPtr HCursor;
-        public IntPtr HbrBackground;
-        public string? LpszMenuName;
-        public string LpszClassName;
-        public IntPtr HIconSm;
-    }
-
-    [LibraryImport("user32.dll", SetLastError = true)]
-    private static partial ushort RegisterClassEx(ref WndClassEx lpwcx);
-
-    [LibraryImport("user32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool UnregisterClass(string lpClassName, IntPtr hInstance);
-
-    [LibraryImport("user32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
-    private static partial IntPtr CreateWindowEx(
-        int dwExStyle,
-        string lpClassName,
-        string lpWindowName,
-        int dwStyle,
-        int x,
-        int y,
-        int nWidth,
-        int nHeight,
-        IntPtr hWndParent,
-        IntPtr hMenu,
-        IntPtr hInstance,
-        IntPtr lpParam);
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool DestroyWindow(IntPtr hWnd);
-
-    [LibraryImport("user32.dll")]
-    private static partial IntPtr DefWindowProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
-
-    [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)]
-    private static partial IntPtr GetModuleHandle(string? lpModuleName);
 }

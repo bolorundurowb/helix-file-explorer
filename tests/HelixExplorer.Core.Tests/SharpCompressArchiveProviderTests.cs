@@ -3,7 +3,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using SharpCompress.Archives;
 using SharpCompress.Archives.Zip;
 using SharpCompress.Common;
-using SharpCompress.Writers.Zip;
 
 namespace HelixExplorer.Core.Tests;
 

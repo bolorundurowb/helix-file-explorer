@@ -3,6 +3,9 @@ using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
+using static Vanara.PInvoke.ComCtl32;
+using static Vanara.PInvoke.Shell32;
+using static Vanara.PInvoke.User32;
 
 namespace HelixExplorer.Windows.Shell;
 
@@ -62,32 +65,32 @@ public sealed class WinFileVisualProvider : IFileVisualProvider
 
     private static FileVisualData? TryGetShellIcon(string path, bool isDirectory, int size)
     {
-        var shfi = new ShellFileInfo();
+        var shfi = new SHFILEINFO();
         var useAttributes = !File.Exists(path) && !Directory.Exists(path);
         var attributes = isDirectory
-            ? ShellFileAttributes.Directory
-            : ShellFileAttributes.Normal;
+            ? FileAttributes.Directory
+            : FileAttributes.Normal;
 
-        var flags = ShellGetFileInfoFlags.Icon
-                    | (size > 32 ? ShellGetFileInfoFlags.LargeIcon : ShellGetFileInfoFlags.SmallIcon);
+        var flags = SHGFI.SHGFI_ICON
+                    | (size > 32 ? SHGFI.SHGFI_LARGEICON : SHGFI.SHGFI_SMALLICON);
         if (useAttributes)
-            flags |= ShellGetFileInfoFlags.UseFileAttributes;
+            flags |= SHGFI.SHGFI_USEFILEATTRIBUTES;
 
-        var result = ShellIconNative.SHGetFileInfo(
+        var result = SHGetFileInfo(
             path,
             useAttributes ? attributes : 0,
             ref shfi,
-            (uint)Marshal.SizeOf<ShellFileInfo>(),
+            SHFILEINFO.Size,
             flags);
 
         // Bail out if the call failed OR no icon handle came back. Using || (not &&) is essential:
         // a non-zero result with a zero hIcon would otherwise reach Icon.FromHandle(IntPtr.Zero).
-        if (result == IntPtr.Zero || shfi.hIcon == IntPtr.Zero)
+        if (result == IntPtr.Zero || shfi.hIcon.IsNull)
             return null;
 
         try
         {
-            using var icon = Icon.FromHandle(shfi.hIcon);
+            using var icon = Icon.FromHandle((IntPtr)shfi.hIcon);
             using var bitmap = icon.ToBitmap();
             using var scaled = ResizeToSquare(bitmap, size);
             return EncodePng(scaled);
@@ -98,8 +101,8 @@ public sealed class WinFileVisualProvider : IFileVisualProvider
         }
         finally
         {
-            if (shfi.hIcon != IntPtr.Zero)
-                ShellIconNative.DestroyIcon(shfi.hIcon);
+            if (!shfi.hIcon.IsNull)
+                DestroyIcon(shfi.hIcon);
         }
     }
 
@@ -108,23 +111,27 @@ public sealed class WinFileVisualProvider : IFileVisualProvider
         if (!TryGetShellIconIndex(path, isDirectory, out var iconIndex))
             return null;
 
-        var imageListSize = GetImageListSize(size);
-        var iid = ShellIconNative.IID_IImageList;
-        var hr = ShellIconNative.SHGetImageList(imageListSize, ref iid, out var imageList);
-        if (hr < 0 || imageList is null)
+        var hr = SHGetImageList(GetImageListSize(size), out IImageList? imageList);
+        if (hr.Failed || imageList is null)
             return null;
 
-        var hIcon = IntPtr.Zero;
         try
         {
-            hr = imageList.GetIcon(iconIndex, ImageListDrawFlags.Transparent, ref hIcon);
-            if (hr < 0 || hIcon == IntPtr.Zero)
+            var hIcon = imageList.GetIcon(iconIndex, IMAGELISTDRAWFLAGS.ILD_TRANSPARENT);
+            if (hIcon.IsNull)
                 return null;
 
-            using var icon = Icon.FromHandle(hIcon);
-            using var bitmap = icon.ToBitmap();
-            using var scaled = ResizeToSquare(bitmap, size);
-            return EncodePng(scaled);
+            try
+            {
+                using var icon = Icon.FromHandle((IntPtr)hIcon);
+                using var bitmap = icon.ToBitmap();
+                using var scaled = ResizeToSquare(bitmap, size);
+                return EncodePng(scaled);
+            }
+            finally
+            {
+                DestroyIcon(hIcon);
+            }
         }
         catch (Exception)
         {
@@ -132,9 +139,6 @@ public sealed class WinFileVisualProvider : IFileVisualProvider
         }
         finally
         {
-            if (hIcon != IntPtr.Zero)
-                ShellIconNative.DestroyIcon(hIcon);
-
             Marshal.ReleaseComObject(imageList);
         }
     }
@@ -143,21 +147,21 @@ public sealed class WinFileVisualProvider : IFileVisualProvider
     {
         iconIndex = 0;
 
-        var shfi = new ShellFileInfo();
+        var shfi = new SHFILEINFO();
         var useAttributes = !File.Exists(path) && !Directory.Exists(path);
         var attributes = isDirectory
-            ? ShellFileAttributes.Directory
-            : ShellFileAttributes.Normal;
+            ? FileAttributes.Directory
+            : FileAttributes.Normal;
 
-        var flags = ShellGetFileInfoFlags.SysIconIndex;
+        var flags = SHGFI.SHGFI_SYSICONINDEX;
         if (useAttributes)
-            flags |= ShellGetFileInfoFlags.UseFileAttributes;
+            flags |= SHGFI.SHGFI_USEFILEATTRIBUTES;
 
-        var result = ShellIconNative.SHGetFileInfo(
+        var result = SHGetFileInfo(
             path,
             useAttributes ? attributes : 0,
             ref shfi,
-            (uint)Marshal.SizeOf<ShellFileInfo>(),
+            SHFILEINFO.Size,
             flags);
 
         if (result == IntPtr.Zero)
@@ -167,13 +171,13 @@ public sealed class WinFileVisualProvider : IFileVisualProvider
         return iconIndex >= 0;
     }
 
-    private static ShellImageListSize GetImageListSize(int size)
+    private static SHIL GetImageListSize(int size)
         => size switch
         {
-            > 48 => ShellImageListSize.Jumbo,
-            > 32 => ShellImageListSize.ExtraLarge,
-            > 16 => ShellImageListSize.Large,
-            _ => ShellImageListSize.Small
+            > 48 => SHIL.SHIL_JUMBO,
+            > 32 => SHIL.SHIL_EXTRALARGE,
+            > 16 => SHIL.SHIL_LARGE,
+            _ => SHIL.SHIL_SMALL
         };
 
     private static FileStream OpenReadShared(string path)

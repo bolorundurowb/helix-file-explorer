@@ -2,7 +2,7 @@ namespace HelixExplorer.Windows.Shell;
 
 /// <summary>
 /// Runs work on a dedicated Single-Threaded Apartment (STA) thread. This is required for reliable
-/// COM interop with apartment-threaded shell objects such as <see cref="IShellFolder"/>.
+/// COM interop with apartment-threaded shell objects such as <see cref="Vanara.PInvoke.Shell32.IShellFolder"/>.
 /// </summary>
 internal static class STATask
 {

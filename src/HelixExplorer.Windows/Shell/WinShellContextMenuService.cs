@@ -1,6 +1,10 @@
 using System.Runtime.InteropServices;
 using HelixExplorer.Core.FileSystem;
 using Microsoft.Extensions.Logging;
+using Vanara.PInvoke;
+using static Vanara.PInvoke.Kernel32;
+using static Vanara.PInvoke.Shell32;
+using static Vanara.PInvoke.User32;
 
 namespace HelixExplorer.Windows.Shell;
 
@@ -30,7 +34,7 @@ public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuServic
 
         try
         {
-            ShowContextMenu((IntPtr)ownerHwnd, folderPath, paths, screenX, screenY);
+            ShowContextMenu(ownerHwnd, folderPath, paths, screenX, screenY);
         }
         catch (Exception ex)
         {
@@ -51,14 +55,14 @@ public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuServic
             var info = new SHELLEXECUTEINFO
             {
                 cbSize = Marshal.SizeOf<SHELLEXECUTEINFO>(),
-                fMask = Shell32Native.SEE_MASK_INVOKEIDLIST,
-                hwnd = (IntPtr)ownerHwnd,
+                fMask = ShellExecuteMaskFlags.SEE_MASK_INVOKEIDLIST,
+                hwnd = ownerHwnd,
                 lpVerb = "properties",
                 lpFile = path,
-                nShow = Shell32Native.SW_SHOWNORMAL
+                nShellExecuteShow = ShowWindowCommand.SW_SHOWNORMAL
             };
 
-            if (!Shell32Native.ShellExecuteEx(ref info))
+            if (!ShellExecuteEx(ref info))
             {
                 var error = Marshal.GetLastWin32Error();
                 logger.LogError("ShellExecuteEx(properties) failed with error {Error}", error);
@@ -73,48 +77,43 @@ public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuServic
     }
 
     private void ShowContextMenu(
-        IntPtr hwnd,
+        HWND hwnd,
         string folderPath,
         IReadOnlyList<string> selectedPaths,
         int screenX,
         int screenY)
     {
-        if (!Shell32Native.TryGetDesktopFolder(out var desktop) || desktop is null)
+        var hrDesktop = SHGetDesktopFolder(out var desktop);
+        if (hrDesktop.Failed || desktop is null)
             return;
 
-        uint attr = 0;
-        var hr = desktop.ParseDisplayName(IntPtr.Zero, IntPtr.Zero, folderPath, 0, out var pidlFull, ref attr);
-        if (hr != 0 || pidlFull == IntPtr.Zero)
+        var hr = desktop.ParseDisplayName(HWND.NULL, null, folderPath, out _, out var pidlFull, IntPtr.Zero);
+        if (hr.Failed || pidlFull is null || pidlFull.IsInvalid)
         {
-            logger.LogError("ParseDisplayName failed for '{FolderPath}': 0x{Hr:X8}", folderPath, hr);
-            if (pidlFull != IntPtr.Zero)
-                Shell32Native.SHFree(pidlFull);
+            logger.LogError("ParseDisplayName failed for '{FolderPath}': 0x{Hr:X8}", folderPath, (int)hr);
+            pidlFull?.Dispose();
             Marshal.ReleaseComObject(desktop);
             return;
         }
 
         IShellFolder? folder = null;
-        var folderPtr = IntPtr.Zero;
         IContextMenu? cm = null;
-        var cmPtr = IntPtr.Zero;
-        IntPtr[]? childPidls = null;
-        var cidl = 0;
+        var childPidls = new List<PIDL>();
 
         try
         {
-            var iidShellFolder = ShellIID.IID_IShellFolder;
-            var hrBind = desktop.BindToObject(pidlFull, IntPtr.Zero, ref iidShellFolder, out folderPtr);
-            if (hrBind != 0 || folderPtr == IntPtr.Zero)
+            var iidShellFolder = typeof(IShellFolder).GUID;
+            hr = desktop.BindToObject(pidlFull, null, in iidShellFolder, out var folderObj);
+            if (hr.Failed || folderObj is not IShellFolder boundFolder)
             {
-                logger.LogError("BindToObject failed for '{FolderPath}': 0x{HrBind:X8}", folderPath, hrBind);
+                logger.LogError("BindToObject failed for '{FolderPath}': 0x{HrBind:X8}", folderPath, (int)hr);
                 return;
             }
 
-            folder = (IShellFolder)Marshal.GetObjectForIUnknown(folderPtr);
+            folder = boundFolder;
 
             if (selectedPaths.Count > 0)
             {
-                childPidls = new IntPtr[selectedPaths.Count];
                 foreach (var path in selectedPaths)
                 {
                     if (string.IsNullOrEmpty(path))
@@ -124,30 +123,29 @@ public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuServic
                     if (string.IsNullOrEmpty(fileName))
                         continue;
 
-                    uint fileAttr = 0;
                     var hrFile = folder.ParseDisplayName(
-                        IntPtr.Zero,
-                        IntPtr.Zero,
+                        HWND.NULL,
+                        null,
                         fileName,
-                        0,
+                        out _,
                         out var childPidl,
-                        ref fileAttr);
-                    if (hrFile == 0 && childPidl != IntPtr.Zero)
-                        childPidls[cidl++] = childPidl;
+                        IntPtr.Zero);
+                    if (hrFile.Succeeded && childPidl is not null && !childPidl.IsInvalid)
+                        childPidls.Add(childPidl);
                     else
-                        logger.LogDebug("ParseDisplayName failed for child '{Path}': 0x{HrFile:X8}", path, hrFile);
+                        logger.LogDebug("ParseDisplayName failed for child '{Path}': 0x{HrFile:X8}", path, (int)hrFile);
                 }
             }
 
-            if (cidl > 0)
+            var iidCm = typeof(IContextMenu).GUID;
+            object? cmObj;
+            if (childPidls.Count > 0)
             {
-                var apidl = childPidls![..cidl];
-                var iidCm = ShellIID.IID_IContextMenu;
-                uint reserved = 0;
-                var hrCm = folder.GetUIObjectOf(hwnd, (uint)cidl, apidl, ref iidCm, ref reserved, out cmPtr);
-                if (hrCm != 0 || cmPtr == IntPtr.Zero)
+                var apidl = childPidls.Select(p => (IntPtr)p).ToArray();
+                hr = folder.GetUIObjectOf(hwnd, (uint)apidl.Length, apidl, in iidCm, IntPtr.Zero, out cmObj);
+                if (hr.Failed || cmObj is not IContextMenu)
                 {
-                    logger.LogError("GetUIObjectOf failed for {Count} item(s): 0x{HrCm:X8}", cidl, hrCm);
+                    logger.LogError("GetUIObjectOf failed for {Count} item(s): 0x{HrCm:X8}", childPidls.Count, (int)hr);
                     return;
                 }
             }
@@ -156,38 +154,34 @@ public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuServic
                 // GetUIObjectOf(cidl=0) does not yield the background menu on most shell namespaces;
                 // CreateViewObject is the documented pattern for the folder's own background verbs
                 // (Defender/7-Zip/etc.).
-                var iidCm = ShellIID.IID_IContextMenu;
-                var hrCv = folder.CreateViewObject(hwnd, ref iidCm, out cmPtr);
-                if (hrCv != 0 || cmPtr == IntPtr.Zero)
+                hr = folder.CreateViewObject(hwnd, in iidCm, out cmObj);
+                if (hr.Failed || cmObj is not IContextMenu)
                 {
-                    logger.LogError("CreateViewObject failed for '{FolderPath}': 0x{HrCv:X8}", folderPath, hrCv);
+                    logger.LogError("CreateViewObject failed for '{FolderPath}': 0x{HrCv:X8}", folderPath, (int)hr);
                     return;
                 }
             }
 
-            cm = (IContextMenu)Marshal.GetObjectForIUnknown(cmPtr);
+            cm = (IContextMenu)cmObj;
             TrackAndInvoke(hwnd, cm, screenX, screenY);
         }
         finally
         {
             if (cm is not null)
                 Marshal.ReleaseComObject(cm);
-            if (cmPtr != IntPtr.Zero)
-                Marshal.Release(cmPtr);
             if (folder is not null)
                 Marshal.ReleaseComObject(folder);
-            if (folderPtr != IntPtr.Zero)
-                Marshal.Release(folderPtr);
-            FreePidls(childPidls, cidl);
-            Shell32Native.SHFree(pidlFull);
+            foreach (var pidl in childPidls)
+                pidl.Dispose();
+            pidlFull.Dispose();
             Marshal.ReleaseComObject(desktop);
         }
     }
 
-    private void TrackAndInvoke(IntPtr hwnd, IContextMenu cm, int screenX, int screenY)
+    private void TrackAndInvoke(HWND hwnd, IContextMenu cm, int screenX, int screenY)
     {
-        var hmenu = Shell32Native.CreatePopupMenu();
-        if (hmenu == IntPtr.Zero)
+        var hmenu = CreatePopupMenu();
+        if (hmenu.IsNull)
             return;
 
         IContextMenu2? cm2 = null;
@@ -202,14 +196,14 @@ public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuServic
             // Optional extensions; owner-drawn submenus simply won't paint.
         }
 
-        IntPtr hook = IntPtr.Zero;
-        NativeMethods.HookProc? hookProc = null;
+        HHOOK hook = default;
+        HookProc? hookProc = null;
         try
         {
-            var hrQ = cm.QueryContextMenu(hmenu, 0, IdCmdFirst, IdCmdLast, Shell32Native.CMF_NORMAL);
-            if (hrQ < 0)
+            var hrQ = cm.QueryContextMenu(hmenu, 0, IdCmdFirst, IdCmdLast, CMF.CMF_NORMAL);
+            if (hrQ.Failed)
             {
-                logger.LogError("QueryContextMenu returned 0x{HrQ:X8}", hrQ);
+                logger.LogError("QueryContextMenu returned 0x{HrQ:X8}", (int)hrQ);
                 return;
             }
 
@@ -225,9 +219,9 @@ public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuServic
             {
                 hookProc = (code, wParam, lParam) =>
                 {
-                    if (code >= 0 && wParam == (IntPtr)NativeMethods.MSGF_MENU)
+                    if (code >= 0 && wParam == (IntPtr)MSGF.MSGF_MENU)
                     {
-                        var msg = Marshal.PtrToStructure<NativeMethods.MSG>(lParam);
+                        var msg = Marshal.PtrToStructure<MSG>(lParam);
                         if (IsContextMenuMessage(msg.message))
                         {
                             if (cm3 is not null)
@@ -237,121 +231,60 @@ public sealed class WinShellContextMenuService(ILogger<WinShellContextMenuServic
                         }
                     }
 
-                    return NativeMethods.CallNextHookEx(hook, code, wParam, lParam);
+                    return CallNextHookEx(hook, code, wParam, lParam);
                 };
 
-                hook = NativeMethods.SetWindowsHookEx(
-                    NativeMethods.WH_MSGFILTER,
+                hook = SetWindowsHookEx(
+                    HookType.WH_MSGFILTER,
                     hookProc,
-                    IntPtr.Zero,
-                    NativeMethods.GetCurrentThreadId());
+                    HINSTANCE.NULL,
+                    (int)GetCurrentThreadId());
             }
 
-            var owner = hwnd == IntPtr.Zero ? GetDesktopWindow() : hwnd;
-            var cmdId = Shell32Native.TrackPopupMenuEx(
+            var owner = hwnd.IsNull ? GetDesktopWindow() : hwnd;
+            var cmdId = TrackPopupMenuEx(
                 hmenu,
-                Shell32Native.TPM_LEFTALIGN | Shell32Native.TPM_TOPALIGN | Shell32Native.TPM_RETURNCMD,
+                TrackPopupMenuFlags.TPM_LEFTALIGN | TrackPopupMenuFlags.TPM_TOPALIGN | TrackPopupMenuFlags.TPM_RETURNCMD,
                 screenX,
                 screenY,
                 owner,
-                IntPtr.Zero);
+                null!);
 
             if (cmdId == 0)
                 return;
 
-            var offset = (uint)(cmdId - IdCmdFirst);
-            var ici = new CMINVOKECOMMANDINFO
-            {
-                cbSize = Marshal.SizeOf<CMINVOKECOMMANDINFO>(),
-                fMask = 0,
-                hwnd = hwnd,
-                lpVerb = (IntPtr)offset,
-                lpParameters = IntPtr.Zero,
-                lpDirectory = IntPtr.Zero,
-                nShow = Shell32Native.SW_SHOWNORMAL
-            };
+            var offset = (int)(cmdId - IdCmdFirst);
+            var ici = new CMINVOKECOMMANDINFOEX(
+                offset,
+                ShowWindowCommand.SW_SHOWNORMAL,
+                hwnd);
 
-            var hrInv = cm.InvokeCommand(ref ici);
-            if (hrInv < 0)
-                logger.LogError("InvokeCommand returned 0x{HrInv:X8}", hrInv);
+            var iciPtr = Marshal.AllocHGlobal(Marshal.SizeOf<CMINVOKECOMMANDINFOEX>());
+            try
+            {
+                Marshal.StructureToPtr(ici, iciPtr, false);
+                var hrInv = cm.InvokeCommand(iciPtr);
+                if (hrInv.Failed)
+                    logger.LogError("InvokeCommand returned 0x{HrInv:X8}", (int)hrInv);
+            }
+            finally
+            {
+                Marshal.DestroyStructure<CMINVOKECOMMANDINFOEX>(iciPtr);
+                Marshal.FreeHGlobal(iciPtr);
+            }
         }
         finally
         {
-            if (hook != IntPtr.Zero)
-                NativeMethods.UnhookWindowsHookEx(hook);
+            if (!hook.IsNull)
+                UnhookWindowsHookEx(hook);
             GC.KeepAlive(hookProc);
-            Shell32Native.DestroyMenu(hmenu);
+            DestroyMenu(hmenu);
         }
     }
 
     private static bool IsContextMenuMessage(uint message)
-        => message is NativeMethods.WM_INITMENUPOPUP
-            or NativeMethods.WM_MEASUREITEM
-            or NativeMethods.WM_DRAWITEM
-            or NativeMethods.WM_MENUCHAR;
-
-    private static class NativeMethods
-    {
-        public const int WH_MSGFILTER = -1;
-        public const int MSGF_MENU = 2;
-        public const uint WM_INITMENUPOPUP = 0x0117;
-        public const uint WM_MEASUREITEM = 0x002C;
-        public const uint WM_DRAWITEM = 0x002B;
-        public const uint WM_MENUCHAR = 0x0120;
-
-        public delegate IntPtr HookProc(int code, IntPtr wParam, IntPtr lParam);
-
-        [DllImport("user32.dll", SetLastError = true)]
-        public static extern IntPtr SetWindowsHookEx(int idHook, HookProc lpfn, IntPtr hMod, uint dwThreadId);
-
-        [DllImport("user32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        public static extern bool UnhookWindowsHookEx(IntPtr hhk);
-
-        [DllImport("user32.dll")]
-        public static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
-
-        [DllImport("kernel32.dll")]
-        public static extern uint GetCurrentThreadId();
-
-        [StructLayout(LayoutKind.Sequential)]
-        public struct MSG
-        {
-            public IntPtr hwnd;
-            public uint message;
-            public IntPtr wParam;
-            public IntPtr lParam;
-            public uint time;
-            public int pt_x;
-            public int pt_y;
-        }
-    }
-
-    private static void FreePidls(IntPtr[]? pidls, int count)
-    {
-        if (pidls is null)
-            return;
-
-        for (var i = 0; i < count; i++)
-        {
-            if (pidls[i] != IntPtr.Zero)
-            {
-                Shell32Native.SHFree(pidls[i]);
-                pidls[i] = IntPtr.Zero;
-            }
-        }
-    }
-
-    [DllImport("user32.dll")]
-    private static extern bool GetCursorPos(out POINT lpPoint);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr GetDesktopWindow();
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct POINT
-    {
-        public int X;
-        public int Y;
-    }
+        => message is (uint)WindowMessage.WM_INITMENUPOPUP
+            or (uint)WindowMessage.WM_MEASUREITEM
+            or (uint)WindowMessage.WM_DRAWITEM
+            or (uint)WindowMessage.WM_MENUCHAR;
 }

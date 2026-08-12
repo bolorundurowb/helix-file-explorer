@@ -3,6 +3,8 @@ using System.Runtime.InteropServices;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Models;
 using Microsoft.Extensions.Logging;
+using Vanara.PInvoke;
+using static Vanara.PInvoke.Mpr;
 
 namespace HelixExplorer.Windows.FileSystem;
 
@@ -15,20 +17,6 @@ public sealed class WinNetworkLocationProvider(
     IShellFolderEnumerator shell,
     ILogger<WinNetworkLocationProvider> logger) : INetworkLocationProvider
 {
-    private const int ResourceConnected = 0x00000001;
-    private const int ResourceGlobalNet = 0x00000002;
-    private const int ResourceRemembered = 0x00000003;
-    private const int ResourceTypeDisk = 0x00000001;
-    private const int ResourceUsageContainer = 0x00000002;
-
-    private const int ErrorNoMoreItems = 259;
-    private const int ErrorMoreData = 234;
-
-    private const int DisplayTypeDomain = 0x00000001;
-    private const int DisplayTypeServer = 0x00000002;
-    private const int DisplayTypeNetwork = 0x00000006;
-    private const int DisplayTypeRoot = 0x00000007;
-
     /// <summary>Domains → servers only. Deeper (server → shares) enumeration is deferred to navigation.</summary>
     private const int MaxContainerDepth = 2;
 
@@ -126,33 +114,33 @@ public sealed class WinNetworkLocationProvider(
     {
         var results = new List<NetworkLocationInfo>();
 
-        Enumerate(ResourceGlobalNet, null, results, depth: 0, cancellationToken);
+        Enumerate(NETRESOURCEScope.RESOURCE_GLOBALNET, null, results, depth: 0, cancellationToken);
 
         // Mapped/remembered UNC connections so users still see shares when live discovery is unavailable.
-        AddKnownConnections(ResourceConnected, results, cancellationToken);
-        AddKnownConnections(ResourceRemembered, results, cancellationToken);
+        AddKnownConnections(NETRESOURCEScope.RESOURCE_CONNECTED, results, cancellationToken);
+        AddKnownConnections(NETRESOURCEScope.RESOURCE_REMEMBERED, results, cancellationToken);
 
         return results;
     }
 
     private void Enumerate(
-        int scope,
-        NetResource? parent,
+        NETRESOURCEScope scope,
+        NETRESOURCE? parent,
         List<NetworkLocationInfo> results,
         int depth,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var openResult = WNetOpenEnum(scope, ResourceTypeDisk, 0, parent, out var handle);
-        if (openResult != 0)
+        var openResult = WNetOpenEnum(scope, NETRESOURCEType.RESOURCETYPE_DISK, 0, parent!, out var handle);
+        if (openResult != Win32Error.ERROR_SUCCESS)
         {
             logger.LogDebug(
                 "WNetOpenEnum failed ({Error}) for parent '{Parent}' at depth {Depth}: {Message}",
                 openResult,
-                parent?.RemoteName ?? "<root>",
+                parent?.lpRemoteName ?? "<root>",
                 depth,
-                new Win32Exception(openResult).Message);
+                new Win32Exception(unchecked((int)(uint)openResult)).Message);
             return;
         }
 
@@ -161,52 +149,52 @@ public sealed class WinNetworkLocationProvider(
             while (!cancellationToken.IsCancellationRequested)
             {
                 var count = -1;
-                var bufferSize = NetworkEnumBuffer.InitialSize;
-                var buffer = Marshal.AllocHGlobal(bufferSize);
+                var bufferSize = (uint)NetworkEnumBuffer.InitialSize;
+                var buffer = Marshal.AllocHGlobal((int)bufferSize);
                 try
                 {
-                    var attemptedSize = bufferSize;
+                    var attemptedSize = (int)bufferSize;
                     var result = WNetEnumResource(handle, ref count, buffer, ref bufferSize);
 
-                    if (result == ErrorMoreData)
+                    if (result == Win32Error.ERROR_MORE_DATA)
                     {
                         Marshal.FreeHGlobal(buffer);
-                        bufferSize = NetworkEnumBuffer.Grow(attemptedSize, bufferSize);
-                        buffer = Marshal.AllocHGlobal(bufferSize);
+                        bufferSize = (uint)NetworkEnumBuffer.Grow(attemptedSize, (int)bufferSize);
+                        buffer = Marshal.AllocHGlobal((int)bufferSize);
                         count = -1;
                         result = WNetEnumResource(handle, ref count, buffer, ref bufferSize);
                     }
 
-                    if (result == ErrorNoMoreItems)
+                    if (result == Win32Error.ERROR_NO_MORE_ITEMS)
                         break;
 
-                    if (result != 0)
+                    if (result != Win32Error.ERROR_SUCCESS)
                     {
                         logger.LogDebug(
                             "WNetEnumResource failed ({Error}) for parent '{Parent}': {Message}",
                             result,
-                            parent?.RemoteName ?? "<root>",
-                            new Win32Exception(result).Message);
+                            parent?.lpRemoteName ?? "<root>",
+                            new Win32Exception(unchecked((int)(uint)result)).Message);
                         break;
                     }
 
-                    var itemSize = Marshal.SizeOf<NetResource>();
+                    var itemSize = Marshal.SizeOf<NETRESOURCE>();
                     for (var i = 0; i < count; i++)
                     {
-                        var resource = Marshal.PtrToStructure<NetResource>(buffer + i * itemSize);
+                        var resource = Marshal.PtrToStructure<NETRESOURCE>(buffer + i * itemSize);
                         if (resource is null)
                             continue;
 
-                        var remoteName = resource.RemoteName;
+                        var remoteName = resource.lpRemoteName;
                         if (!string.IsNullOrWhiteSpace(remoteName) && ShouldInclude(resource))
                         {
                             results.Add(new NetworkLocationInfo(
                                 NetworkPath.Normalize(remoteName),
-                                GetDisplayName(remoteName, resource.Comment),
-                                resource.Comment));
+                                GetDisplayName(remoteName, resource.lpComment),
+                                resource.lpComment));
                         }
 
-                        if ((resource.Usage & ResourceUsageContainer) == ResourceUsageContainer
+                        if ((resource.dwUsage & NETRESOURCEUsage.RESOURCEUSAGE_CONTAINER) != 0
                             && depth + 1 < MaxContainerDepth)
                         {
                             Enumerate(scope, resource, results, depth + 1, cancellationToken);
@@ -221,13 +209,13 @@ public sealed class WinNetworkLocationProvider(
         }
         finally
         {
-            WNetCloseEnum(handle);
+            handle.Dispose();
         }
     }
 
-    private void AddKnownConnections(int scope, List<NetworkLocationInfo> results, CancellationToken cancellationToken)
+    private void AddKnownConnections(NETRESOURCEScope scope, List<NetworkLocationInfo> results, CancellationToken cancellationToken)
     {
-        if (WNetOpenEnum(scope, ResourceTypeDisk, 0, null, out var handle) != 0)
+        if (WNetOpenEnum(scope, NETRESOURCEType.RESOURCETYPE_DISK, 0, null!, out var handle) != Win32Error.ERROR_SUCCESS)
             return;
 
         try
@@ -235,36 +223,36 @@ public sealed class WinNetworkLocationProvider(
             while (!cancellationToken.IsCancellationRequested)
             {
                 var count = -1;
-                var bufferSize = NetworkEnumBuffer.InitialSize;
-                var buffer = Marshal.AllocHGlobal(bufferSize);
+                var bufferSize = (uint)NetworkEnumBuffer.InitialSize;
+                var buffer = Marshal.AllocHGlobal((int)bufferSize);
                 try
                 {
-                    var attemptedSize = bufferSize;
+                    var attemptedSize = (int)bufferSize;
                     var result = WNetEnumResource(handle, ref count, buffer, ref bufferSize);
-                    if (result == ErrorMoreData)
+                    if (result == Win32Error.ERROR_MORE_DATA)
                     {
                         Marshal.FreeHGlobal(buffer);
-                        bufferSize = NetworkEnumBuffer.Grow(attemptedSize, bufferSize);
-                        buffer = Marshal.AllocHGlobal(bufferSize);
+                        bufferSize = (uint)NetworkEnumBuffer.Grow(attemptedSize, (int)bufferSize);
+                        buffer = Marshal.AllocHGlobal((int)bufferSize);
                         count = -1;
                         result = WNetEnumResource(handle, ref count, buffer, ref bufferSize);
                     }
 
-                    if (result == ErrorNoMoreItems || result != 0)
+                    if (result == Win32Error.ERROR_NO_MORE_ITEMS || result != Win32Error.ERROR_SUCCESS)
                         break;
 
-                    var itemSize = Marshal.SizeOf<NetResource>();
+                    var itemSize = Marshal.SizeOf<NETRESOURCE>();
                     for (var i = 0; i < count; i++)
                     {
-                        var resource = Marshal.PtrToStructure<NetResource>(buffer + i * itemSize);
-                        var remoteName = resource?.RemoteName;
+                        var resource = Marshal.PtrToStructure<NETRESOURCE>(buffer + i * itemSize);
+                        var remoteName = resource?.lpRemoteName;
                         if (string.IsNullOrWhiteSpace(remoteName) || !NetworkPath.IsUnc(remoteName))
                             continue;
 
                         results.Add(new NetworkLocationInfo(
                             NetworkPath.Normalize(remoteName),
-                            GetDisplayName(remoteName, resource!.Comment),
-                            resource.Comment));
+                            GetDisplayName(remoteName, resource!.lpComment),
+                            resource.lpComment));
                     }
                 }
                 finally
@@ -275,16 +263,20 @@ public sealed class WinNetworkLocationProvider(
         }
         finally
         {
-            WNetCloseEnum(handle);
+            handle.Dispose();
         }
     }
 
-    private static bool ShouldInclude(NetResource resource)
+    private static bool ShouldInclude(NETRESOURCE resource)
     {
-        if (resource.DisplayType is DisplayTypeNetwork or DisplayTypeRoot)
+        if (resource.dwDisplayType is NETRESOURCEDisplayType.RESOURCEDISPLAYTYPE_NETWORK
+            or NETRESOURCEDisplayType.RESOURCEDISPLAYTYPE_ROOT)
+        {
             return false;
+        }
 
-        return resource.DisplayType is DisplayTypeDomain or DisplayTypeServer;
+        return resource.dwDisplayType is NETRESOURCEDisplayType.RESOURCEDISPLAYTYPE_DOMAIN
+            or NETRESOURCEDisplayType.RESOURCEDISPLAYTYPE_SERVER;
     }
 
     private static string GetDisplayName(string remoteName, string? comment)
@@ -295,28 +287,6 @@ public sealed class WinNetworkLocationProvider(
         var trimmed = remoteName.TrimEnd('\\');
         var index = trimmed.LastIndexOf('\\');
         return index >= 0 && index < trimmed.Length - 1 ? trimmed[(index + 1)..] : trimmed;
-    }
-
-    [DllImport("mpr.dll", CharSet = CharSet.Unicode)]
-    private static extern int WNetOpenEnum(int dwScope, int dwType, int dwUsage, NetResource? lpNetResource, out IntPtr lphEnum);
-
-    [DllImport("mpr.dll", CharSet = CharSet.Unicode)]
-    private static extern int WNetEnumResource(IntPtr hEnum, ref int lpcCount, IntPtr lpBuffer, ref int lpBufferSize);
-
-    [DllImport("mpr.dll")]
-    private static extern int WNetCloseEnum(IntPtr hEnum);
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private sealed class NetResource
-    {
-        public int Scope;
-        public int Type;
-        public int DisplayType;
-        public int Usage;
-        public string? LocalName;
-        public string? RemoteName;
-        public string? Comment;
-        public string? Provider;
     }
 }
 
@@ -331,7 +301,7 @@ public static class NetworkEnumBuffer
     public static int Grow(int currentSize)
         => Grow(currentSize, requestedSize: 0);
 
-    /// <summary>Honors Windows' requested size on <c>ERROR_MORE_DATA</c> when larger than a simple doubling.</summary>
+    /// <summary>Honours Windows' requested size on <c>ERROR_MORE_DATA</c> when larger than a simple doubling.</summary>
     public static int Grow(int currentSize, int requestedSize)
     {
         if (currentSize <= 0)

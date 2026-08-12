@@ -1,6 +1,5 @@
 using HelixExplorer.Core.Settings;
 using HelixExplorer.Core.Theming;
-using HelixExplorer.Services;
 
 namespace HelixExplorer.ViewModels;
 

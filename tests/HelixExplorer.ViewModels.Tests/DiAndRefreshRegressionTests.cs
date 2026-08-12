@@ -4,7 +4,6 @@ using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Services;
-using HelixExplorer.ViewModels;
 using HelixExplorer.ViewModels.Pane;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -249,8 +248,9 @@ public class ShellStrretLayoutTests
     [Fact]
     public void STRRET_IsLargeEnoughForShellCStrBuffer()
     {
-        var strretType = typeof(HelixExplorer.Windows.Shell.WinShellFolderEnumerator).Assembly
-            .GetType("HelixExplorer.Windows.Shell.STRRET", throwOnError: true)!;
-        System.Runtime.InteropServices.Marshal.SizeOf(strretType).Must().BeGreaterThanOrEqualTo(264);
+        // Vanara owns the STRRET layout now; keep the regression guard so a package upgrade
+        // cannot shrink the union below the shell's cStr[MAX_PATH] write size.
+        System.Runtime.InteropServices.Marshal.SizeOf<Vanara.PInvoke.Shell32.STRRET>()
+            .Must().BeGreaterThanOrEqualTo(264);
     }
 }

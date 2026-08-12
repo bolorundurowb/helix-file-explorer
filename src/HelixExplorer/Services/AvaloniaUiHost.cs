@@ -1,9 +1,10 @@
-using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input.Platform;
 using HelixExplorer.Core.Infrastructure;
+using Vanara.PInvoke;
+using static Vanara.PInvoke.User32;
 
 namespace HelixExplorer.Services;
 
@@ -63,15 +64,11 @@ public sealed class AvaloniaUiHost(IWindowOwnerContext ownerContext) : IUiHost
         return null;
     }
 
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetCursorPos(out POINT lpPoint);
-
     private static bool TryGetCursorPos(out (int X, int Y) point)
     {
         try
         {
-            if (GetCursorPos(out var pt))
+            if (GetCursorPos(out POINT pt))
             {
                 point = (pt.X, pt.Y);
                 return true;
@@ -83,12 +80,5 @@ public sealed class AvaloniaUiHost(IWindowOwnerContext ownerContext) : IUiHost
 
         point = default;
         return false;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct POINT
-    {
-        public int X;
-        public int Y;
     }
 }

@@ -174,7 +174,7 @@ public sealed class WinFileSystemProvider(
             IgnoreInaccessible = true,
             RecurseSubdirectories = false,
             AttributesToSkip = options.IncludeHiddenAndSystem
-                ? (FileAttributes)0
+                ? 0
                 : FileAttributes.Hidden | FileAttributes.System,
             ReturnSpecialDirectories = false,
             MatchType = MatchType.Simple

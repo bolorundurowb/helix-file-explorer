@@ -49,19 +49,28 @@ public sealed class WinTerminalLauncher : ITerminalLauncher
         });
     }
 
-    private static bool IsWindowsTerminalDefault()
+    private static bool ShouldUseWindowsTerminal(out string? wtPath)
     {
+        wtPath = ResolveWindowsTerminal();
+        if (wtPath is null)
+            return false;
+
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(@"Console\%%Startup");
-            if (key?.GetValue("DelegationTerminal") is string clsid)
-                return WindowsTerminalClsids.Contains(clsid, StringComparer.OrdinalIgnoreCase);
+            if (key?.GetValue("DelegationTerminal") is not string clsid)
+                return false;
+
+            // An "Automatic" (`00000000-…`) or all-zero CLSID is a Windows setting, not an assertion
+            // that Windows Terminal is the default — do not force `wt` under that value. Only the
+            // explicit Windows Terminal delegation GUIDs are honored here.
+            return clsid.Equals(WindowsTerminalStableClsid, StringComparison.OrdinalIgnoreCase)
+                || clsid.Equals(WindowsTerminalPreviewClsid, StringComparison.OrdinalIgnoreCase);
         }
         catch
         {
+            return false;
         }
-
-        return false;
     }
 
     /// <summary>

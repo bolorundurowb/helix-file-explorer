@@ -12,13 +12,9 @@ namespace HelixExplorer.Windows.Shell;
 /// </summary>
 public sealed class WinTerminalLauncher : ITerminalLauncher
 {
-    // DelegationTerminal CLSIDs registered by Windows Terminal (stable + preview).
-    // Source: microsoft/terminal policies/WindowsTerminal.admx.
-    private static readonly string[] WindowsTerminalClsids =
-    [
-        "{E12CFF52-A866-4C77-9A90-F570A7AA2C6B}", // Windows Terminal (stable)
-        "{86633F1F-6454-40EC-89CE-DA4EBA977EE2}", // Windows Terminal Preview
-    ];
+    private const string WindowsTerminalStableClsid = "{E12CFF52-A866-4C77-9A90-F570A7AA2C6B}";
+    // Preview CLSID retained to honour users running the preview channel as their default terminal.
+    private const string WindowsTerminalPreviewClsid = "{86633F1F-6454-40EC-89CE-DA4EBA977EE2}";
 
     public bool TryOpenInDirectory(string directoryPath)
     {
@@ -27,41 +23,63 @@ public sealed class WinTerminalLauncher : ITerminalLauncher
 
         var fullPath = Path.GetFullPath(directoryPath);
 
-        if (IsWindowsTerminalDefault() && TryOpenWindowsTerminalNewTab(fullPath))
+        if (ShouldUseWindowsTerminal(out var wt) && TryOpenWindowsTerminalNewTab(wt!, fullPath))
             return true;
 
         return TryOpenFallbackShell(fullPath);
     }
 
-    private static bool TryOpenWindowsTerminalNewTab(string directoryPath)
+    private static bool TryOpenWindowsTerminalNewTab(string wtPath, string directoryPath)
     {
-        // "wt.exe" with UseShellExecute resolves via PATH / AppExecutionAlias without locating the binary.
+        // Resolve `wt.exe` explicitly under %LOCALAPPDATA%\Microsoft\WindowsApps rather than relying
+        // on the current process's PATH. The Windows Terminal App Execution Alias lives there but
+        // is not guaranteed to be on an inherited PATH (the common cause of "'wt' is not recognized").
+        // No `-p` profile is specified so Windows Terminal launches the user's configured defaultProfile.
         // The directory path is escaped per Windows command-line rules so a path containing
         // a literal " cannot break out of the quoted argument and inject flags.
         var args = $"-w 0 new-tab -d {QuoteForWindowsCommandLine(directoryPath)}";
 
         return TryStart(new ProcessStartInfo
         {
-            FileName = "wt.exe",
+            FileName = wtPath,
             Arguments = args,
-            UseShellExecute = true,
-            CreateNoWindow = false
+            UseShellExecute = true
         });
     }
 
-    private static bool IsWindowsTerminalDefault()
+    private static bool ShouldUseWindowsTerminal(out string? wtPath)
     {
+        wtPath = ResolveWindowsTerminal();
+        if (wtPath is null)
+            return false;
+
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(@"Console\%%Startup");
-            if (key?.GetValue("DelegationTerminal") is string clsid)
-                return WindowsTerminalClsids.Contains(clsid, StringComparer.OrdinalIgnoreCase);
+            if (key?.GetValue("DelegationTerminal") is not string clsid)
+                return false;
+
+            // An "Automatic" (`00000000-…`) or all-zero CLSID is a Windows setting, not an assertion
+            // that Windows Terminal is the default — do not force `wt` under that value. Only the
+            // explicit Windows Terminal delegation GUIDs are honored here.
+            return clsid.Equals(WindowsTerminalStableClsid, StringComparison.OrdinalIgnoreCase)
+                || clsid.Equals(WindowsTerminalPreviewClsid, StringComparison.OrdinalIgnoreCase);
         }
         catch
         {
+            return false;
         }
+    }
 
-        return false;
+    /// <summary>
+    /// Locates <c>wt.exe</c> via its App Execution Alias install location rather than the process
+    /// <c>PATH</c>, which may not include <c>%LOCALAPPDATA%\Microsoft\WindowsApps</c>.
+    /// </summary>
+    private static string? ResolveWindowsTerminal()
+    {
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var wt = Path.Combine(localAppData, "Microsoft", "WindowsApps", "wt.exe");
+        return File.Exists(wt) ? wt : null;
     }
 
     private static bool TryOpenFallbackShell(string directoryPath)

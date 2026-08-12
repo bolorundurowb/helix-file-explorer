@@ -64,6 +64,17 @@ public sealed class WinTerminalLauncher : ITerminalLauncher
         return false;
     }
 
+    /// <summary>
+    /// Locates <c>wt.exe</c> via its App Execution Alias install location rather than the process
+    /// <c>PATH</c>, which may not include <c>%LOCALAPPDATA%\Microsoft\WindowsApps</c>.
+    /// </summary>
+    private static string? ResolveWindowsTerminal()
+    {
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var wt = Path.Combine(localAppData, "Microsoft", "WindowsApps", "wt.exe");
+        return File.Exists(wt) ? wt : null;
+    }
+
     private static bool TryOpenFallbackShell(string directoryPath)
     {
         var pwsh = ResolveExecutableOnPath("pwsh.exe");

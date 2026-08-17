@@ -4,6 +4,7 @@ using Avalonia.Markup.Xaml;
 using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Core.Logging;
+using HelixExplorer.Core.Persistence;
 using HelixExplorer.Services;
 using HelixExplorer.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
@@ -56,6 +57,11 @@ public partial class App : Application
             .Build();
 
         Services = _host.Services;
+
+        // Initialize the app database (and run any legacy JSON migration) before any settings
+        // Load/Flush or window creation so chrome saves cannot drop the legacy maps first.
+        _host.Services.GetRequiredService<IAppDatabase>().Initialize();
+
         var startupLogger = _host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("HelixExplorer");
         startupLogger.LogInformation(
             "Helix Explorer {Version} starting. Logs: {LogsDirectory}",

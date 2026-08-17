@@ -1,17 +1,18 @@
+using HelixExplorer.Core.Persistence;
 using HelixExplorer.Core.Settings;
 
 namespace HelixExplorer.Services;
 
 public sealed class FolderColorService : IFolderColorService
 {
-    private readonly ISettingsStore _settingsStore;
+    private readonly IFolderColorStore _store;
     private readonly Dictionary<string, uint> _colors = new(StringComparer.OrdinalIgnoreCase);
 
-    public FolderColorService(ISettingsStore settingsStore)
+    public FolderColorService(IFolderColorStore store)
     {
-        _settingsStore = settingsStore;
-        var settings = _settingsStore.Load();
-        foreach (var (path, color) in settings.FolderColors)
+        _store = store;
+        // Colors are looked up per visible item by converters; load once so listing never hits SQLite.
+        foreach (var (path, color) in store.LoadAll())
             _colors[path] = color;
     }
 
@@ -31,7 +32,7 @@ public sealed class FolderColorService : IFolderColorService
             return;
 
         _colors[normalized] = argb;
-        Persist();
+        _store.Upsert(normalized, argb);
         ColorsChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -44,15 +45,8 @@ public sealed class FolderColorService : IFolderColorService
         if (!_colors.Remove(normalized))
             return;
 
-        Persist();
+        _store.Delete(normalized);
         ColorsChanged?.Invoke(this, EventArgs.Empty);
-    }
-
-    private void Persist()
-    {
-        var settings = _settingsStore.Load();
-        settings.FolderColors = new Dictionary<string, uint>(_colors, StringComparer.OrdinalIgnoreCase);
-        _settingsStore.Save(settings);
     }
 
     private static string? Normalize(string path)

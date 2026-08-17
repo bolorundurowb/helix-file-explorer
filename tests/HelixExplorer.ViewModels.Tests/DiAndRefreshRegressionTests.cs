@@ -3,6 +3,8 @@ using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Core.Models;
+using HelixExplorer.Core.Persistence;
+using HelixExplorer.Core.Settings;
 using HelixExplorer.Services;
 using HelixExplorer.ViewModels.Pane;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,6 +32,11 @@ public class ScopedDiWiringTests
         Descriptor<PaneFileOperationCoordinator>(services).Lifetime.Must().Be(ServiceLifetime.Transient);
         Descriptor<PaneShellActionCoordinator>(services).Lifetime.Must().Be(ServiceLifetime.Transient);
         Descriptor<IWindowHostService>(services).Lifetime.Must().Be(ServiceLifetime.Singleton);
+        Descriptor<IAppDatabase>(services).Lifetime.Must().Be(ServiceLifetime.Singleton);
+        Descriptor<IFolderViewPreferencesStore>(services).Lifetime.Must().Be(ServiceLifetime.Singleton);
+        Descriptor<IFolderColorStore>(services).Lifetime.Must().Be(ServiceLifetime.Singleton);
+        Descriptor<IFolderColorService>(services).Lifetime.Must().Be(ServiceLifetime.Singleton);
+        Descriptor<IFolderViewPreferencesService>(services).Lifetime.Must().Be(ServiceLifetime.Singleton);
     }
 
     [Fact]

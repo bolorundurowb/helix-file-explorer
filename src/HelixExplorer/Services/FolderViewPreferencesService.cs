@@ -1,19 +1,17 @@
+using HelixExplorer.Core.Persistence;
 using HelixExplorer.Core.Settings;
 
 namespace HelixExplorer.Services;
 
 public sealed class FolderViewPreferencesService : IFolderViewPreferencesService
 {
-    private readonly ISettingsStore _settingsStore;
+    private readonly IFolderViewPreferencesStore _store;
     private readonly Dictionary<string, FolderViewPreferences> _prefs = new(StringComparer.OrdinalIgnoreCase);
     private readonly Lock _gate = new();
 
-    public FolderViewPreferencesService(ISettingsStore settingsStore)
+    public FolderViewPreferencesService(IFolderViewPreferencesStore store)
     {
-        _settingsStore = settingsStore;
-        var settings = _settingsStore.Load();
-        foreach (var (path, prefs) in settings.FolderViewPreferences)
-            _prefs[path] = Clone(prefs);
+        _store = store;
     }
 
     public bool TryGet(string path, out FolderViewPreferences preferences)
@@ -25,10 +23,18 @@ public sealed class FolderViewPreferencesService : IFolderViewPreferencesService
 
         lock (_gate)
         {
-            if (!_prefs.TryGetValue(normalized, out var stored))
+            if (_prefs.TryGetValue(normalized, out var cached))
+            {
+                preferences = Clone(cached);
+                return true;
+            }
+
+            if (!_store.TryGet(normalized, out var fromStore))
                 return false;
 
-            preferences = Clone(stored);
+            // Write-through cache: populate on first miss so navigation never hits SQLite twice.
+            _prefs[normalized] = Clone(fromStore);
+            preferences = Clone(fromStore);
             return true;
         }
     }
@@ -41,8 +47,9 @@ public sealed class FolderViewPreferencesService : IFolderViewPreferencesService
 
         lock (_gate)
         {
-            _prefs[normalized] = Clone(preferences);
-            Persist();
+            var copy = Clone(preferences);
+            _prefs[normalized] = copy;
+            _store.Upsert(normalized, copy);
         }
     }
 
@@ -54,21 +61,9 @@ public sealed class FolderViewPreferencesService : IFolderViewPreferencesService
 
         lock (_gate)
         {
-            if (!_prefs.Remove(normalized))
-                return;
-
-            Persist();
+            _prefs.Remove(normalized);
+            _store.Delete(normalized);
         }
-    }
-
-    private void Persist()
-    {
-        var settings = _settingsStore.Load();
-        settings.FolderViewPreferences = _prefs.ToDictionary(
-            static kv => kv.Key,
-            static kv => Clone(kv.Value),
-            StringComparer.OrdinalIgnoreCase);
-        _settingsStore.Save(settings);
     }
 
     private static FolderViewPreferences Clone(FolderViewPreferences source) => new()

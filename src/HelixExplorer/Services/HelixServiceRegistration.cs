@@ -3,6 +3,7 @@ using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Infrastructure;
+using HelixExplorer.Core.Persistence;
 using HelixExplorer.Core.Session;
 using HelixExplorer.Core.Settings;
 using HelixExplorer.Core.Theming;
@@ -25,6 +26,9 @@ public static class HelixServiceRegistration
     {
         services.AddHelixWindowsServices();
         services.AddSingleton<ISettingsStore, JsonSettingsStore>();
+        services.AddSingleton<IAppDatabase, SqliteAppDatabase>();
+        services.AddSingleton<IFolderViewPreferencesStore, FolderViewPreferencesStore>();
+        services.AddSingleton<IFolderColorStore, FolderColorStore>();
         services.AddSingleton<ISessionStore, JsonSessionStore>();
         services.AddSingleton<IThemeService, AvaloniaThemeService>();
         services.AddSingleton<IUiFontService, AvaloniaUiFontService>();

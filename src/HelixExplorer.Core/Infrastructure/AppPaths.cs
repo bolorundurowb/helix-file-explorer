@@ -14,6 +14,7 @@ public static class AppPaths
     public static string AppData => AppDataFolder;
     public static string SettingsFile => Path.Combine(AppDataFolder, "settings.json");
     public static string SessionFile => Path.Combine(AppDataFolder, "session.json");
+    public static string AppDatabaseFile => Path.Combine(AppDataFolder, "helix.db");
 
     /// <summary>
     /// Root folder for application log files under the system temp directory.

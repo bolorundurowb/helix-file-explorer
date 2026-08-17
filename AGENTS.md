@@ -55,6 +55,7 @@ Bump product version only in `Directory.Build.props` (release workflow reads it 
 | Data | Location |
 |------|----------|
 | Settings / session | `%AppData%\HelixExplorer\` (`settings.json`, `session.json`) |
+| App database | `%AppData%\HelixExplorer\` (`helix.db` — per-folder view preferences and colors via `IAppDatabase`) |
 | Logs | `%TEMP%\HelixExplorer\logs\{version}\` (rolling, versioned) |
 
 Use `AppPaths` / `AppVersion` instead of hard-coding paths.

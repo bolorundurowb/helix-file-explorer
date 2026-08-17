@@ -24,13 +24,10 @@ public sealed class AppSettings
     public uint? AccentColorArgb { get; set; }
     public List<string> PinnedPaths { get; set; } = [];
     public List<string> UnpinnedPaths { get; set; } = [];
-    public Dictionary<string, uint> FolderColors { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>
-    /// Per-directory view/sort/thumbnail overrides keyed by normalized path.
-    /// </summary>
-    public Dictionary<string, FolderViewPreferences> FolderViewPreferences { get; set; } =
-        new(StringComparer.OrdinalIgnoreCase);
+    // Per-folder view preferences and folder colors have moved to the SQLite app database
+    // (helix.db). A one-time migration in SqliteAppDatabase.Initialize() copies legacy JSON
+    // entries before this class ever loads.
 
     public double? WindowWidth { get; set; }
     public double? WindowHeight { get; set; }

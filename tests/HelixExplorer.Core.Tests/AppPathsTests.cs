@@ -4,6 +4,15 @@ namespace HelixExplorer.Core.Tests;
 
 public class AppPathsTests
 {
+    private static string ExpectedProfileFolderName =>
+        AppPaths.IsDevelopmentProfile ? "HelixExplorer.Dev" : "HelixExplorer";
+
+    [Fact]
+    public void AppData_UsesProfileFolder()
+    {
+        Path.GetFileName(AppPaths.AppData).Must().Be(ExpectedProfileFolderName);
+    }
+
     [Fact]
     public void AppDatabaseFile_IsHelixDbUnderAppData()
     {
@@ -11,9 +20,15 @@ public class AppPathsTests
     }
 
     [Fact]
+    public void TempRoot_MatchesProfileFolder()
+    {
+        AppPaths.TempRoot.Must().Be(Path.Combine(Path.GetTempPath(), ExpectedProfileFolderName));
+    }
+
+    [Fact]
     public void LogsRoot_IsUnderTempDirectory()
     {
-        var expectedPrefix = Path.Combine(Path.GetTempPath(), "HelixExplorer", "logs");
+        var expectedPrefix = Path.Combine(Path.GetTempPath(), ExpectedProfileFolderName, "logs");
         AppPaths.LogsRoot.Must().Be(expectedPrefix);
     }
 

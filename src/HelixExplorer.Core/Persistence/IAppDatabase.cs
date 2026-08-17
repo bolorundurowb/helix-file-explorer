@@ -4,7 +4,7 @@ namespace HelixExplorer.Core.Persistence;
 
 /// <summary>
 /// Owns the shared SQLite connection and schema for the app database
-/// (<c>%AppData%\HelixExplorer\helix.db</c>). Stores borrow the connection
+/// (<see cref="HelixExplorer.Core.Infrastructure.AppPaths.AppDatabaseFile"/>). Stores borrow the connection
 /// and synchronize on <see cref="ConnectionGate"/>.
 /// </summary>
 public interface IAppDatabase : IDisposable

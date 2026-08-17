@@ -1,4 +1,5 @@
 using HelixExplorer.Core.Archives;
+using HelixExplorer.Core.Infrastructure;
 using Microsoft.Extensions.Logging.Abstractions;
 using SharpCompress.Archives;
 using SharpCompress.Archives.Zip;
@@ -78,7 +79,7 @@ public class SharpCompressArchiveProviderTests
             var result = await provider.ExtractEntryAsync(ArchivePath.Combine(archivePath, entryKey));
 
             result.Must().NotBeNull();
-            var tempRoot = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "HelixExplorer"));
+            var tempRoot = Path.GetFullPath(AppPaths.TempRoot);
             result!.Must().StartWith(tempRoot);
             File.Exists(result!).Must().BeTrue();
             (await File.ReadAllTextAsync(result!)).Must().Be("payload");

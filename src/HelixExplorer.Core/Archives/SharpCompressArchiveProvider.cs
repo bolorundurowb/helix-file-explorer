@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using HelixExplorer.Core.Collections;
 using HelixExplorer.Core.FileSystem;
+using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Core.Models;
 using Microsoft.Extensions.Logging;
 using SharpCompress.Archives;
@@ -13,7 +14,7 @@ namespace HelixExplorer.Core.Archives;
 
 public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchiveProvider> logger) : IArchiveProvider
 {
-    private static string ExtractionRoot => Path.Combine(Path.GetTempPath(), "HelixExplorer");
+    private static string ExtractionRoot => AppPaths.TempRoot;
 
     public bool IsArchiveFile(string path) => ArchivePath.IsArchiveFile(path);
 

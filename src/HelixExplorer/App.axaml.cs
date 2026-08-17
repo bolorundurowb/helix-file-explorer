@@ -64,8 +64,9 @@ public partial class App : Application
 
         var startupLogger = _host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("HelixExplorer");
         startupLogger.LogInformation(
-            "Helix Explorer {Version} starting. Logs: {LogsDirectory}",
+            "Helix Explorer {Version} starting. Data: {AppData}. Logs: {LogsDirectory}",
             AppVersion.Current,
+            AppPaths.AppData,
             _fileLoggerProvider.LogsDirectory);
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)

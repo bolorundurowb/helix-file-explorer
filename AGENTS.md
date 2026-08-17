@@ -58,6 +58,8 @@ Bump product version only in `Directory.Build.props` (release workflow reads it 
 | App database | `%AppData%\HelixExplorer\` (`helix.db` — per-folder view preferences and colors via `IAppDatabase`) |
 | Logs | `%TEMP%\HelixExplorer\logs\{version}\` (rolling, versioned) |
 
+Debug builds (F5 / `dotnet run`) and any process with `HELIX_DEV_PROFILE=1` use the sibling `HelixExplorer.Dev` folder for AppData, logs, and archive temp so they cannot overwrite an installed Release profile. Installed Release builds keep `%AppData%\HelixExplorer\`.
+
 Use `AppPaths` / `AppVersion` instead of hard-coding paths.
 
 ## Installer

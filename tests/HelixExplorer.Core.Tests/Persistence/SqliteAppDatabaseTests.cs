@@ -546,6 +546,46 @@ public class LegacyJsonMigrationTests
     }
 
     [Fact]
+    public void Initialize_DoesNotOverwriteExistingDbRows_WhenLegacyJsonStillPresent()
+    {
+        var dbPath = NewTempDbPath();
+        var settingsPath = NewTempSettingsPath();
+        try
+        {
+            var settingsStore = new JsonSettingsStore(settingsPath);
+            using (var db = new SqliteAppDatabase(settingsStore, dbPath, settingsPath))
+            {
+                db.Initialize();
+                new FolderViewPreferencesStore(db).Upsert(
+                    @"C:\Users\docs",
+                    new FolderViewPreferences { ViewMode = LayoutMode.Details, ThumbnailSize = 72 });
+                new FolderColorStore(db).Upsert(@"C:\Users\docs", 0xFF00FF00);
+            }
+
+            // Simulate a failed settings rewrite: JSON still has the old maps, but the DB
+            // already has newer rows. Re-init must not copy JSON over them.
+            WriteLegacySettings(settingsPath,
+                new() { [@"C:\Users\docs"] = new() { ViewMode = LayoutMode.Grid, ThumbnailSize = 96 } },
+                new() { [@"C:\Users\docs"] = 0xFF0078D4 });
+
+            using var db2 = new SqliteAppDatabase(settingsStore, dbPath, settingsPath);
+            db2.Initialize();
+
+            var prefStore = new FolderViewPreferencesStore(db2);
+            prefStore.TryGet(@"C:\Users\docs", out var prefs).Must().BeTrue();
+            prefs.ViewMode.Must().Be(LayoutMode.Details);
+            prefs.ThumbnailSize.Must().Be(72);
+
+            new FolderColorStore(db2).LoadAll()[@"C:\Users\docs"].Must().Be(0xFF00FF00u);
+        }
+        finally
+        {
+            CleanupDb(dbPath);
+            try { File.Delete(settingsPath); } catch { }
+        }
+    }
+
+    [Fact]
     public void Initialize_DoesNotDuplicateOrOverwrite_OnSecondStartup()
     {
         var dbPath = NewTempDbPath();

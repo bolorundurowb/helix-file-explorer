@@ -5,6 +5,12 @@ namespace HelixExplorer.Core.Tests;
 public class AppPathsTests
 {
     [Fact]
+    public void AppDatabaseFile_IsHelixDbUnderAppData()
+    {
+        AppPaths.AppDatabaseFile.Must().Be(Path.Combine(AppPaths.AppData, "helix.db"));
+    }
+
+    [Fact]
     public void LogsRoot_IsUnderTempDirectory()
     {
         var expectedPrefix = Path.Combine(Path.GetTempPath(), "HelixExplorer", "logs");

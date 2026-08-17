@@ -1,5 +1,3 @@
-using Microsoft.Data.Sqlite;
-
 namespace HelixExplorer.Core.Persistence;
 
 /// <summary>

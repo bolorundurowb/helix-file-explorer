@@ -1,7 +1,6 @@
 using System.Text.Json;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Settings;
-using Microsoft.Data.Sqlite;
 
 namespace HelixExplorer.Core.Persistence;
 

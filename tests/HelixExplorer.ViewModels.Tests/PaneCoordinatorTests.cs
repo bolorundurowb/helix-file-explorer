@@ -419,6 +419,42 @@ public class PaneNavigationControllerTests
         PaneNavigationController.TryGetChildOnPath(null, @"C:\A\B\").Must().BeNull();
     }
 
+    [Fact]
+    public void ResolveFocusOnEnter_ForwardUncParent_SelectsTheShareFolderJustLeft()
+    {
+        var navigation = CreateController();
+
+        navigation.ResolveFocusOnEnter(
+                PaneNavigationKind.Forward,
+                @"\\server\share\folder\",
+                @"\\server\share\")
+            .Must().Be(@"\\server\share\folder\");
+    }
+
+    [Fact]
+    public void ResolveFocusOnEnter_ForwardArchiveParent_SelectsTheInnerFolderJustLeft()
+    {
+        var navigation = CreateController();
+        var docs = ArchivePath.Combine(@"C:\backup.zip", "docs/");
+        var nested = ArchivePath.Combine(@"C:\backup.zip", "docs/sub/");
+
+        navigation.ResolveFocusOnEnter(PaneNavigationKind.Forward, nested, docs)
+            .Must().Be(nested);
+    }
+
+    [Fact]
+    public void ResolveFocusOnEnter_HistoryUnc_UsesRememberedEntryNotTheBranch()
+    {
+        var navigation = CreateController();
+        navigation.RememberFocus(@"\\server\share\", @"\\server\share\notes.txt");
+
+        navigation.ResolveFocusOnEnter(
+                PaneNavigationKind.History,
+                @"\\server\share\folder\",
+                @"\\server\share\")
+            .Must().Be(@"\\server\share\notes.txt");
+    }
+
     private static PaneNavigationController CreateController()
         => new(new FakeFileSystem(), new FakeArchive());
 

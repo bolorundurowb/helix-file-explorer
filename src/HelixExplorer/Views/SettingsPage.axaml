@@ -86,6 +86,19 @@
                             </ComboBox>
                         </Grid>
                     </Border>
+                    <TextBlock Text="Tabs"
+                               FontSize="14" FontWeight="SemiBold" Margin="2,12,0,4" />
+                    <Border Classes="settingsRow">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Text="Switch to new tabs when opening" FontSize="14" />
+                                <TextBlock Text="Off keeps you on the current tab when using Open in new tab."
+                                           FontSize="12" Opacity="0.6" />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1"
+                                          IsChecked="{Binding Main.SwitchToNewTabOnOpen, Mode=TwoWay}" />
+                        </Grid>
+                    </Border>
                     <Border Classes="settingsRow">
                         <Grid ColumnDefinitions="*,Auto">
                             <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">

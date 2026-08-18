@@ -76,6 +76,26 @@ public class JsonSettingsStoreTests
     }
 
     [Fact]
+    public void Load_SettingsFileWithoutNewTabPreference_KeepsSwitchingToNewTabs()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "helix-settings-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            // A file written before the preference existed must not silently change tab behaviour.
+            File.WriteAllText(path, "{\"Theme\":\"Dark\",\"SidebarWidth\":260}");
+
+            var loaded = new JsonSettingsStore(path).Load();
+
+            loaded.SwitchToNewTabOnOpen.Must().BeTrue();
+            loaded.SidebarWidth.Must().Be(260);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+        }
+    }
+
+    [Fact]
     public async Task Save_ConcurrentCalls_DoNotThrowAndLeaveValidJson()
     {
         var path = Path.Combine(Path.GetTempPath(), "helix-settings-" + Guid.NewGuid().ToString("N") + ".json");

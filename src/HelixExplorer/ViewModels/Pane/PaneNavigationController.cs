@@ -3,14 +3,128 @@ using HelixExplorer.Core.FileSystem;
 
 namespace HelixExplorer.ViewModels.Pane;
 
+/// <summary>How a pane arrived at a folder, which decides what should be focused there.</summary>
+public enum PaneNavigationKind
+{
+    /// <summary>New navigation: Up/breadcrumb highlights the branch just left.</summary>
+    Forward,
+
+    /// <summary>Back/Forward: replay where the user was in that folder.</summary>
+    History
+}
+
 public sealed class PaneNavigationController(IFileSystemProvider fileSystem, IArchiveProvider archive)
 {
+    /// <summary>
+    /// Focus memory is session state for browsing comfort, so it stays in memory and stays bounded —
+    /// a long session must not accumulate an entry per folder visited.
+    /// </summary>
+    private const int MaxRememberedFolders = 64;
+
     private readonly Stack<string> _backStack = new();
     private readonly Stack<string> _forwardStack = new();
+    private readonly Dictionary<string, string> _focusByPath = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Queue<string> _focusOrder = new();
 
     public bool CanGoBack => _backStack.Count > 0;
 
     public bool CanGoForward => _forwardStack.Count > 0;
+
+    /// <summary>
+    /// Records the entry a pane was focused on in <paramref name="path"/>. A null or empty
+    /// <paramref name="entryPath"/> forgets the folder rather than storing a meaningless anchor.
+    /// </summary>
+    public void RememberFocus(string? path, string? entryPath)
+    {
+        var key = PathUtilities.NormalizePath(path);
+        if (key.Length == 0)
+            return;
+
+        if (string.IsNullOrEmpty(entryPath))
+        {
+            _focusByPath.Remove(key);
+            return;
+        }
+
+        if (!_focusByPath.TryAdd(key, entryPath))
+        {
+            _focusByPath[key] = entryPath;
+            return;
+        }
+
+        _focusOrder.Enqueue(key);
+        while (_focusOrder.Count > MaxRememberedFolders)
+        {
+            var evicted = _focusOrder.Dequeue();
+            if (!string.Equals(evicted, key, StringComparison.OrdinalIgnoreCase))
+                _focusByPath.Remove(evicted);
+        }
+    }
+
+    public string? GetRememberedFocus(string? path)
+    {
+        var key = PathUtilities.NormalizePath(path);
+        return key.Length == 0 ? null : _focusByPath.GetValueOrDefault(key);
+    }
+
+    /// <summary>
+    /// The entry that should be focused on entering <paramref name="destination"/> from
+    /// <paramref name="origin"/>, or null when there is nothing sensible to focus.
+    /// </summary>
+    public string? ResolveFocusOnEnter(PaneNavigationKind kind, string? origin, string? destination)
+    {
+        if (string.IsNullOrEmpty(destination))
+            return null;
+
+        // Back/Forward replays the user's own position; only a fresh navigation upwards should
+        // override it with the folder that was just left.
+        if (kind == PaneNavigationKind.History)
+            return GetRememberedFocus(destination);
+
+        return TryGetChildOnPath(destination, origin) ?? GetRememberedFocus(destination);
+    }
+
+    /// <summary>
+    /// The immediate child of <paramref name="ancestor"/> on the way down to
+    /// <paramref name="descendant"/>, so jumping up several levels (breadcrumb) still highlights the
+    /// branch the user came from. Null when the two are unrelated or equal.
+    /// </summary>
+    public static string? TryGetChildOnPath(string? ancestor, string? descendant)
+    {
+        if (string.IsNullOrEmpty(ancestor)
+            || string.IsNullOrEmpty(descendant)
+            || PathUtilities.PathsEqual(ancestor, descendant)
+            || !PathUtilities.IsSameOrChildPath(ancestor, descendant))
+        {
+            return null;
+        }
+
+        var candidate = descendant;
+        while (true)
+        {
+            var parent = GetParentPath(candidate);
+            if (string.IsNullOrEmpty(parent) || PathUtilities.PathsEqual(parent, candidate))
+                return null;
+
+            if (PathUtilities.PathsEqual(parent, ancestor))
+                return candidate;
+
+            candidate = parent;
+        }
+    }
+
+    private static string? GetParentPath(string path)
+    {
+        if (ArchivePath.IsVirtual(path))
+            return ArchivePath.GetParent(path);
+
+        if (ShellPath.IsShellPath(path))
+            return null;
+
+        var trimmed = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var parent = Directory.GetParent(trimmed);
+        return parent is null ? null : EnsureTrailingSeparator(parent.FullName);
+    }
 
     /// <summary>
     /// Whether Up should be enabled for the current location (drive/network/server roots cannot go up).

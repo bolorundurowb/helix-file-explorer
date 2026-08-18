@@ -173,11 +173,23 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
 
     private void OnOpenInOtherPaneRequested(object? sender, string path)
     {
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+
+        // Resolve the requesting pane before ToggleDualPane(): splitting reassigns ActivePane to the
+        // new right pane, so deriving "the other pane" from ActivePane afterwards inverts the target.
+        var source = sender as PaneViewModel ?? ActivePane;
+
         if (!IsDualPane)
             ToggleDualPane();
 
-        var target = ReferenceEquals(ActivePane, LeftPane) ? RightPane : LeftPane;
-        target ??= RightPane ?? LeftPane;
+        var target = ReferenceEquals(source, LeftPane) ? RightPane : LeftPane;
+
+        // No other pane means no target: navigating the source pane instead would silently move the
+        // user away from the folder they were looking at.
+        if (target is null || ReferenceEquals(target, source))
+            return;
+
         target.NavigateTo(path);
         ActivePane = target;
     }

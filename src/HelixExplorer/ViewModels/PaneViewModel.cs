@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Collections.Specialized;
 using System.Diagnostics;
 using Avalonia.Input;
 using Avalonia.Threading;
@@ -44,13 +43,17 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     private readonly PaneSelectionModel _selection = new();
     private readonly PaneNavigationController _navigation;
     private readonly PaneListingCoordinator _listing = new();
+    private readonly PaneTypeAheadModel _typeAhead = new();
     private readonly PaneFileOperationCoordinator _fileOperations;
     private readonly PaneRefreshCoordinator _refreshCoordinator;
     private readonly PaneSearchCoordinator _searchCoordinator;
     private readonly PaneShellActionCoordinator _shellActions;
     private EntryItemViewModel? _renamingEntry;
     private bool _isCommittingRename;
-    private bool _suppressSelectionFlagSync;
+    private bool _syncingSelectedEntry;
+
+    /// <summary>Entry the pending navigation wants focused once the destination listing publishes.</summary>
+    private string? _pendingFocusPath;
     private CancellationTokenSource? _thumbnailVisualCts;
     private IReadOnlyList<FileSystemEntry> _allEntries = Array.Empty<FileSystemEntry>();
     private IReadOnlyList<FileSystemEntry> _directoryEntries = Array.Empty<FileSystemEntry>();
@@ -117,8 +120,11 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         _shellActions = coordinatorFactory.CreateShellActionCoordinator();
         _watcher.Changed += OnWatcherChanged;
         _clipboard.Changed += OnClipboardChanged;
+
+        // PaneSelectionModel owns SelectedEntries and the per-entry IsSelected flags, and raises this
+        // once per selection operation. Reacting to individual collection changes instead made every
+        // range extension re-sync all entries and the native list control per added item.
         _selection.SelectionChanged += OnSelectionModelChanged;
-        _selection.SelectedEntries.CollectionChanged += OnSelectedEntriesChanged;
     }
 
     private void OnRecycleBinChanged(object? sender, EventArgs e)
@@ -126,17 +132,19 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
 
     private void OnSelectionModelChanged(object? sender, EventArgs e)
     {
-        SelectedEntry = _selection.SelectedEntry;
+        _syncingSelectedEntry = true;
+        try
+        {
+            SelectedEntry = _selection.SelectedEntry;
+        }
+        finally
+        {
+            _syncingSelectedEntry = false;
+        }
+
         SelectedCount = _selection.SelectedCount;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         NotifyCommandsCanExecuteChanged();
-    }
-
-    private void OnSelectedEntriesChanged(object? sender, NotifyCollectionChangedEventArgs e)
-    {
-        if (!_suppressSelectionFlagSync)
-            SyncEntrySelectionFlags();
-        SelectedCount = SelectedEntries.Count;
     }
 
     public event EventHandler? Navigated;
@@ -272,6 +280,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     partial void OnCurrentPathChanged(string value)
     {
         ClearRenameState();
+        _typeAhead.Reset();
         var isHomeRoute = string.Equals(value, PaneConstants.HomeRoute, StringComparison.Ordinal);
         LocationKind = isHomeRoute
             ? PaneLocationKind.Home
@@ -336,9 +345,10 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         Entries.Clear();
         GridItems.Clear();
         _gridPresenter.Reset();
-        SelectedEntries.Clear();
-        SelectedEntry = null;
-        SelectedCount = 0;
+
+        // Clear through the model so the range anchor is dropped too: it used to survive a folder
+        // change, letting the first Shift+Click in the new listing extend from a stale origin.
+        _selection.Clear();
         ItemCount = 0;
         TotalCount = 0;
         ListingSizeBytes = 0;
@@ -705,16 +715,16 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
 
     partial void OnSelectedEntryChanged(EntryItemViewModel? value)
     {
-        if (value is null)
+        // Set from the selection model itself: nothing to reconcile.
+        if (value is null || _syncingSelectedEntry)
             return;
 
-        if (SelectedEntries.Count <= 1)
+        // An external assignment (single active item) must go through the model so the collection and
+        // the per-entry flags stay consistent with it.
+        if (SelectedEntries.Count <= 1
+            && (SelectedEntries.Count == 0 || !ReferenceEquals(SelectedEntries[0], value)))
         {
-            if (SelectedEntries.Count == 0 || !ReferenceEquals(SelectedEntries[0], value))
-            {
-                SelectedEntries.Clear();
-                SelectedEntries.Add(value);
-            }
+            _selection.SelectSingle(value, Entries);
         }
     }
 
@@ -735,6 +745,24 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     public void UpdateSelection(IList<EntryItemViewModel> entries)
         => _selection.UpdateSelection(entries, Entries);
 
+    /// <summary>
+    /// Applies a selection change the list control already made (Shift+Down on the DataGrid reports a
+    /// single added row). Keeps keyboard range extension independent of how much is already selected.
+    /// </summary>
+    public void ApplyNativeSelectionDelta(
+        IReadOnlyList<EntryItemViewModel> added,
+        IReadOnlyList<EntryItemViewModel> removed)
+        => _selection.ApplyNativeDelta(added, removed, Entries);
+
+    /// <summary>
+    /// Raised when the pane wants the view to scroll an entry into view (type-ahead match, focus
+    /// restored after navigation). The view owns scrolling; the pane only names the target.
+    /// </summary>
+    public event EventHandler<EntryItemViewModel>? BringEntryIntoViewRequested;
+
+    private void RequestBringIntoView(EntryItemViewModel entry)
+        => BringEntryIntoViewRequested?.Invoke(this, entry);
+
     public void SelectEntry(EntryItemViewModel entry, KeyModifiers modifiers)
     {
         if (modifiers.HasFlag(KeyModifiers.Control))
@@ -751,6 +779,44 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     public void SelectByBounds(IReadOnlyList<EntryItemViewModel> hits, bool additive)
         => _selection.SelectByBounds(hits, Entries, additive);
 
+    /// <summary>
+    /// Type-to-select over the current listing. Returns the entry that became selected, or null when
+    /// the input was not searchable or nothing matched (the selection is then left untouched).
+    /// </summary>
+    public EntryItemViewModel? TypeAheadSelect(string? text)
+    {
+        // Miller view owns its own per-column lists, and Home is not a listing at all.
+        if (IsHome || IsMillerView || Entries.Count == 0)
+            return null;
+
+        var currentIndex = SelectedEntry is null ? -1 : IndexOfEntry(SelectedEntry);
+        var index = _typeAhead.Resolve(text, Entries, currentIndex, DateTime.UtcNow);
+        if (index < 0)
+            return null;
+
+        var target = Entries[index];
+        _selection.SelectSingle(target, Entries);
+        RequestBringIntoView(target);
+        return target;
+    }
+
+    private int IndexOfEntry(EntryItemViewModel entry)
+    {
+        for (var i = 0; i < Entries.Count; i++)
+        {
+            if (ReferenceEquals(Entries[i], entry))
+                return i;
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// Reconciles <see cref="EntryItemViewModel.IsSelected"/> across the whole listing. Only needed
+    /// after a publish (pooled entries can carry stale flags); ordinary selection changes are applied
+    /// per entry by <see cref="PaneSelectionModel"/>. Cut state is deliberately not touched here — it
+    /// is refreshed on clipboard changes and once per publish.
+    /// </summary>
     private void SyncEntrySelectionFlags()
     {
         var selected = new HashSet<EntryItemViewModel>(SelectedEntries);
@@ -759,8 +825,6 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
             var isSelected = selected.Contains(entry);
             if (entry.IsSelected != isSelected)
                 entry.IsSelected = isSelected;
-
-            RefreshCutState(entry);
         }
     }
 
@@ -781,7 +845,11 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         => _selection.SelectAll(Entries);
 
     public void ClearSelection()
-        => _selection.Clear();
+    {
+        // Without a cursor there is nothing for the buffer to continue from.
+        _typeAhead.Reset();
+        _selection.Clear();
+    }
 
     public void InvertSelection()
         => _selection.Invert(Entries);
@@ -814,7 +882,10 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
 
     private void RecordNavigation(string resolved)
     {
-        var transition = _navigation.RecordForward(CurrentPath, resolved);
+        var origin = CurrentPath;
+        PrepareNavigation(PaneNavigationKind.Forward, origin, resolved);
+
+        var transition = _navigation.RecordForward(origin, resolved);
         CurrentPath = transition.Path;
         CanGoBack = transition.CanGoBack;
         CanGoForward = transition.CanGoForward;
@@ -823,10 +894,12 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     [RelayCommand(CanExecute = nameof(CanGoBack))]
     private void GoBack()
     {
-        var transition = _navigation.GoBack(CurrentPath);
+        var origin = CurrentPath;
+        var transition = _navigation.GoBack(origin);
         if (transition is null)
             return;
 
+        PrepareNavigation(PaneNavigationKind.History, origin, transition.Value.Path);
         CurrentPath = transition.Value.Path;
         CanGoBack = transition.Value.CanGoBack;
         CanGoForward = transition.Value.CanGoForward;
@@ -835,13 +908,61 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     [RelayCommand(CanExecute = nameof(CanGoForward))]
     private void GoForward()
     {
-        var transition = _navigation.GoForward(CurrentPath);
+        var origin = CurrentPath;
+        var transition = _navigation.GoForward(origin);
         if (transition is null)
             return;
 
+        PrepareNavigation(PaneNavigationKind.History, origin, transition.Value.Path);
         CurrentPath = transition.Value.Path;
         CanGoBack = transition.Value.CanGoBack;
         CanGoForward = transition.Value.CanGoForward;
+    }
+
+    /// <summary>
+    /// Captures where the user was before leaving <paramref name="origin"/> and decides what to focus
+    /// on arrival. Must run before <see cref="CurrentPath"/> is assigned: that setter drops the listing.
+    /// </summary>
+    private void PrepareNavigation(PaneNavigationKind kind, string origin, string destination)
+    {
+        if (!IsHome && !string.IsNullOrEmpty(origin))
+        {
+            _navigation.RememberFocus(
+                origin,
+                SelectedEntry?.FullPath ?? SelectedEntries.FirstOrDefault()?.FullPath);
+        }
+
+        _pendingFocusPath = _navigation.ResolveFocusOnEnter(kind, origin, destination);
+    }
+
+    /// <summary>
+    /// Selects the entry this navigation asked to focus, once, on the first publish that actually has a
+    /// listing. Skipped when something is already selected so a watcher refresh, sort, filter or F5
+    /// cannot move the user's selection.
+    /// </summary>
+    private void ApplyPendingFocus(IReadOnlyList<EntryItemViewModel> entries)
+    {
+        if (_pendingFocusPath is not { } focusPath)
+            return;
+
+        // An empty publish happens on the way into a folder (state cleared before the listing arrives);
+        // keep the request pending for the real one.
+        if (entries.Count == 0)
+            return;
+
+        _pendingFocusPath = null;
+        if (SelectedEntries.Count > 0)
+            return;
+
+        foreach (var entry in entries)
+        {
+            if (!PathUtilities.PathsEqual(entry.FullPath, focusPath))
+                continue;
+
+            _selection.SelectSingle(entry, Entries);
+            RequestBringIntoView(entry);
+            return;
+        }
     }
 
     [RelayCommand(CanExecute = nameof(CanGoUp))]
@@ -921,6 +1042,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         RefreshCutState();
         ItemCount = result.ItemCount;
         RestoreSelection(result.Entries, previouslySelected, previousSelectedEntryPath);
+        ApplyPendingFocus(result.Entries);
         UpdateStatusText();
         _refreshCoordinator.RequestEntryVisuals(this, result.VisualTargets);
         return result;
@@ -933,19 +1055,12 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     {
         if (selectedPaths is null || selectedPaths.Count == 0)
         {
-            _suppressSelectionFlagSync = true;
-            try
-            {
-                _selection.ReplaceSelection(Array.Empty<EntryItemViewModel>(), entries, preferredSingle: null);
-            }
-            finally
-            {
-                _suppressSelectionFlagSync = false;
-            }
+            _selection.ReplaceSelection(Array.Empty<EntryItemViewModel>(), entries, preferredSingle: null);
 
+            // A publish can hand us pooled entries that were selected before the listing changed, so
+            // one flag sweep is still needed here — unlike ordinary selection changes, which the
+            // selection model applies per entry.
             SyncEntrySelectionFlags();
-            SelectedCount = 0;
-            SelectedEntry = null;
             return;
         }
 
@@ -964,19 +1079,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
             }
         }
 
-        _suppressSelectionFlagSync = true;
-        try
-        {
-            _selection.ReplaceSelection(restored, entries, single);
-        }
-        finally
-        {
-            _suppressSelectionFlagSync = false;
-        }
-
+        _selection.ReplaceSelection(restored, entries, single);
         SyncEntrySelectionFlags();
-        SelectedCount = _selection.SelectedCount;
-        SelectedEntry = _selection.SelectedEntry;
     }
 
     private void SyncEntriesCollection(IReadOnlyList<EntryItemViewModel> nextEntries)
@@ -1141,6 +1245,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         if (!IsFileSystem)
             return;
 
+        // The listing the buffer was matched against is about to change.
+        _typeAhead.Reset();
         CancelSearch();
         OmnibarMode = OmnibarMode.Filter;
         _allEntries = _directoryEntries;
@@ -1153,6 +1259,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         if (!IsFileSystem)
             return;
 
+        _typeAhead.Reset();
         OmnibarMode = OmnibarMode.Search;
         if (!string.IsNullOrWhiteSpace(FilterText))
             OnFilterTextChanged(FilterText);
@@ -1165,6 +1272,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
 
     public void ClearFilter()
     {
+        _typeAhead.Reset();
         CancelSearch();
         var hadQuery = !string.IsNullOrWhiteSpace(FilterText);
         var wasFilterOrSearch = OmnibarMode is OmnibarMode.Filter or OmnibarMode.Search;
@@ -2001,7 +2109,6 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         _folderPrefPersistCts?.Dispose();
         _folderPrefPersistCts = null;
         _selection.SelectionChanged -= OnSelectionModelChanged;
-        _selection.SelectedEntries.CollectionChanged -= OnSelectedEntriesChanged;
         _clipboard.Changed -= OnClipboardChanged;
         _watcher.Changed -= OnWatcherChanged;
         _watcher.Dispose();

@@ -443,6 +443,33 @@ public sealed class VirtualizingFileGrid : TemplatedControl
         return false;
     }
 
+    /// <summary>
+    /// Scrolls the row that contains <paramref name="item"/> into view. Uses the cached packing from the
+    /// last rebuild; a no-op when that cache is stale, because the pending rebuild will follow anyway.
+    /// </summary>
+    public void ScrollIntoView(object item)
+    {
+        if (_rows is null || _lastItems.Count == 0)
+            return;
+
+        var itemIndex = -1;
+        for (var i = 0; i < _lastItems.Count; i++)
+        {
+            if (!ReferenceEquals(_lastItems[i], item))
+                continue;
+
+            itemIndex = i;
+            break;
+        }
+
+        if (itemIndex < 0)
+            return;
+
+        var rowIndex = FindRowIndex(itemIndex);
+        if (rowIndex >= 0)
+            _rows.ScrollIntoView(rowIndex);
+    }
+
     private int FindRowIndex(int itemIndex)
     {
         for (var i = 0; i < _lastRows.Count; i++)

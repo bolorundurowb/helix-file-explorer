@@ -691,6 +691,7 @@
                  ItemSize="{Binding ThumbnailSize}"
                  Background="Transparent"
                  BorderThickness="0"
+                 KeyDown="OnGridKeyDown"
                  PointerWheelChanged="OnGridPointerWheel"
                  PointerPressed="OnListPointerPressed"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">

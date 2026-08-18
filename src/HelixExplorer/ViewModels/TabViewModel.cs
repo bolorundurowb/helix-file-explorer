@@ -171,7 +171,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     private void OnOpenInNewTabRequested(object? sender, string path)
         => OpenInNewTabRequested?.Invoke(this, path);
 
-    private void OnOpenInOtherPaneRequested(object? sender, string path)
+    internal void OnOpenInOtherPaneRequested(object? sender, string path)
     {
         if (string.IsNullOrWhiteSpace(path))
             return;

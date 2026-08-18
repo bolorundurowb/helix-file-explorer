@@ -623,6 +623,7 @@
                  Grid.Row="0"
                  ItemsSource="{Binding Entries}"
                  SelectionMode="Multiple"
+                 IsTextSearchEnabled="False"
                  Background="Transparent"
                  BorderThickness="0"
                  Focusable="True"

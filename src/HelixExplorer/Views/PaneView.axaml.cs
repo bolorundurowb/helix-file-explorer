@@ -835,7 +835,7 @@ public sealed partial class PaneView : UserControl
     /// clicks are caret gestures. Mirrors the <see cref="IsTextBoxSource"/> guard the pointer-pressed
     /// handlers already apply; without it the gesture also activates the underlying item.
     /// </summary>
-    private static bool ShouldSuppressActivation(object? source) => IsTextBoxSource(source);
+    internal static bool ShouldSuppressActivation(object? source) => IsTextBoxSource(source);
 
     private void OnGridItemDoubleTapped(object? sender, TappedEventArgs e)
     {
@@ -910,7 +910,9 @@ public sealed partial class PaneView : UserControl
             Width = 250,
             ItemsSource = entries,
             ItemTemplate = _millerItemTemplate,
-            SelectionMode = SelectionMode.Single
+            SelectionMode = SelectionMode.Single,
+            // PaneView owns type-ahead; the column list must not apply its own TextSearch.
+            IsTextSearchEnabled = false
         };
         list.ItemsPanel = new FuncTemplate<Panel?>(() => new VirtualizingStackPanel());
         MillerColumnPanel.SetColumnIndex(list, columnIndex);

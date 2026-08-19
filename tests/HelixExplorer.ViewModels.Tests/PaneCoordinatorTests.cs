@@ -153,6 +153,119 @@ public class PaneSelectionModelTests
     }
 
     [Fact]
+    public void SelectRange_ExtendingOneItemAtATime_KeepsCollectionChurnLinear()
+    {
+        const int steps = 200;
+        var entries = CreateEntries(steps + 1);
+        var model = new PaneSelectionModel();
+
+        var mutations = 0;
+        var selectionChanges = 0;
+        model.SelectedEntries.CollectionChanged += (_, _) => mutations++;
+        model.SelectionChanged += (_, _) => selectionChanges++;
+
+        model.SelectSingle(entries[0], entries);
+        var baselineMutations = mutations;
+        var baselineChanges = selectionChanges;
+
+        for (var i = 1; i <= steps; i++)
+            model.SelectRange(entries[i], entries);
+
+        model.SelectedCount.Must().Be(steps + 1);
+        (selectionChanges - baselineChanges).Must().Be(steps);
+
+        // Rebuilding the whole range per keystroke cost ~steps²/2 mutations; a delta costs ~1 each.
+        ((mutations - baselineMutations) <= steps * 2).Must().BeTrue();
+    }
+
+    [Fact]
+    public void SelectRange_ExtendContractReverse_KeepsIsSelectedFlagsExact()
+    {
+        var entries = CreateEntries(10);
+        var model = new PaneSelectionModel();
+
+        model.SelectSingle(entries[4], entries);
+        AssertFlagsMatchSelection(model, entries);
+
+        model.SelectRange(entries[8], entries);
+        AssertFlagsMatchSelection(model, entries);
+
+        model.SelectRange(entries[6], entries);
+        model.SelectedCount.Must().Be(3);
+        AssertFlagsMatchSelection(model, entries);
+
+        // Reversing past the anchor keeps listing order in SelectedEntries.
+        model.SelectRange(entries[1], entries);
+        model.SelectedCount.Must().Be(4);
+        model.SelectedEntries[0].Must().Be(entries[1]);
+        model.SelectedEntries[^1].Must().Be(entries[4]);
+        AssertFlagsMatchSelection(model, entries);
+
+        model.Clear();
+        AssertFlagsMatchSelection(model, entries);
+    }
+
+    [Fact]
+    public void ApplyNativeDelta_AppliesOnlyReportedRowsAndTracksActiveItem()
+    {
+        var entries = CreateEntries(5);
+        var model = new PaneSelectionModel();
+        model.SelectSingle(entries[0], entries);
+
+        var mutations = 0;
+        model.SelectedEntries.CollectionChanged += (_, _) => mutations++;
+
+        model.ApplyNativeDelta([entries[1]], [], entries);
+        model.ApplyNativeDelta([entries[2]], [], entries);
+
+        model.SelectedCount.Must().Be(3);
+        model.SelectedEntry.Must().Be(entries[2]);
+        mutations.Must().Be(2);
+        AssertFlagsMatchSelection(model, entries);
+
+        model.ApplyNativeDelta([], [entries[2]], entries);
+
+        model.SelectedCount.Must().Be(2);
+        entries[2].IsSelected.Must().BeFalse();
+        AssertFlagsMatchSelection(model, entries);
+    }
+
+    [Fact]
+    public void UpdateSelection_AppliesDifferenceAndLeavesSurvivingEntriesSelected()
+    {
+        var entries = CreateEntries(5);
+        var model = new PaneSelectionModel();
+        model.UpdateSelection([entries[0], entries[1], entries[2]], entries);
+
+        var mutations = 0;
+        model.SelectedEntries.CollectionChanged += (_, _) => mutations++;
+
+        model.UpdateSelection([entries[1], entries[2], entries[3]], entries);
+
+        model.SelectedCount.Must().Be(3);
+        model.SelectedEntries.Must().NotContain(entries[0]);
+        model.SelectedEntries.Must().Contain(entries[3]);
+        AssertFlagsMatchSelection(model, entries);
+
+        // One removal plus one addition — not a clear and re-add of the whole set.
+        mutations.Must().Be(2);
+    }
+
+    private static void AssertFlagsMatchSelection(
+        PaneSelectionModel model,
+        IReadOnlyList<EntryItemViewModel> entries)
+    {
+        var selected = new HashSet<EntryItemViewModel>(model.SelectedEntries);
+        foreach (var entry in entries)
+        {
+            if (selected.Contains(entry))
+                entry.IsSelected.Must().BeTrue();
+            else
+                entry.IsSelected.Must().BeFalse();
+        }
+    }
+
+    [Fact]
     public void Toggle_OffLastSelected_ClearsAnchor()
     {
         var entries = CreateEntries(4);
@@ -213,6 +326,137 @@ public class PaneNavigationControllerTests
         PaneNavigationController.CanNavigateUp(ShellPath.RecycleBin, isHome: false, isShellNamespace: true)
             .Must().BeTrue();
     }
+
+    [Fact]
+    public void ResolveFocusOnEnter_ForwardToParent_SelectsTheFolderJustLeft()
+    {
+        var navigation = CreateController();
+
+        navigation.ResolveFocusOnEnter(PaneNavigationKind.Forward, @"C:\A\B\", @"C:\A\")
+            .Must().Be(@"C:\A\B\");
+    }
+
+    [Fact]
+    public void ResolveFocusOnEnter_ForwardToGrandparent_SelectsTheBranchOnThePath()
+    {
+        var navigation = CreateController();
+
+        navigation.ResolveFocusOnEnter(PaneNavigationKind.Forward, @"C:\A\B\C\", @"C:\A\")
+            .Must().Be(@"C:\A\B\");
+    }
+
+    [Fact]
+    public void ResolveFocusOnEnter_HistoryPrefersRememberedEntryOverTheBranchOnThePath()
+    {
+        var navigation = CreateController();
+        navigation.RememberFocus(@"C:\A", @"C:\A\notes.txt");
+
+        navigation.ResolveFocusOnEnter(PaneNavigationKind.History, @"C:\A\B\", @"C:\A\")
+            .Must().Be(@"C:\A\notes.txt");
+
+        navigation.ResolveFocusOnEnter(PaneNavigationKind.Forward, @"C:\A\B\", @"C:\A\")
+            .Must().Be(@"C:\A\B\");
+    }
+
+    [Fact]
+    public void ResolveFocusOnEnter_UnrelatedDestinationWithoutMemory_ReturnsNull()
+    {
+        var navigation = CreateController();
+
+        navigation.ResolveFocusOnEnter(PaneNavigationKind.Forward, @"C:\A\B\", @"D:\Work\")
+            .Must().BeNull();
+        navigation.ResolveFocusOnEnter(PaneNavigationKind.History, @"C:\A\B\", @"D:\Work\")
+            .Must().BeNull();
+    }
+
+    [Fact]
+    public void ResolveFocusOnEnter_ForwardIntoChild_UsesRememberedEntryNotTheOrigin()
+    {
+        var navigation = CreateController();
+        navigation.RememberFocus(@"C:\A\B\", @"C:\A\B\report.txt");
+
+        navigation.ResolveFocusOnEnter(PaneNavigationKind.Forward, @"C:\A\", @"C:\A\B\")
+            .Must().Be(@"C:\A\B\report.txt");
+    }
+
+    [Fact]
+    public void RememberFocus_KeyIgnoresTrailingSeparatorAndCase()
+    {
+        var navigation = CreateController();
+        navigation.RememberFocus(@"C:\A\B", @"C:\A\B\item.txt");
+
+        navigation.GetRememberedFocus(@"c:\a\b\").Must().Be(@"C:\A\B\item.txt");
+    }
+
+    [Fact]
+    public void RememberFocus_WithoutEntry_ForgetsTheFolder()
+    {
+        var navigation = CreateController();
+        navigation.RememberFocus(@"C:\A\", @"C:\A\item.txt");
+
+        navigation.RememberFocus(@"C:\A\", null);
+
+        navigation.GetRememberedFocus(@"C:\A\").Must().BeNull();
+    }
+
+    [Fact]
+    public void RememberFocus_EvictsOldestFoldersBeyondTheCap()
+    {
+        var navigation = CreateController();
+        for (var i = 0; i < 70; i++)
+            navigation.RememberFocus($@"C:\folder{i}\", $@"C:\folder{i}\item.txt");
+
+        navigation.GetRememberedFocus(@"C:\folder0\").Must().BeNull();
+        navigation.GetRememberedFocus(@"C:\folder69\").Must().Be(@"C:\folder69\item.txt");
+    }
+
+    [Fact]
+    public void TryGetChildOnPath_ReturnsNullForSameFolderOrUnrelatedPaths()
+    {
+        PaneNavigationController.TryGetChildOnPath(@"C:\A\", @"C:\A\").Must().BeNull();
+        PaneNavigationController.TryGetChildOnPath(@"C:\A\B\", @"C:\A\").Must().BeNull();
+        PaneNavigationController.TryGetChildOnPath(@"C:\A\", null).Must().BeNull();
+        PaneNavigationController.TryGetChildOnPath(null, @"C:\A\B\").Must().BeNull();
+    }
+
+    [Fact]
+    public void ResolveFocusOnEnter_ForwardUncParent_SelectsTheShareFolderJustLeft()
+    {
+        var navigation = CreateController();
+
+        navigation.ResolveFocusOnEnter(
+                PaneNavigationKind.Forward,
+                @"\\server\share\folder\",
+                @"\\server\share\")
+            .Must().Be(@"\\server\share\folder\");
+    }
+
+    [Fact]
+    public void ResolveFocusOnEnter_ForwardArchiveParent_SelectsTheInnerFolderJustLeft()
+    {
+        var navigation = CreateController();
+        var docs = ArchivePath.Combine(@"C:\backup.zip", "docs/");
+        var nested = ArchivePath.Combine(@"C:\backup.zip", "docs/sub/");
+
+        navigation.ResolveFocusOnEnter(PaneNavigationKind.Forward, nested, docs)
+            .Must().Be(nested);
+    }
+
+    [Fact]
+    public void ResolveFocusOnEnter_HistoryUnc_UsesRememberedEntryNotTheBranch()
+    {
+        var navigation = CreateController();
+        navigation.RememberFocus(@"\\server\share\", @"\\server\share\notes.txt");
+
+        navigation.ResolveFocusOnEnter(
+                PaneNavigationKind.History,
+                @"\\server\share\folder\",
+                @"\\server\share\")
+            .Must().Be(@"\\server\share\notes.txt");
+    }
+
+    private static PaneNavigationController CreateController()
+        => new(new FakeFileSystem(), new FakeArchive());
 
     private sealed class FakeFileSystem : IFileSystemProvider
     {

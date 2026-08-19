@@ -21,6 +21,13 @@ public sealed class AppSettings
     public double DefaultThumbnailSize { get; set; } = 72;
     public bool DefaultDualPane { get; set; }
     public PaneSplitOrientation DefaultSplitOrientation { get; set; } = PaneSplitOrientation.Vertical;
+
+    /// <summary>
+    /// Whether "Open in new tab" moves the user to the new tab. False opens it in the background and
+    /// keeps them on the current tab. Explicit new tabs (Ctrl+T, Settings) always take focus.
+    /// </summary>
+    public bool SwitchToNewTabOnOpen { get; set; } = true;
+
     public uint? AccentColorArgb { get; set; }
     public List<string> PinnedPaths { get; set; } = [];
     public List<string> UnpinnedPaths { get; set; } = [];

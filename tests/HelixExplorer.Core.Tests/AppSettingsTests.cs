@@ -32,6 +32,7 @@ public class AppSettingsTests
         settings.PinnedPaths.Must().BeEmpty();
         settings.OpenInTerminalGesture.Must().Be("Ctrl+OemTilde");
         settings.AutoCheckForUpdates.Must().BeTrue();
+        settings.SwitchToNewTabOnOpen.Must().BeTrue();
     }
 
     [Fact]
@@ -55,7 +56,8 @@ public class AppSettingsTests
             WindowY = 80,
             WindowMaximized = true,
             OpenInTerminalGesture = "Ctrl+Shift+T",
-            AutoCheckForUpdates = false
+            AutoCheckForUpdates = false,
+            SwitchToNewTabOnOpen = false
         };
 
         var json = JsonSerializer.Serialize(original, Options);
@@ -79,6 +81,7 @@ public class AppSettingsTests
         loaded!.WindowMaximized.Must().BeTrue();
         loaded!.OpenInTerminalGesture.Must().Be("Ctrl+Shift+T");
         loaded!.AutoCheckForUpdates.Must().BeFalse();
+        loaded!.SwitchToNewTabOnOpen.Must().BeFalse();
     }
 
     [Fact]

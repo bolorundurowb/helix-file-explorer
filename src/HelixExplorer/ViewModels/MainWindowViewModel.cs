@@ -104,6 +104,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         DefaultViewMode = settings.DefaultViewMode;
         DefaultThumbnailSize = Math.Clamp(settings.DefaultThumbnailSize, PaneViewModel.MinThumbnailSize, PaneViewModel.MaxThumbnailSize);
         DefaultDualPane = settings.DefaultDualPane;
+        SwitchToNewTabOnOpen = settings.SwitchToNewTabOnOpen;
         DefaultSplitOrientation = settings.DefaultSplitOrientation;
         AccentColorArgb = settings.AccentColorArgb;
         ApplyOpenInTerminalGesture(settings.OpenInTerminalGesture);
@@ -440,6 +441,13 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _defaultDualPane;
 
+    /// <summary>
+    /// Applies to the "Open in new tab" action only; <see cref="NewTabCommand"/> and Settings always
+    /// switch, since the user asked for that tab directly.
+    /// </summary>
+    [ObservableProperty]
+    private bool _switchToNewTabOnOpen = true;
+
     [ObservableProperty]
     private PaneSplitOrientation _defaultSplitOrientation = PaneSplitOrientation.Vertical;
 
@@ -550,6 +558,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     partial void OnDefaultDualPaneChanged(bool value) => PersistChromeSettings();
 
+    partial void OnSwitchToNewTabOnOpenChanged(bool value) => PersistChromeSettings();
+
     partial void OnDefaultSplitOrientationChanged(PaneSplitOrientation value) => PersistChromeSettings();
 
     partial void OnAccentColorArgbChanged(uint? value) => PersistChromeSettings();
@@ -578,6 +588,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             settings.DefaultViewMode = DefaultViewMode;
             settings.DefaultThumbnailSize = DefaultThumbnailSize;
             settings.DefaultDualPane = DefaultDualPane;
+            settings.SwitchToNewTabOnOpen = SwitchToNewTabOnOpen;
             settings.DefaultSplitOrientation = DefaultSplitOrientation;
             settings.AccentColorArgb = AccentColorArgb;
             settings.OpenInTerminalGesture = string.IsNullOrWhiteSpace(OpenInTerminalGesture)
@@ -680,7 +691,9 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         var tab = CreateTab();
         tab.LeftPane.NavigateTo(path);
         AddTab(tab);
-        SelectedTab = tab;
+
+        if (SwitchToNewTabOnOpen)
+            SelectedTab = tab;
     }
 
     private TabViewModel CreateDefaultTab()

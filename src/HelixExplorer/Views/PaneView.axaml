@@ -623,6 +623,7 @@
                  Grid.Row="0"
                  ItemsSource="{Binding Entries}"
                  SelectionMode="Multiple"
+                 IsTextSearchEnabled="False"
                  Background="Transparent"
                  BorderThickness="0"
                  Focusable="True"
@@ -691,6 +692,7 @@
                  ItemSize="{Binding ThumbnailSize}"
                  Background="Transparent"
                  BorderThickness="0"
+                 KeyDown="OnGridKeyDown"
                  PointerWheelChanged="OnGridPointerWheel"
                  PointerPressed="OnListPointerPressed"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">

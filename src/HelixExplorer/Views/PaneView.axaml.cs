@@ -47,6 +47,8 @@ public sealed partial class PaneView : UserControl
     private Control? _pressHost;
     private bool _dragStarted;
     private bool _syncingSelectionToView;
+    private bool _applyingNativeSelection;
+    private bool _selectionSyncPending;
     private PointerInteractionMode _interactionMode;
     private EntryItemViewModel? _dropTargetEntry;
     private DispatcherTimer? _renameClickTimer;
@@ -96,6 +98,16 @@ public sealed partial class PaneView : UserControl
         // clicks without handledEventsToo — arm marquee/clear here instead.
         GridView.AddHandler(PointerPressedEvent, OnGridBlankPointerPressed, RoutingStrategies.Bubble, handledEventsToo: true);
         AddHandler(PointerPressedEvent, OnBlankAreaPointerPressed, RoutingStrategies.Bubble, handledEventsToo: true);
+
+        // TextInput is a bubble-only routed event, so this cannot be a tunnel handler. handledEventsToo
+        // makes it run even when a list control already applied its own built-in text search, and the
+        // pane search then has the last word — one behaviour (cycling, narrowing, idle timeout) across
+        // Details, List and Grid.
+        AddHandler(TextInputEvent, OnPaneTextInput, RoutingStrategies.Bubble, handledEventsToo: true);
+
+        // The dual-pane host toggles IsVisible on an ancestor, which raises no event here, so flush a
+        // selection sync that was skipped while hidden on the next layout pass instead.
+        LayoutUpdated += OnPaneLayoutUpdated;
     }
 
     private void AttachDragGestureHandlers(Control control)
@@ -120,6 +132,7 @@ public sealed partial class PaneView : UserControl
         {
             _pane.PropertyChanged -= OnPanePropertyChanged;
             _pane.Navigated -= OnPaneNavigated;
+            _pane.BringEntryIntoViewRequested -= OnBringEntryIntoViewRequested;
         }
 
         _pane = DataContext as PaneViewModel;
@@ -131,6 +144,7 @@ public sealed partial class PaneView : UserControl
 
         _pane.PropertyChanged += OnPanePropertyChanged;
         _pane.Navigated += OnPaneNavigated;
+        _pane.BringEntryIntoViewRequested += OnBringEntryIntoViewRequested;
         UpdateInactiveClass();
         if (_pane.IsMillerView)
             RebuildMiller();
@@ -167,9 +181,46 @@ public sealed partial class PaneView : UserControl
         else if (e.PropertyName == nameof(PaneViewModel.SelectedCount))
         {
             // Keep DataGrid/ListBox chrome in sync when selection changes programmatically
-            // (blank clear, Clear/Invert commands, Select All from the window VM).
-            SyncSelectionToView();
+            // (blank clear, Clear/Invert commands, Select All from the window VM). Changes the control
+            // itself originated are already reflected there — syncing back would re-drive its
+            // selection (and current cell) for every keystroke of a Shift+Down run.
+            if (!_applyingNativeSelection)
+                SyncSelectionToView();
         }
+    }
+
+    private void OnPaneLayoutUpdated(object? sender, EventArgs e)
+    {
+        if (!_selectionSyncPending || !IsEffectivelyVisible)
+            return;
+
+        SyncSelectionToView();
+    }
+
+    private void OnBringEntryIntoViewRequested(object? sender, EntryItemViewModel entry)
+    {
+        // Posted so the target container exists: the request can arrive during a listing publish or a
+        // view-mode switch, before the list has been laid out.
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (Pane is null || !IsEffectivelyVisible)
+                    return;
+
+                switch (GetVisibleControl())
+                {
+                    case DataGrid grid:
+                        grid.ScrollIntoView(entry, null);
+                        break;
+                    case ListBox list:
+                        list.ScrollIntoView(entry);
+                        break;
+                    case VirtualizingFileGrid gridView:
+                        gridView.ScrollIntoView(entry);
+                        break;
+                }
+            },
+            DispatcherPriority.Loaded);
     }
 
     private async void OnEntryContextMenuOpening(object? sender, CancelEventArgs e)
@@ -227,6 +278,14 @@ public sealed partial class PaneView : UserControl
 
     private void OnItemActivated(object? sender, TappedEventArgs e)
     {
+        // A double-click inside the inline rename editor is a word-selection gesture. The TextBox does
+        // not mark DoubleTapped handled, so without this the same gesture also opens/navigates the row.
+        if (ShouldSuppressActivation(e.Source))
+        {
+            e.Handled = true;
+            return;
+        }
+
         CancelPendingRenameClick();
         if (ExtractSelected(sender) is { } entry)
             Pane?.ActivateEntry(entry);
@@ -237,9 +296,56 @@ public sealed partial class PaneView : UserControl
         if (_syncingSelectionToView || Pane is null || sender is not Control { IsVisible: true })
             return;
 
-        var items = ExtractSelectedItems(sender);
-        Pane.UpdateSelection(items);
+        var added = CollectEntries(e.AddedItems);
+        var removed = CollectEntries(e.RemovedItems);
+
+        _applyingNativeSelection = true;
+        try
+        {
+            if (added.Count == 0 && removed.Count == 0)
+            {
+                // Reset-style change with no delta reported: reconcile against the control's set. The
+                // model applies this as a difference, so it is not a clear-and-re-add either.
+                Pane.UpdateSelection(ExtractSelectedItems(sender));
+                return;
+            }
+
+            Pane.ApplyNativeSelectionDelta(added, removed);
+
+            // Cheap safety net: if the reported delta did not describe the whole change, fall back to a
+            // diffed reconciliation rather than trusting a selection that drifted from the control.
+            var controlCount = GetControlSelectionCount(sender);
+            if (controlCount >= 0 && controlCount != Pane.SelectedCount)
+                Pane.UpdateSelection(ExtractSelectedItems(sender));
+        }
+        finally
+        {
+            _applyingNativeSelection = false;
+        }
     }
+
+    private static List<EntryItemViewModel> CollectEntries(System.Collections.IEnumerable? items)
+    {
+        var result = new List<EntryItemViewModel>();
+        if (items is null)
+            return result;
+
+        foreach (var item in items)
+        {
+            if (item is EntryItemViewModel entry)
+                result.Add(entry);
+        }
+
+        return result;
+    }
+
+    /// <summary>Selected-item count as the control sees it, or -1 when it cannot be determined.</summary>
+    private static int GetControlSelectionCount(object? sender) => sender switch
+    {
+        DataGrid grid => grid.SelectedItems?.Count ?? 0,
+        ListBox list => list.SelectedItems?.Count ?? 0,
+        _ => -1
+    };
 
     private void OnDetailsSorting(object? sender, DataGridColumnEventArgs e)
     {
@@ -375,7 +481,7 @@ public sealed partial class PaneView : UserControl
 
     private void OnGridKeyDown(object? sender, KeyEventArgs e)
     {
-        if (Pane is null || TextInputFocus.IsActive() || !e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+        if (Pane is null || IsTextEditorFocused() || !e.KeyModifiers.HasFlag(KeyModifiers.Shift))
             return;
 
         if (e.Key is not (Key.Left or Key.Right or Key.Up or Key.Down))
@@ -385,31 +491,114 @@ public sealed partial class PaneView : UserControl
         if (current is null)
             return;
 
-        // Navigate the presentation list, not the flat listing: with Group By on it carries the
-        // header bands and hides collapsed entries, so it is the only accurate index space.
-        var items = Pane.GridItems;
-        var currentIndex = items.IndexOf(current);
-        if (currentIndex >= 0
-            && GridView.TryGetAdjacentIndex(currentIndex, items.Count, e.Key, out var targetIndex)
-            && items[targetIndex] is EntryItemViewModel target)
-        {
-            Pane.SelectGridNavigationTarget(target, e.KeyModifiers);
-            SyncSelectionToView();
-        }
+        var target = Pane.IsGridView
+            ? FindGridNavigationTarget(current, e.Key)
+            : FindListNavigationTarget(current, e.Key);
 
+        // Leave the keystroke alone when there is nowhere to move: marking it handled regardless made
+        // Shift+Arrow a no-op in List view, where GridItems is intentionally empty.
+        if (target is null)
+            return;
+
+        Pane.SelectGridNavigationTarget(target, e.KeyModifiers);
+        SyncSelectionToView();
+        BringEntryIntoView(target);
         e.Handled = true;
     }
+
+    /// <summary>
+    /// Grid navigates the presentation list: with Group By on it carries the header bands and hides
+    /// collapsed entries, so it is the only accurate index space for the packed tile geometry.
+    /// </summary>
+    private EntryItemViewModel? FindGridNavigationTarget(EntryItemViewModel current, Key direction)
+    {
+        if (Pane is null)
+            return null;
+
+        var items = Pane.GridItems;
+        var currentIndex = IndexOfReference(items, current);
+        if (currentIndex < 0)
+            return null;
+
+        return GridView.TryGetAdjacentIndex(currentIndex, items.Count, direction, out var targetIndex)
+            ? items[targetIndex] as EntryItemViewModel
+            : null;
+    }
+
+    /// <summary>
+    /// List view is a single column over the flat listing, so vertical moves are ±1 and horizontal
+    /// moves do not apply. The grid's packed row geometry must not be used here.
+    /// </summary>
+    private EntryItemViewModel? FindListNavigationTarget(EntryItemViewModel current, Key direction)
+    {
+        if (Pane is null || direction is Key.Left or Key.Right)
+            return null;
+
+        var entries = Pane.Entries;
+        var currentIndex = IndexOfReference(entries, current);
+        if (currentIndex < 0)
+            return null;
+
+        var targetIndex = direction == Key.Up ? currentIndex - 1 : currentIndex + 1;
+        return (uint)targetIndex < (uint)entries.Count ? entries[targetIndex] : null;
+    }
+
+    private static int IndexOfReference<T>(IReadOnlyList<T> items, object target) where T : class
+    {
+        for (var i = 0; i < items.Count; i++)
+        {
+            if (ReferenceEquals(items[i], target))
+                return i;
+        }
+
+        return -1;
+    }
+
+    private void OnPaneTextInput(object? sender, TextInputEventArgs e)
+    {
+        if (Pane is null
+            || Pane.IsHome
+            || Pane.IsRenaming
+            || IsTextBoxSource(e.Source)
+            || IsTextEditorFocused())
+            return;
+
+        if (Pane.TypeAheadSelect(e.Text) is null)
+            return;
+
+        SyncSelectionToView();
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// Focus probe scoped to this pane's window. <see cref="TextInputFocus.IsActive"/> only inspects
+    /// the application main window, which is the wrong window for secondary Helix windows.
+    /// </summary>
+    private bool IsTextEditorFocused()
+        => TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is TextBox;
+
+    private void BringEntryIntoView(EntryItemViewModel entry)
+        => OnBringEntryIntoViewRequested(this, entry);
 
     private void SyncSelectionToView()
     {
         if (Pane is null)
             return;
 
+        // Both the single-pane and dual-pane hosts keep a PaneView bound to the same pane, so the
+        // hidden one would otherwise duplicate every selection sync.
+        if (!IsEffectivelyVisible)
+        {
+            _selectionSyncPending = true;
+            return;
+        }
+
         var visibleControl = GetVisibleControl();
         if (visibleControl is null)
             return;
 
-        var selected = Pane.SelectedEntries.ToList();
+        _selectionSyncPending = false;
+        var selected = Pane.SelectedEntries;
 
         _syncingSelectionToView = true;
         try
@@ -420,15 +609,7 @@ public sealed partial class PaneView : UserControl
                     SyncDataGridSelection(grid, selected);
                     break;
                 case ListBox list:
-                    list.SelectedItems?.Clear();
-                    if (selected.Count == 0)
-                        list.SelectedItem = null;
-                    else
-                    {
-                        foreach (var entry in selected)
-                            list.SelectedItems?.Add(entry);
-                    }
-
+                    SyncListBoxSelection(list, selected);
                     break;
             }
         }
@@ -438,26 +619,76 @@ public sealed partial class PaneView : UserControl
         }
     }
 
-    private static void SyncDataGridSelection(DataGrid grid, List<EntryItemViewModel> selected)
+    private static void SyncDataGridSelection(DataGrid grid, IReadOnlyList<EntryItemViewModel> selected)
     {
-        // Avalonia DataGrid often leaves :selected row chrome after SelectedItems.Clear() alone.
-        if (grid.SelectedItems is { } items)
+        if (selected.Count == 0)
         {
-            while (items.Count > 0)
-                items.RemoveAt(items.Count - 1);
+            // Avalonia DataGrid often leaves :selected row chrome after SelectedItems.Clear() alone.
+            if (grid.SelectedItems is { } stale)
+            {
+                while (stale.Count > 0)
+                    stale.RemoveAt(stale.Count - 1);
+            }
+
+            grid.SelectedItem = null;
+            grid.SelectedIndex = -1;
+            return;
         }
 
-        grid.SelectedItem = null;
-        grid.SelectedIndex = -1;
-
-        if (selected.Count == 0)
-            return;
-
-        foreach (var entry in selected)
-            grid.SelectedItems?.Add(entry);
-
-        if (selected.Count == 1)
+        if (grid.SelectedItems is not { } items)
+        {
             grid.SelectedItem = selected[0];
+            return;
+        }
+
+        // Only touch rows whose state actually differs: re-adding the whole set moved the current cell
+        // (and scrolled) once per already-selected row.
+        ApplySelectionDelta(items, selected);
+
+        if (selected.Count == 1 && !ReferenceEquals(grid.SelectedItem, selected[0]))
+            grid.SelectedItem = selected[0];
+    }
+
+    private static void SyncListBoxSelection(ListBox list, IReadOnlyList<EntryItemViewModel> selected)
+    {
+        if (selected.Count == 0)
+        {
+            list.SelectedItems?.Clear();
+            list.SelectedItem = null;
+            return;
+        }
+
+        if (list.SelectedItems is { } items)
+            ApplySelectionDelta(items, selected);
+        else
+            list.SelectedItem = selected[0];
+    }
+
+    private static void ApplySelectionDelta(
+        System.Collections.IList items,
+        IReadOnlyList<EntryItemViewModel> selected)
+    {
+        var desired = new HashSet<EntryItemViewModel>(selected);
+        var present = new HashSet<EntryItemViewModel>();
+
+        for (var i = items.Count - 1; i >= 0; i--)
+        {
+            if (items[i] is EntryItemViewModel entry && desired.Contains(entry))
+            {
+                present.Add(entry);
+                continue;
+            }
+
+            items.RemoveAt(i);
+        }
+
+        // Indexed so a live selection collection cannot invalidate an enumerator mid-sync.
+        for (var i = 0; i < selected.Count; i++)
+        {
+            var entry = selected[i];
+            if (!present.Contains(entry))
+                items.Add(entry);
+        }
     }
 
     private Control? GetVisibleControl()
@@ -599,8 +830,21 @@ public sealed partial class PaneView : UserControl
         return false;
     }
 
+    /// <summary>
+    /// True when a tap originated inside a text editor (the inline rename box), where double/triple
+    /// clicks are caret gestures. Mirrors the <see cref="IsTextBoxSource"/> guard the pointer-pressed
+    /// handlers already apply; without it the gesture also activates the underlying item.
+    /// </summary>
+    internal static bool ShouldSuppressActivation(object? source) => IsTextBoxSource(source);
+
     private void OnGridItemDoubleTapped(object? sender, TappedEventArgs e)
     {
+        if (ShouldSuppressActivation(e.Source))
+        {
+            e.Handled = true;
+            return;
+        }
+
         CancelPendingRenameClick();
         if (sender is Control { DataContext: EntryItemViewModel entry })
             Pane?.ActivateEntry(entry);
@@ -666,7 +910,9 @@ public sealed partial class PaneView : UserControl
             Width = 250,
             ItemsSource = entries,
             ItemTemplate = _millerItemTemplate,
-            SelectionMode = SelectionMode.Single
+            SelectionMode = SelectionMode.Single,
+            // PaneView owns type-ahead; the column list must not apply its own TextSearch.
+            IsTextSearchEnabled = false
         };
         list.ItemsPanel = new FuncTemplate<Panel?>(() => new VirtualizingStackPanel());
         MillerColumnPanel.SetColumnIndex(list, columnIndex);
@@ -679,8 +925,14 @@ public sealed partial class PaneView : UserControl
                     MillerPanel.RaiseActivated(columnIndex, entry);
             }
         };
-        list.DoubleTapped += (_, _) =>
+        list.DoubleTapped += (_, e) =>
         {
+            if (ShouldSuppressActivation(e.Source))
+            {
+                e.Handled = true;
+                return;
+            }
+
             if (list.SelectedItem is EntryItemViewModel { IsDirectory: false } entry
                 && !ArchivePath.IsArchiveFile(entry.FullPath))
                 Pane?.ActivateEntry(entry);

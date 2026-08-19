@@ -2,9 +2,24 @@ using System.Collections.ObjectModel;
 
 namespace HelixExplorer.ViewModels.Pane;
 
+/// <summary>
+/// Sole owner of the pane selection: the <see cref="SelectedEntries"/> collection *and* each entry's
+/// <see cref="EntryItemViewModel.IsSelected"/> flag. Every public operation touches only the entries
+/// that actually enter or leave the selection and raises <see cref="SelectionChanged"/> exactly once,
+/// so extending a selection stays O(delta) instead of re-publishing the whole set per keystroke.
+/// </summary>
 public sealed class PaneSelectionModel
 {
+    private readonly HashSet<EntryItemViewModel> _selected = new();
     private int _anchorIndex = -1;
+    private int _rangeEndIndex = -1;
+
+    /// <summary>
+    /// True while <see cref="SelectedEntries"/> is exactly the contiguous span between
+    /// <see cref="_anchorIndex"/> and <see cref="_rangeEndIndex"/>. Only then can a new range target be
+    /// applied as a delta; every other mutation invalidates it.
+    /// </summary>
+    private bool _rangeValid;
 
     public ObservableCollection<EntryItemViewModel> SelectedEntries { get; } = new();
 
@@ -20,21 +35,57 @@ public sealed class PaneSelectionModel
     }
 
     /// <summary>
-    /// Replaces the selection in one shot and raises <see cref="SelectionChanged"/> once.
-    /// Use for restore-after-sort so callers can sync entry flags a single time.
+    /// Makes the selection equal to <paramref name="entries"/>, applying only the difference against
+    /// the current selection, and raises <see cref="SelectionChanged"/> once.
     /// </summary>
     public void ReplaceSelection(
         IEnumerable<EntryItemViewModel> entries,
         IReadOnlyList<EntryItemViewModel> allEntries,
         EntryItemViewModel? preferredSingle)
     {
-        SelectedEntries.Clear();
-        foreach (var entry in entries)
-            SelectedEntries.Add(entry);
+        ApplyDesiredSelection(entries);
 
         SelectedEntry = preferredSingle
             ?? (SelectedEntries.Count == 1 ? SelectedEntries[0] : null);
         _anchorIndex = SelectedEntry is not null ? IndexOf(allEntries, SelectedEntry) : -1;
+        _rangeValid = false;
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Applies a selection change that the native list control has already made (for example the
+    /// DataGrid extending with Shift+Down, which reports a single added row). Avoids rebuilding the
+    /// whole selection from the control's <c>SelectedItems</c> on every keystroke.
+    /// </summary>
+    public void ApplyNativeDelta(
+        IReadOnlyList<EntryItemViewModel> added,
+        IReadOnlyList<EntryItemViewModel> removed,
+        IReadOnlyList<EntryItemViewModel> allEntries)
+    {
+        var changed = false;
+
+        foreach (var entry in removed)
+            changed |= Deselect(entry);
+
+        foreach (var entry in added)
+            changed |= Select(entry);
+
+        if (!changed)
+            return;
+
+        // The last added row is the control's active item (the Shift+Down cursor).
+        var active = added.Count > 0 ? added[^1] : SelectedEntry;
+        if (active is null || !_selected.Contains(active))
+            active = SelectedEntries.Count == 1 ? SelectedEntries[0] : null;
+
+        SelectedEntry = active;
+        if (SelectedEntries.Count == 0)
+            _anchorIndex = -1;
+        else if (_anchorIndex < 0 || SelectedEntries.Count == 1)
+            _anchorIndex = active is null ? -1 : IndexOf(allEntries, active);
+
+        // The control owns the range origin in this path, so our own range delta cannot be trusted.
+        _rangeValid = false;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -45,11 +96,9 @@ public sealed class PaneSelectionModel
 
     public void Toggle(EntryItemViewModel entry, IReadOnlyList<EntryItemViewModel> allEntries)
     {
-        var removed = SelectedEntries.Contains(entry);
-        if (removed)
-            SelectedEntries.Remove(entry);
-        else
-            SelectedEntries.Add(entry);
+        var removed = Deselect(entry);
+        if (!removed)
+            Select(entry);
 
         SelectedEntry = SelectedEntries.Count == 1 ? SelectedEntries[0] : null;
 
@@ -67,6 +116,7 @@ public sealed class PaneSelectionModel
             _anchorIndex = IndexOf(allEntries, entry);
         }
 
+        _rangeValid = false;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -79,20 +129,30 @@ public sealed class PaneSelectionModel
             return;
         }
 
-        if (_anchorIndex < 0)
+        if (_anchorIndex < 0 || _anchorIndex >= allEntries.Count)
             _anchorIndex = targetIndex;
 
         var start = Math.Min(_anchorIndex, targetIndex);
         var end = Math.Max(_anchorIndex, targetIndex);
-        var range = new List<EntryItemViewModel>();
-        for (var i = start; i <= end; i++)
-            range.Add(allEntries[i]);
 
         // Do not use ReplaceSelection here: a range can be extended and contracted repeatedly,
         // so its original anchor must survive while the target becomes the active item.
-        SelectedEntries.Clear();
-        foreach (var entry in range)
-            SelectedEntries.Add(entry);
+        if (_rangeValid && _rangeEndIndex >= 0 && _rangeEndIndex < allEntries.Count)
+        {
+            ApplyRangeDelta(
+                allEntries,
+                previousStart: Math.Min(_anchorIndex, _rangeEndIndex),
+                previousEnd: Math.Max(_anchorIndex, _rangeEndIndex),
+                start,
+                end);
+        }
+        else
+        {
+            ReplaceWithRange(allEntries, start, end);
+        }
+
+        _rangeEndIndex = targetIndex;
+        _rangeValid = true;
         SelectedEntry = target;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -111,14 +171,12 @@ public sealed class PaneSelectionModel
         }
 
         foreach (var hit in hits)
-        {
-            if (!SelectedEntries.Contains(hit))
-                SelectedEntries.Add(hit);
-        }
+            Select(hit);
 
         SelectedEntry = SelectedEntries.Count == 1 ? SelectedEntries[0] : null;
         if (hits.Count > 0)
             _anchorIndex = LowestIndexAmong(allEntries, hits);
+        _rangeValid = false;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -129,11 +187,10 @@ public sealed class PaneSelectionModel
 
     public void Invert(IReadOnlyList<EntryItemViewModel> allEntries)
     {
-        var selected = new HashSet<EntryItemViewModel>(SelectedEntries);
         var inverted = new List<EntryItemViewModel>(allEntries.Count);
         foreach (var entry in allEntries)
         {
-            if (!selected.Contains(entry))
+            if (!_selected.Contains(entry))
                 inverted.Add(entry);
         }
 
@@ -142,10 +199,111 @@ public sealed class PaneSelectionModel
 
     public void Clear()
     {
-        SelectedEntries.Clear();
+        DeselectAll();
         SelectedEntry = null;
         _anchorIndex = -1;
+        _rangeEndIndex = -1;
+        _rangeValid = false;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private bool Select(EntryItemViewModel entry)
+    {
+        if (!_selected.Add(entry))
+            return false;
+
+        SelectedEntries.Add(entry);
+        entry.IsSelected = true;
+        return true;
+    }
+
+    /// <summary>Adds at the front so a range extended upwards stays in listing order.</summary>
+    private bool Prepend(EntryItemViewModel entry)
+    {
+        if (!_selected.Add(entry))
+            return false;
+
+        SelectedEntries.Insert(0, entry);
+        entry.IsSelected = true;
+        return true;
+    }
+
+    private bool Deselect(EntryItemViewModel entry)
+    {
+        if (!_selected.Remove(entry))
+            return false;
+
+        SelectedEntries.Remove(entry);
+        entry.IsSelected = false;
+        return true;
+    }
+
+    private void DeselectAll()
+    {
+        if (SelectedEntries.Count == 0)
+            return;
+
+        foreach (var entry in SelectedEntries)
+            entry.IsSelected = false;
+
+        SelectedEntries.Clear();
+        _selected.Clear();
+    }
+
+    private void ApplyDesiredSelection(IEnumerable<EntryItemViewModel> desired)
+    {
+        // Copy when a caller hands us the live selection: the loops below mutate it as they go.
+        var wanted = ReferenceEquals(desired, SelectedEntries)
+            ? desired.ToList()
+            : desired as IReadOnlyList<EntryItemViewModel> ?? desired.ToList();
+
+        if (wanted.Count == 0)
+        {
+            DeselectAll();
+            return;
+        }
+
+        var wantedSet = new HashSet<EntryItemViewModel>(wanted);
+        for (var i = SelectedEntries.Count - 1; i >= 0; i--)
+        {
+            var entry = SelectedEntries[i];
+            if (wantedSet.Contains(entry))
+                continue;
+
+            SelectedEntries.RemoveAt(i);
+            _selected.Remove(entry);
+            entry.IsSelected = false;
+        }
+
+        foreach (var entry in wanted)
+            Select(entry);
+    }
+
+    private void ApplyRangeDelta(
+        IReadOnlyList<EntryItemViewModel> allEntries,
+        int previousStart,
+        int previousEnd,
+        int start,
+        int end)
+    {
+        for (var i = previousStart; i < start && i <= previousEnd; i++)
+            Deselect(allEntries[i]);
+
+        for (var i = previousEnd; i > end && i >= previousStart; i--)
+            Deselect(allEntries[i]);
+
+        for (var i = previousStart - 1; i >= start; i--)
+            Prepend(allEntries[i]);
+
+        for (var i = previousEnd + 1; i <= end; i++)
+            Select(allEntries[i]);
+    }
+
+    private void ReplaceWithRange(IReadOnlyList<EntryItemViewModel> allEntries, int start, int end)
+    {
+        DeselectAll();
+        for (var i = start; i <= end; i++)
+            Select(allEntries[i]);
     }
 
     /// <summary>

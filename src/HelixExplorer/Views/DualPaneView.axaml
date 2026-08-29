@@ -16,7 +16,7 @@
                                       Home="{Binding Home}" />
 
             <Grid x:Name="DualGrid" IsVisible="{Binding IsDualPane}">
-                <Grid x:Name="LeftHost" PointerPressed="OnLeftActivate">
+                <Grid x:Name="LeftHost">
                     <controls:PaneContentHost Pane="{Binding LeftPane}"
                                                 Home="{Binding Home}" />
                     <Border IsVisible="{Binding LeftPane.IsActive}"
@@ -29,7 +29,7 @@
                 <GridSplitter x:Name="Splitter"
                               Background="{DynamicResource HelixBorderColor}" />
 
-                <Grid x:Name="RightHost" PointerPressed="OnRightActivate">
+                <Grid x:Name="RightHost">
                     <controls:PaneContentHost Pane="{Binding RightPane}"
                                                 Home="{Binding Home}" />
                     <Border IsVisible="{Binding RightPane.IsActive, FallbackValue=False}"

@@ -46,6 +46,9 @@ public sealed partial class PaneView : UserControl
     private PointerPressedEventArgs? _pressArgs;
     private Control? _pressHost;
     private bool _dragStarted;
+    // Full selection captured at press time, before the native control collapses a multi-selection
+    // to the pressed row. Used so a drag that starts on a member of a group carries the whole group.
+    private List<EntryItemViewModel>? _dragSelectionSnapshot;
     private bool _syncingSelectionToView;
     private bool _applyingNativeSelection;
     private bool _selectionSyncPending;
@@ -719,9 +722,17 @@ public sealed partial class PaneView : UserControl
         if (e.KeyModifiers != KeyModifiers.None
             || TryGetEntryFromSource(e.Source) is not { } entry)
         {
+            _dragSelectionSnapshot = null;
             CancelPendingRenameClick();
             return;
         }
+
+        // This tunnel handler runs before the DataGrid/ListBox collapses a multi-selection to the
+        // pressed row. If the press lands on a member of a group, snapshot the whole selection so a
+        // subsequent drag-out carries every selected item, not just the one the native control leaves.
+        _dragSelectionSnapshot = Pane.SelectedCount > 1 && Pane.SelectedEntries.Contains(entry)
+            ? Pane.SelectedEntries.ToList()
+            : null;
 
         var alreadySelectedAlone = Pane.SelectedCount == 1
                                    && ReferenceEquals(Pane.SelectedEntry, entry);
@@ -770,6 +781,14 @@ public sealed partial class PaneView : UserControl
                                    && ReferenceEquals(Pane.SelectedEntry, entry)
                                    && e.KeyModifiers == KeyModifiers.None;
 
+        // Snapshot the group before SelectGridEntry collapses it, so a drag started on a member
+        // of a multi-selection carries every selected item (see _dragSelectionSnapshot).
+        _dragSelectionSnapshot = Pane.SelectedCount > 1
+                                 && Pane.SelectedEntries.Contains(entry)
+                                 && e.KeyModifiers == KeyModifiers.None
+            ? Pane.SelectedEntries.ToList()
+            : null;
+
         SelectGridEntry(entry, e.KeyModifiers);
         GridView.Focus();
 
@@ -788,6 +807,12 @@ public sealed partial class PaneView : UserControl
         _interactionMode = Pane.SelectedEntries.Contains(entry)
             ? PointerInteractionMode.DragOutPending
             : PointerInteractionMode.None;
+
+        // Because we mark the event handled, neither the tile nor the inner ListBox captures the
+        // pointer, so without an explicit capture the subsequent PointerMoved stream is not retained
+        // as a drag and the drag-out never starts. Capture here to mirror the marquee/blank paths.
+        if (_interactionMode == PointerInteractionMode.DragOutPending)
+            e.Pointer.Capture(GridView);
 
         e.Handled = true;
     }
@@ -1218,9 +1243,11 @@ public sealed partial class PaneView : UserControl
         _dragStarted = true;
         CancelPendingRenameClick();
         var pressArgs = _pressArgs;
+        // Grab the snapshot before ResetPointerInteraction clears it.
+        var dragEntries = _dragSelectionSnapshot;
         ResetPointerInteraction(e);
 
-        _ = StartDragOutAsync(pressArgs);
+        _ = StartDragOutAsync(pressArgs, dragEntries);
     }
 
     private void UpdateMarquee(Control host, Point start, Point current, KeyModifiers modifiers)
@@ -1341,15 +1368,29 @@ public sealed partial class PaneView : UserControl
         return true;
     }
 
-    private async Task StartDragOutAsync(PointerPressedEventArgs pressArgs)
+    private async Task StartDragOutAsync(
+        PointerPressedEventArgs pressArgs,
+        IReadOnlyList<EntryItemViewModel>? selectionSnapshot = null)
     {
         if (Pane is null)
             return;
 
+        // Prefer the pre-collapse snapshot when the drag began on a member of a group: the native
+        // control (and grid selection) reduce SelectedEntries to the pressed row on press, so reading
+        // the live selection here would drag only one item. The snapshot is only honoured when the
+        // current (collapsed) selection is contained in it, i.e. the collapse happened on a member.
+        var live = Pane.SelectedEntries;
+        IReadOnlyList<EntryItemViewModel> source = live;
+        if (selectionSnapshot is { Count: > 1 }
+            && (live.Count == 0 || (live.Count == 1 && selectionSnapshot.Contains(live[0]))))
+        {
+            source = selectionSnapshot;
+        }
+
         // Resolve and materialize the payload BEFORE starting the OS drag. Building the transfer while
         // the drag is already in flight risks the user releasing over the target (e.g. a browser upload
         // field) before DoDragDropAsync has actually begun, which drops the operation silently.
-        var virtualPaths = Pane.SelectedEntries.Select(x => x.FullPath).ToList();
+        var virtualPaths = source.Select(x => x.FullPath).ToList();
         if (virtualPaths.Count == 0)
             return;
 
@@ -1387,6 +1428,7 @@ public sealed partial class PaneView : UserControl
         _pressArgs = null;
         _pressHost = null;
         _dragStarted = false;
+        _dragSelectionSnapshot = null;
         _interactionMode = PointerInteractionMode.None;
         SelectionMarquee.IsActive = false;
     }

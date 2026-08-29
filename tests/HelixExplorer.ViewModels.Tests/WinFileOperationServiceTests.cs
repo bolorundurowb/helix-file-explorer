@@ -60,6 +60,69 @@ public class WinFileOperationServiceTests
     }
 
     [Fact]
+    public async Task MoveAsync_DirectoryMerge_CombinesTreesAndRemovesSource()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var source = Path.Combine(root, "source");
+            var dest = Path.Combine(root, "dest", "source");
+            Directory.CreateDirectory(source);
+            Directory.CreateDirectory(dest);
+            await File.WriteAllTextAsync(Path.Combine(source, "only-source.txt"), "s");
+            await File.WriteAllTextAsync(Path.Combine(dest, "only-dest.txt"), "d");
+
+            var service = CreateService();
+            var result = await service.MoveAsync(
+                [source],
+                Path.Combine(root, "dest"),
+                conflicts: new FixedConflictResolver(FileConflictChoice.Merge));
+
+            result.Failed.Must().Be(0);
+            // Both sides survive the merge.
+            File.Exists(Path.Combine(dest, "only-dest.txt")).Must().BeTrue();
+            File.Exists(Path.Combine(dest, "only-source.txt")).Must().BeTrue();
+            // The source tree is removed after a merge-move.
+            Directory.Exists(source).Must().BeFalse();
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [Fact]
+    public async Task CopyAsync_DirectoryMerge_KeepsBothSidesAndLeavesSource()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var source = Path.Combine(root, "source");
+            var dest = Path.Combine(root, "dest", "source");
+            Directory.CreateDirectory(source);
+            Directory.CreateDirectory(dest);
+            await File.WriteAllTextAsync(Path.Combine(source, "only-source.txt"), "s");
+            await File.WriteAllTextAsync(Path.Combine(dest, "only-dest.txt"), "d");
+
+            var service = CreateService();
+            var result = await service.CopyAsync(
+                [source],
+                Path.Combine(root, "dest"),
+                conflicts: new FixedConflictResolver(FileConflictChoice.Merge));
+
+            result.Failed.Must().Be(0);
+            File.Exists(Path.Combine(dest, "only-dest.txt")).Must().BeTrue();
+            File.Exists(Path.Combine(dest, "only-source.txt")).Must().BeTrue();
+            // A copy-merge leaves the source in place.
+            File.Exists(Path.Combine(source, "only-source.txt")).Must().BeTrue();
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [Fact]
     public async Task CopyAsync_DirectoryIntoOwnDescendant_FailsWithoutNesting()
     {
         var root = CreateTempDirectory();

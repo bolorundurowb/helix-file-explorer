@@ -5,7 +5,14 @@ public enum FileConflictChoice
     Replace,
     KeepBoth,
     Skip,
-    Cancel
+    Cancel,
+
+    /// <summary>
+    /// Directory-only: recursively merge the source into the existing destination, keeping files that
+    /// exist only on one side and resolving per-file conflicts. For a move, the source is removed after
+    /// the merge. Meaningless for files, where it is treated as <see cref="Replace"/>.
+    /// </summary>
+    Merge
 }
 
 public sealed record FileConflictInfo(string SourcePath, string DestinationPath, bool IsDirectory);

@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using HelixExplorer.Core.Models;
 using HelixExplorer.ViewModels;
@@ -18,6 +19,13 @@ public sealed partial class DualPaneView : UserControl
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
         ApplyOrientation(PaneSplitOrientation.Vertical);
+
+        // The pane content (DataGrid/ListBox/VirtualizingFileGrid) marks PointerPressed handled
+        // for its own selection before the event can bubble to the host grids. Register activation
+        // on the Tunnel route with handledEventsToo:true so a single click updates the active pane
+        // immediately (before the list consumes the press), rather than lagging one click behind.
+        LeftHost.AddHandler(PointerPressedEvent, OnLeftActivate, RoutingStrategies.Tunnel, handledEventsToo: true);
+        RightHost.AddHandler(PointerPressedEvent, OnRightActivate, RoutingStrategies.Tunnel, handledEventsToo: true);
     }
 
     private void OnDataContextChanged(object? sender, EventArgs e)

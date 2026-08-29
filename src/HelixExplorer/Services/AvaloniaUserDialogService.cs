@@ -122,10 +122,32 @@ public sealed class AvaloniaUserDialogService(IWindowOwnerContext ownerContext) 
         var owner = GetOwnerWindow();
         var tcs = new TaskCompletionSource<FileConflictResolution?>();
         var applyToAll = new CheckBox { Content = "Apply to all", IsVisible = canApplyToAll };
-        var dialog = BuildDialog(owner, "Replace or skip files", 480);
+        var dialog = BuildDialog(
+            owner,
+            conflict.IsDirectory ? "Folder already exists" : "Replace or skip files",
+            520);
 
         var sourceName = Path.GetFileName(conflict.SourcePath);
         var destName = Path.GetFileName(conflict.DestinationPath);
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Spacing = 8
+        };
+        buttons.Children.Add(CreateButton("Cancel", () => { tcs.TrySetResult(null); dialog.Close(); }));
+        buttons.Children.Add(CreateButton("Skip", () => Complete(FileConflictChoice.Skip)));
+        buttons.Children.Add(CreateButton("Keep both", () => Complete(FileConflictChoice.KeepBoth)));
+        // Merge only makes sense for a folder — combine the two trees, resolving nested conflicts.
+        if (conflict.IsDirectory)
+            buttons.Children.Add(CreateButton("Merge", () => Complete(FileConflictChoice.Merge)));
+        buttons.Children.Add(CreateButton("Replace", () => Complete(FileConflictChoice.Replace), primary: true));
+
+        var message = conflict.IsDirectory
+            ? $"A folder named \"{destName}\" already exists at the destination. Merge combines the two trees. Replace overwrites the existing folder."
+            : $"A file or folder named \"{destName}\" already exists at the destination.";
+
         dialog.Content = new StackPanel
         {
             Margin = new Thickness(20),
@@ -134,24 +156,12 @@ public sealed class AvaloniaUserDialogService(IWindowOwnerContext ownerContext) 
             {
                 new TextBlock
                 {
-                    Text = $"A file or folder named \"{destName}\" already exists at the destination.",
+                    Text = message,
                     TextWrapping = TextWrapping.Wrap
                 },
                 new TextBlock { Text = $"Source: {sourceName}", Opacity = 0.7 },
                 applyToAll,
-                new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                    Spacing = 8,
-                    Children =
-                    {
-                        CreateButton("Cancel", () => { tcs.TrySetResult(null); dialog.Close(); }),
-                        CreateButton("Skip", () => Complete(FileConflictChoice.Skip)),
-                        CreateButton("Keep both", () => Complete(FileConflictChoice.KeepBoth)),
-                        CreateButton("Replace", () => Complete(FileConflictChoice.Replace), primary: true)
-                    }
-                }
+                buttons
             }
         };
 

@@ -176,7 +176,7 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
             catch (Exception ex)
             {
                 logger.LogError(ex, "{Kind} failed for '{Source}'", kind, source);
-                failures.Add(new FileOperationFailure(source, ex.Message));
+                failures.Add(new FileOperationFailure(source, FileSystemError.DescribeFileOperation(ex)));
             }
 
             progress?.Report(new FileOperationProgress(i + 1, total, source, kind));
@@ -218,7 +218,7 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
             if (PathUtilities.IsSameOrChildPath(source, destPath))
                 throw new InvalidOperationException("Cannot copy a folder into itself or one of its subfolders.");
 
-            if (Directory.Exists(destPath) && !TryResolveDirectoryConflict(source, destPath, ct, conflicts, control, state, out destPath, merge: true))
+            if (Directory.Exists(destPath) && !TryResolveDirectoryConflict(source, destPath, ct, conflicts, control, state, out destPath, isMove: false))
                 return;
 
             CopyDirectory(source, destPath, ct, conflicts, state, control);
@@ -244,6 +244,8 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
             if (File.Exists(destPath) && !TryResolveFileConflict(source, destPath, isDirectory: false, conflicts, state, out destPath))
                 return;
 
+            // File.Move copy-and-deletes internally when the destination is on another volume, so it
+            // already works across drives/network locations.
             File.Move(source, destPath);
         }
         else if (Directory.Exists(source))
@@ -251,11 +253,45 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
             if (PathUtilities.IsSameOrChildPath(source, destPath))
                 throw new InvalidOperationException("Cannot move a folder into itself or one of its subfolders.");
 
-            if (Directory.Exists(destPath) && !TryResolveDirectoryConflict(source, destPath, ct, conflicts, control, state, out destPath, merge: false))
+            if (Directory.Exists(destPath) && !TryResolveDirectoryConflict(source, destPath, ct, conflicts, control, state, out destPath, isMove: true))
                 return;
 
-            Directory.Move(source, destPath);
+            MoveDirectory(source, destPath, ct, conflicts, state, control);
         }
+    }
+
+    /// <summary>
+    /// Moves a directory tree, falling back to copy-then-delete when the source and destination live on
+    /// different volumes or a network location, where <see cref="Directory.Move"/> throws
+    /// ("source and destination path must have the same root").
+    /// </summary>
+    private static void MoveDirectory(
+        string source,
+        string destination,
+        CancellationToken ct,
+        IFileConflictResolver? conflicts,
+        FileOperationRunState state,
+        IFileOperationControl? control)
+    {
+        if (PathUtilities.IsSameVolume(source, destination))
+        {
+            try
+            {
+                Directory.Move(source, destination);
+                return;
+            }
+            catch (IOException)
+            {
+                // subst / mapped drives can share a root string but still refuse rename.
+            }
+        }
+
+        // Cross-volume / network move: copy the tree, then delete the source so the net effect is a move.
+        CopyDirectory(source, destination, ct, conflicts, state, control);
+        if (state.WasCancelled)
+            return;
+
+        Directory.Delete(source, recursive: true);
     }
 
     private static bool TryResolveFileConflict(
@@ -268,6 +304,10 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
     {
         resolvedDestPath = destPath;
         var choice = ResolveConflict(source, destPath, isDirectory, conflicts);
+
+        // Files cannot be merged; treat a Merge choice as Replace so overwrite still occurs.
+        if (choice == FileConflictChoice.Merge)
+            choice = FileConflictChoice.Replace;
 
         if (choice is null || choice == FileConflictChoice.Cancel)
         {
@@ -316,7 +356,7 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
         IFileOperationControl? control,
         FileOperationRunState state,
         out string resolvedDestPath,
-        bool merge)
+        bool isMove)
     {
         resolvedDestPath = destPath;
         var choice = ResolveConflict(source, destPath, isDirectory: true, conflicts);
@@ -338,19 +378,30 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
             return true;
         }
 
+        if (choice == FileConflictChoice.Merge)
+        {
+            // Never merge onto the same path.
+            if (PathUtilities.PathsEqual(source, destPath))
+                return false;
+
+            // Recursively merge source into the existing destination (nested conflicts are resolved by
+            // the same resolver). For a move, remove the emptied source afterwards.
+            CopyDirectory(source, destPath, ct, conflicts, state, control);
+            if (isMove && !state.WasCancelled)
+                Directory.Delete(source, recursive: true);
+
+            state.WasSkipped = false;
+            return false;
+        }
+
         if (choice == FileConflictChoice.Replace)
         {
             // Never delete/merge the source when the conflict target is the same path.
             if (PathUtilities.PathsEqual(source, destPath))
                 return false;
 
-            if (merge)
-            {
-                CopyDirectory(source, destPath, ct, conflicts, state, control);
-                state.WasSkipped = false;
-                return false;
-            }
-
+            // Copy and move both replace: remove the existing tree so dest-only files are gone,
+            // then the caller copies or moves source into the emptied path.
             Directory.Delete(destPath, recursive: true);
             return true;
         }
@@ -412,7 +463,7 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
             if (Directory.Exists(destDir))
             {
                 var localState = new FileOperationRunState();
-                if (!TryResolveDirectoryConflict(dir, destDir, ct, conflicts, control, localState, out destDir, merge: true))
+                if (!TryResolveDirectoryConflict(dir, destDir, ct, conflicts, control, localState, out destDir, isMove: false))
                 {
                     if (localState.WasCancelled)
                     {

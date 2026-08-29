@@ -5,6 +5,8 @@
 # Helix Explorer
 
 [![Build and Test](https://github.com/bolorundurowb/helix-file-explorer/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/bolorundurowb/helix-file-explorer/actions/workflows/build-and-test.yml)
+[![codecov](https://codecov.io/gh/bolorundurowb/helix-file-explorer/graph/badge.svg)](https://codecov.io/gh/bolorundurowb/helix-file-explorer)
+[![CodeFactor](https://www.codefactor.io/repository/github/bolorundurowb/helix-file-explorer/badge)](https://www.codefactor.io/repository/github/bolorundurowb/helix-file-explorer)
 
 A fast, modern file manager for Windows. Helix Explorer helps you browse, organize, and move files without the sluggishness of heavier alternatives. It is built for people who work with folders every day—developers, power users, and anyone who wants a clearer, more controllable Windows file manager.
 

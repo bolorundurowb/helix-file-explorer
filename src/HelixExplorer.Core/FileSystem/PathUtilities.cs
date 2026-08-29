@@ -106,6 +106,28 @@ public static class PathUtilities
     public static bool IsUncPath(string? path)
         => NetworkPath.IsUnc(path);
 
+    /// <summary>
+    /// True when both paths resolve to the same drive root (or the same UNC share root).
+    /// <see cref="Directory.Move"/> requires this; otherwise the caller should copy then delete.
+    /// </summary>
+    public static bool IsSameVolume(string source, string destination)
+    {
+        if (string.IsNullOrEmpty(source) || string.IsNullOrEmpty(destination))
+            return false;
+
+        try
+        {
+            var sourceRoot = Path.GetPathRoot(Path.GetFullPath(source));
+            var destRoot = Path.GetPathRoot(Path.GetFullPath(destination));
+            return !string.IsNullOrEmpty(sourceRoot)
+                   && string.Equals(sourceRoot, destRoot, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static bool IsSameOrChildPhysicalPath(string directory, string path)
     {
         var dir = NormalizePhysicalPath(directory);

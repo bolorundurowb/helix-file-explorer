@@ -121,4 +121,21 @@ public sealed class PathUtilitiesTests
     {
         PathUtilities.IsUncPath(path).Must().Be(expected);
     }
+
+    [Theory]
+    [InlineData(@"C:\a", @"C:\b", true)]
+    [InlineData(@"C:\a", @"D:\b", false)]
+    [InlineData(@"C:\a", @"\\server\share\folder", false)]
+    [InlineData(@"\\server\share\a", @"\\server\share\b", true)]
+    public void IsSameVolume_compares_path_roots(string source, string destination, bool expected)
+    {
+        PathUtilities.IsSameVolume(source, destination).Must().Be(expected);
+    }
+
+    [Fact]
+    public void IsSameVolume_empty_is_false()
+    {
+        PathUtilities.IsSameVolume("", @"C:\").Must().BeFalse();
+        PathUtilities.IsSameVolume(@"C:\", "").Must().BeFalse();
+    }
 }

@@ -176,7 +176,7 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
             catch (Exception ex)
             {
                 logger.LogError(ex, "{Kind} failed for '{Source}'", kind, source);
-                failures.Add(new FileOperationFailure(source, ex.Message));
+                failures.Add(new FileOperationFailure(source, FileSystemError.DescribeFileOperation(ex)));
             }
 
             progress?.Report(new FileOperationProgress(i + 1, total, source, kind));
@@ -273,10 +273,17 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
         FileOperationRunState state,
         IFileOperationControl? control)
     {
-        if (IsSameVolume(source, destination))
+        if (PathUtilities.IsSameVolume(source, destination))
         {
-            Directory.Move(source, destination);
-            return;
+            try
+            {
+                Directory.Move(source, destination);
+                return;
+            }
+            catch (IOException)
+            {
+                // subst / mapped drives can share a root string but still refuse rename.
+            }
         }
 
         // Cross-volume / network move: copy the tree, then delete the source so the net effect is a move.
@@ -285,14 +292,6 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
             return;
 
         Directory.Delete(source, recursive: true);
-    }
-
-    private static bool IsSameVolume(string source, string destination)
-    {
-        var sourceRoot = Path.GetPathRoot(Path.GetFullPath(source));
-        var destRoot = Path.GetPathRoot(Path.GetFullPath(destination));
-        return !string.IsNullOrEmpty(sourceRoot)
-               && string.Equals(sourceRoot, destRoot, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool TryResolveFileConflict(
@@ -401,15 +400,8 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
             if (PathUtilities.PathsEqual(source, destPath))
                 return false;
 
-            // A copy onto an existing directory merges (keeping destination-only files); a move replaces
-            // the destination outright and then relocates the source.
-            if (!isMove)
-            {
-                CopyDirectory(source, destPath, ct, conflicts, state, control);
-                state.WasSkipped = false;
-                return false;
-            }
-
+            // Copy and move both replace: remove the existing tree so dest-only files are gone,
+            // then the caller copies or moves source into the emptied path.
             Directory.Delete(destPath, recursive: true);
             return true;
         }

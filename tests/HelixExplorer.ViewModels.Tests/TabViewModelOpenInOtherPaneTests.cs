@@ -130,4 +130,30 @@ public class TabViewModelOpenInOtherPaneTests : IDisposable
         _tab.ActivePane.Must().Be(_tab.RightPane);
         PathUtilities.PathsEqual(_tab.RightPane!.CurrentPath, _tab.LeftPane.CurrentPath).Must().BeTrue();
     }
+
+    [Fact]
+    public void SetActivePane_GoBackCommand_TargetsThatPaneOnly()
+    {
+        var leftGrandchild = Path.Combine(_child, "left-leaf");
+        var rightGrandchild = Path.Combine(_child, "right-leaf");
+        Directory.CreateDirectory(leftGrandchild);
+        Directory.CreateDirectory(rightGrandchild);
+
+        _tab.LeftPane.NavigateTo(_parent);
+        _tab.LeftPane.NavigateTo(_child);
+        _tab.LeftPane.NavigateTo(leftGrandchild);
+
+        _tab.ToggleDualPaneCommand.Execute(null);
+        _tab.RightPane!.NavigateTo(_parent);
+        _tab.RightPane.NavigateTo(_child);
+        _tab.RightPane.NavigateTo(rightGrandchild);
+
+        _tab.SetActivePane(_tab.LeftPane);
+        _tab.ActivePane.Must().Be(_tab.LeftPane);
+        _tab.ActivePane.GoBackCommand.CanExecute(null).Must().BeTrue();
+        _tab.ActivePane.GoBackCommand.Execute(null);
+
+        PathUtilities.PathsEqual(_tab.LeftPane.CurrentPath, _child).Must().BeTrue();
+        PathUtilities.PathsEqual(_tab.RightPane.CurrentPath, rightGrandchild).Must().BeTrue();
+    }
 }

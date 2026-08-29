@@ -11,6 +11,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using HelixExplorer.Controls;
 using HelixExplorer.Core.Archives;
+using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Sorting;
 using HelixExplorer.Input;
@@ -49,6 +50,7 @@ public sealed partial class PaneView : UserControl
     // Full selection captured at press time, before the native control collapses a multi-selection
     // to the pressed row. Used so a drag that starts on a member of a group carries the whole group.
     private List<EntryItemViewModel>? _dragSelectionSnapshot;
+    private EntryItemViewModel? _deferredCollapseEntry;
     private bool _syncingSelectionToView;
     private bool _applyingNativeSelection;
     private bool _selectionSyncPending;
@@ -723,16 +725,22 @@ public sealed partial class PaneView : UserControl
             || TryGetEntryFromSource(e.Source) is not { } entry)
         {
             _dragSelectionSnapshot = null;
+            _deferredCollapseEntry = null;
             CancelPendingRenameClick();
             return;
         }
 
-        // This tunnel handler runs before the DataGrid/ListBox collapses a multi-selection to the
-        // pressed row. If the press lands on a member of a group, snapshot the whole selection so a
-        // subsequent drag-out carries every selected item, not just the one the native control leaves.
-        _dragSelectionSnapshot = Pane.SelectedCount > 1 && Pane.SelectedEntries.Contains(entry)
-            ? Pane.SelectedEntries.ToList()
-            : null;
+        var preserve = FileListPressPolicy.ShouldPreserveGroupOnPress(
+            Pane.SelectedCount,
+            Pane.SelectedEntries.Contains(entry),
+            modifiersDown: false);
+
+        // Snapshot before any native collapse. When preserve is true, mark handled so DataGrid/ListBox
+        // do not reduce the group to the pressed row (Explorer defers that to mouse-up if there is no drag).
+        _dragSelectionSnapshot = preserve ? Pane.SelectedEntries.ToList() : null;
+        _deferredCollapseEntry = preserve ? entry : null;
+        if (preserve)
+            e.Handled = true;
 
         var alreadySelectedAlone = Pane.SelectedCount == 1
                                    && ReferenceEquals(Pane.SelectedEntry, entry);
@@ -777,19 +785,35 @@ public sealed partial class PaneView : UserControl
             return;
         }
 
+        // Double-click activates (navigate into a folder / open a file). We must detect it here via
+        // ClickCount rather than the tile's DoubleTapped event: arming a drag below captures the
+        // pointer, and pointer capture suppresses DoubleTapped on the tile, which would otherwise let
+        // the pending single-click rename timer fire and open inline edit instead of navigating.
+        if (e.ClickCount >= 2)
+        {
+            CancelPendingRenameClick();
+            if (!Pane.SelectedEntries.Contains(entry))
+                SelectGridEntry(entry, KeyModifiers.None);
+            Pane.ActivateEntry(entry);
+            e.Handled = true;
+            return;
+        }
+
         var alreadySelectedAlone = Pane.SelectedCount == 1
                                    && ReferenceEquals(Pane.SelectedEntry, entry)
                                    && e.KeyModifiers == KeyModifiers.None;
 
-        // Snapshot the group before SelectGridEntry collapses it, so a drag started on a member
-        // of a multi-selection carries every selected item (see _dragSelectionSnapshot).
-        _dragSelectionSnapshot = Pane.SelectedCount > 1
-                                 && Pane.SelectedEntries.Contains(entry)
-                                 && e.KeyModifiers == KeyModifiers.None
-            ? Pane.SelectedEntries.ToList()
-            : null;
+        var preserve = FileListPressPolicy.ShouldPreserveGroupOnPress(
+            Pane.SelectedCount,
+            Pane.SelectedEntries.Contains(entry),
+            e.KeyModifiers != KeyModifiers.None);
 
-        SelectGridEntry(entry, e.KeyModifiers);
+        _dragSelectionSnapshot = preserve ? Pane.SelectedEntries.ToList() : null;
+        _deferredCollapseEntry = preserve ? entry : null;
+
+        // Skip SelectGridEntry when preserving: it would collapse the group before a drag can start.
+        if (!preserve)
+            SelectGridEntry(entry, e.KeyModifiers);
         GridView.Focus();
 
         if (alreadySelectedAlone)
@@ -864,15 +888,19 @@ public sealed partial class PaneView : UserControl
 
     private void OnGridItemDoubleTapped(object? sender, TappedEventArgs e)
     {
+        // Grid activation is handled synchronously in OnGridItemPointerPressed via ClickCount, because
+        // capturing the pointer for drag-out suppresses this DoubleTapped event. This handler only
+        // guards against the gesture reaching an underlying item when it starts inside a rename editor,
+        // and otherwise defers to the ClickCount path to avoid activating the entry twice.
         if (ShouldSuppressActivation(e.Source))
         {
             e.Handled = true;
             return;
         }
 
+        // Fallback: if the pointer was not captured (e.g. drag not armed) DoubleTapped may still fire.
+        // Cancel any pending rename; navigation has already occurred on the ClickCount press.
         CancelPendingRenameClick();
-        if (sender is Control { DataContext: EntryItemViewModel entry })
-            Pane?.ActivateEntry(entry);
     }
 
     private void ScheduleRenameClick(EntryItemViewModel entry)
@@ -1062,7 +1090,9 @@ public sealed partial class PaneView : UserControl
         _pressArgs = e;
         _dragStarted = false;
 
-        if (_interactionMode == PointerInteractionMode.MarqueePending && _pressHost is not null)
+        if (_pressHost is not null
+            && _interactionMode is PointerInteractionMode.MarqueePending
+                or PointerInteractionMode.DragOutPending)
             e.Pointer.Capture(_pressHost);
     }
 
@@ -1124,6 +1154,9 @@ public sealed partial class PaneView : UserControl
         _interactionMode = Pane.SelectedEntries.Contains(entry)
             ? PointerInteractionMode.DragOutPending
             : PointerInteractionMode.None;
+
+        if (_interactionMode == PointerInteractionMode.DragOutPending && _pressHost is not null)
+            e.Pointer.Capture(_pressHost);
     }
 
     /// <summary>
@@ -1429,12 +1462,18 @@ public sealed partial class PaneView : UserControl
         _pressHost = null;
         _dragStarted = false;
         _dragSelectionSnapshot = null;
+        _deferredCollapseEntry = null;
         _interactionMode = PointerInteractionMode.None;
         SelectionMarquee.IsActive = false;
     }
 
     private void OnListPointerReleased(object? sender, PointerReleasedEventArgs e)
-        => ResetPointerInteraction(e);
+    {
+        var collapseTo = !_dragStarted ? _deferredCollapseEntry : null;
+        ResetPointerInteraction(e);
+        if (collapseTo is not null)
+            SelectGridEntry(collapseTo, KeyModifiers.None);
+    }
 
     private void FocusRenameEditor()
     {
@@ -1530,11 +1569,17 @@ public sealed partial class PaneView : UserControl
 
     private EntryItemViewModel? FindEntryUnderDrag(DragEventArgs e)
     {
-        if (DetailsGrid.IsVisible)
+        // Use the active view mode, NOT the controls' own IsVisible: a child control's IsVisible stays
+        // true when its parent wrapper is collapsed, so DetailsGrid.IsVisible is true even in grid mode.
+        // Relying on it made grid drops hit-test the hidden DataGrid, find nothing, and fall back to the
+        // current folder (a no-op) instead of the folder tile under the pointer.
+        if (Pane is null)
+            return null;
+        if (Pane.IsDetailsView)
             return HitTestEntry(DetailsGrid, e.GetPosition(DetailsGrid));
-        if (ListView.IsVisible)
+        if (Pane.IsListView)
             return HitTestEntry(ListView, e.GetPosition(ListView));
-        if (Pane?.IsGridView == true)
+        if (Pane.IsGridView)
             return HitTestEntry(GridView, e.GetPosition(GridView));
 
         return null;

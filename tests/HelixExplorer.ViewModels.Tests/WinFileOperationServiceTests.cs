@@ -92,6 +92,102 @@ public class WinFileOperationServiceTests
     }
 
     [Fact]
+    public async Task CopyAsync_DirectoryReplace_RemovesDestinationOnlyFiles()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var source = Path.Combine(root, "source");
+            var dest = Path.Combine(root, "dest", "source");
+            Directory.CreateDirectory(source);
+            Directory.CreateDirectory(dest);
+            await File.WriteAllTextAsync(Path.Combine(source, "only-source.txt"), "s");
+            await File.WriteAllTextAsync(Path.Combine(dest, "only-dest.txt"), "d");
+
+            var service = CreateService();
+            var result = await service.CopyAsync(
+                [source],
+                Path.Combine(root, "dest"),
+                conflicts: new FixedConflictResolver(FileConflictChoice.Replace));
+
+            result.Failed.Must().Be(0);
+            File.Exists(Path.Combine(dest, "only-source.txt")).Must().BeTrue();
+            File.Exists(Path.Combine(dest, "only-dest.txt")).Must().BeFalse();
+            File.Exists(Path.Combine(source, "only-source.txt")).Must().BeTrue();
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [Fact]
+    public async Task CopyAsync_DirectoryMerge_NestedFileSkip_KeepsDestinationFile()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var source = Path.Combine(root, "source");
+            var dest = Path.Combine(root, "dest", "source");
+            Directory.CreateDirectory(source);
+            Directory.CreateDirectory(dest);
+            await File.WriteAllTextAsync(Path.Combine(source, "both.txt"), "from-source");
+            await File.WriteAllTextAsync(Path.Combine(dest, "both.txt"), "from-dest");
+            await File.WriteAllTextAsync(Path.Combine(dest, "only-dest.txt"), "d");
+            await File.WriteAllTextAsync(Path.Combine(source, "only-source.txt"), "s");
+
+            var service = CreateService();
+            var result = await service.CopyAsync(
+                [source],
+                Path.Combine(root, "dest"),
+                conflicts: new DirectoryMergeThenFileSkipResolver());
+
+            result.Failed.Must().Be(0);
+            File.Exists(Path.Combine(dest, "only-dest.txt")).Must().BeTrue();
+            File.Exists(Path.Combine(dest, "only-source.txt")).Must().BeTrue();
+            (await File.ReadAllTextAsync(Path.Combine(dest, "both.txt"))).Must().Be("from-dest");
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [Fact]
+    public async Task MoveAsync_AcrossVolumes_WhenSecondDriveExists()
+    {
+        var tempRoot = Path.GetPathRoot(Path.GetTempPath());
+        var other = DriveInfo.GetDrives()
+            .FirstOrDefault(d => d.IsReady
+                                 && d.DriveType is DriveType.Fixed or DriveType.Removable
+                                 && !string.Equals(d.Name, tempRoot, StringComparison.OrdinalIgnoreCase));
+        if (other is null)
+            return;
+
+        var sourceRoot = CreateTempDirectory();
+        var destParent = Path.Combine(other.Name, "helix-fileops-crossvol-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var source = Path.Combine(sourceRoot, "moved-tree");
+            Directory.CreateDirectory(source);
+            await File.WriteAllTextAsync(Path.Combine(source, "file.txt"), "x");
+            Directory.CreateDirectory(destParent);
+
+            var service = CreateService();
+            var result = await service.MoveAsync([source], destParent);
+
+            result.Failed.Must().Be(0);
+            Directory.Exists(source).Must().BeFalse();
+            File.Exists(Path.Combine(destParent, "moved-tree", "file.txt")).Must().BeTrue();
+        }
+        finally
+        {
+            TryDeleteDirectory(sourceRoot);
+            TryDeleteDirectory(destParent);
+        }
+    }
+
+    [Fact]
     public async Task CopyAsync_DirectoryMerge_KeepsBothSidesAndLeavesSource()
     {
         var root = CreateTempDirectory();
@@ -194,5 +290,16 @@ public class WinFileOperationServiceTests
             => Task.FromResult<FileConflictChoice?>(choice);
 
         public FileConflictChoice? ResolveSync(FileConflictInfo conflict) => choice;
+    }
+
+    private sealed class DirectoryMergeThenFileSkipResolver : IFileConflictResolver
+    {
+        public bool ApplyToAllChosen => false;
+
+        public Task<FileConflictChoice?> ResolveAsync(FileConflictInfo conflict)
+            => Task.FromResult(ResolveSync(conflict));
+
+        public FileConflictChoice? ResolveSync(FileConflictInfo conflict)
+            => conflict.IsDirectory ? FileConflictChoice.Merge : FileConflictChoice.Skip;
     }
 }

@@ -122,7 +122,10 @@ public sealed class AvaloniaUserDialogService(IWindowOwnerContext ownerContext) 
         var owner = GetOwnerWindow();
         var tcs = new TaskCompletionSource<FileConflictResolution?>();
         var applyToAll = new CheckBox { Content = "Apply to all", IsVisible = canApplyToAll };
-        var dialog = BuildDialog(owner, conflict.IsDirectory ? "Merge, replace or skip" : "Replace or skip files", 520);
+        var dialog = BuildDialog(
+            owner,
+            conflict.IsDirectory ? "Folder already exists" : "Replace or skip files",
+            520);
 
         var sourceName = Path.GetFileName(conflict.SourcePath);
         var destName = Path.GetFileName(conflict.DestinationPath);
@@ -142,7 +145,7 @@ public sealed class AvaloniaUserDialogService(IWindowOwnerContext ownerContext) 
         buttons.Children.Add(CreateButton("Replace", () => Complete(FileConflictChoice.Replace), primary: true));
 
         var message = conflict.IsDirectory
-            ? $"A folder named \"{destName}\" already exists at the destination."
+            ? $"A folder named \"{destName}\" already exists at the destination. Merge combines the two trees. Replace overwrites the existing folder."
             : $"A file or folder named \"{destName}\" already exists at the destination.";
 
         dialog.Content = new StackPanel

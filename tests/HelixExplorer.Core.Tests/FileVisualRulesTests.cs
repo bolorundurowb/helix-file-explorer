@@ -5,7 +5,7 @@ namespace HelixExplorer.Core.Tests;
 public sealed class FileVisualRulesTests
 {
     [Fact]
-    public void SupportsThumbnail_matches_common_image_extensions()
+    public void SupportsThumbnail_MatchesCommonImageExtensions()
     {
         FileVisualRules.SupportsThumbnail("photo.jpg").Must().BeTrue();
         FileVisualRules.SupportsThumbnail("photo.JPEG").Must().BeTrue();
@@ -13,7 +13,7 @@ public sealed class FileVisualRulesTests
     }
 
     [Fact]
-    public void PreferThumbnail_only_for_grid_images()
+    public void PreferThumbnail_OnlyTrueForGridImages()
     {
         FileVisualRules.PreferThumbnail(@"C:\a.png", isDirectory: false, gridView: true).Must().BeTrue();
         FileVisualRules.PreferThumbnail(@"C:\a.png", isDirectory: false, gridView: false).Must().BeFalse();

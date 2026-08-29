@@ -6,6 +6,32 @@ namespace HelixExplorer.Core.Tests;
 public class RollingFileLoggerProviderTests
 {
     [Fact]
+    public void Constructor_NullOptions_ThrowsArgumentNullException()
+    {
+        ((Action)(() => new RollingFileLoggerProvider(null!))).Throws<ArgumentNullException>();
+    }
+
+    [Fact]
+    public void Constructor_MaxFileSizeBytesBelowOneKilobyte_ThrowsArgumentOutOfRangeException()
+    {
+        ((Action)(() => new RollingFileLoggerProvider(new RollingFileLoggerOptions
+        {
+            Version = "0.2.1",
+            MaxFileSizeBytes = 1023,
+        }))).Throws<ArgumentOutOfRangeException>();
+    }
+
+    [Fact]
+    public void Constructor_RetainedFileCountBelowOne_ThrowsArgumentOutOfRangeException()
+    {
+        ((Action)(() => new RollingFileLoggerProvider(new RollingFileLoggerOptions
+        {
+            Version = "0.2.1",
+            RetainedFileCount = 0,
+        }))).Throws<ArgumentOutOfRangeException>();
+    }
+
+    [Fact]
     public void Write_CreatesVersionedLogFileWithHeader()
     {
         var directory = CreateTempDirectory();

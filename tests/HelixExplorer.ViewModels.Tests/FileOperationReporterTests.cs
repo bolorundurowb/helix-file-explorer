@@ -6,7 +6,7 @@ namespace HelixExplorer.ViewModels.Tests;
 public class FileOperationReporterTests
 {
     [Fact]
-    public void Begin_resets_progress_and_marks_active()
+    public void Begin_ResetsProgressAndMarksActive()
     {
         var reporter = new FileOperationReporter();
 
@@ -22,7 +22,7 @@ public class FileOperationReporterTests
     }
 
     [Fact]
-    public void Begin_with_unknown_total_marks_indeterminate()
+    public void Begin_UnknownTotal_MarksIndeterminate()
     {
         var reporter = new FileOperationReporter();
 
@@ -32,7 +32,7 @@ public class FileOperationReporterTests
     }
 
     [Fact]
-    public void Report_updates_progress_fraction_and_detail()
+    public void Report_UpdatesProgressFractionAndDetail()
     {
         var reporter = new FileOperationReporter();
         reporter.Begin(FileOperationKind.Copy, 3, "Copying items");
@@ -46,7 +46,7 @@ public class FileOperationReporterTests
     }
 
     [Fact]
-    public void Complete_clears_active_and_emits_succeeded_entry()
+    public void Complete_ClearsActiveAndEmitsSucceededEntry()
     {
         var reporter = new FileOperationReporter();
         reporter.Begin(FileOperationKind.Copy, 1, "Copying items");
@@ -68,7 +68,7 @@ public class FileOperationReporterTests
     }
 
     [Fact]
-    public void Fail_emits_failure_entry()
+    public void Fail_EmitsFailureEntry()
     {
         var reporter = new FileOperationReporter();
         reporter.Begin(FileOperationKind.Delete, 1, "Deleting");
@@ -86,7 +86,7 @@ public class FileOperationReporterTests
     }
 
     [Fact]
-    public void Pause_and_resume_update_operation_control_state()
+    public void PauseAndResume_UpdateOperationControlState()
     {
         var reporter = new FileOperationReporter();
         reporter.Begin(FileOperationKind.Copy, 2, "Copying");
@@ -105,7 +105,7 @@ public class FileOperationReporterTests
     }
 
     [Fact]
-    public void Cancel_operation_signals_token()
+    public void CancelOperation_SignalsToken()
     {
         var reporter = new FileOperationReporter();
         reporter.Begin(FileOperationKind.Move, 1, "Moving");
@@ -117,7 +117,7 @@ public class FileOperationReporterTests
     }
 
     [Fact]
-    public void Cancelled_emits_neutral_completed_entry()
+    public void Cancelled_EmitsNeutralCompletedEntry()
     {
         var reporter = new FileOperationReporter();
         reporter.Begin(FileOperationKind.Copy, 1, "Copying");
@@ -133,7 +133,7 @@ public class FileOperationReporterTests
     }
 
     [Fact]
-    public void ClearCompleted_removes_entries_and_updates_has_completed()
+    public void ClearCompleted_RemovesEntriesAndUpdatesHasCompleted()
     {
         var reporter = new FileOperationReporter();
         reporter.Complete(FileOperationKind.Copy, 1, "Copied");
@@ -146,7 +146,7 @@ public class FileOperationReporterTests
     }
 
     [Fact]
-    public void Report_when_not_active_is_ignored()
+    public void Report_WhenNotActive_IsIgnored()
     {
         var reporter = new FileOperationReporter();
 

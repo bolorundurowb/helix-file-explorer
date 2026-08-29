@@ -6,7 +6,7 @@ namespace HelixExplorer.Core.Tests;
 public sealed class FireAndForgetSafeTests
 {
     [Fact]
-    public async Task Run_swallows_operation_canceled_exception()
+    public async Task Run_OperationCanceledException_IsSwallowed()
     {
         var tcs = new TaskCompletionSource();
         var logger = new TestLogger(onLog: tcs);
@@ -22,7 +22,7 @@ public sealed class FireAndForgetSafeTests
     }
 
     [Fact]
-    public async Task Run_logs_unexpected_exception()
+    public async Task Run_UnexpectedException_IsLogged()
     {
         var tcs = new TaskCompletionSource();
         var logger = new TestLogger(onLog: tcs);
@@ -40,7 +40,7 @@ public sealed class FireAndForgetSafeTests
     }
 
     [Fact]
-    public async Task Run_task_logs_unexpected_exception()
+    public async Task RunTask_UnexpectedException_IsLogged()
     {
         var tcs = new TaskCompletionSource();
         var logger = new TestLogger(onLog: tcs);

@@ -26,4 +26,16 @@ jobs:
         run: dotnet build HelixExplorer.slnx --no-restore -c Release
 
       - name: Run tests
-        run: dotnet test HelixExplorer.slnx --no-build -c Release --verbosity normal
+        run: >
+          dotnet test HelixExplorer.slnx --no-build -c Release --verbosity normal
+          --collect:"XPlat Code Coverage"
+          --results-directory ./coverage
+          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/**/coverage.cobertura.xml
+          fail_ci_if_error: false
+          verbose: true

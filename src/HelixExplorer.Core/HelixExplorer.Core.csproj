@@ -9,4 +9,8 @@
     <PackageReference Include="moment.net" Version="2.1.0" />
     <PackageReference Include="SharpCompress" Version="0.50.4" />
   </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="HelixExplorer.Core.Tests" />
+  </ItemGroup>
 </Project>

@@ -9,19 +9,19 @@ public sealed class ArchivePathTests
     [InlineData("archive://C:\\backup.zip!docs/readme.txt", true)]
     [InlineData("C:\\backup.zip", false)]
     [InlineData("", false)]
-    public void IsVirtual_detects_scheme(string path, bool expected)
+    public void IsVirtual_DetectsScheme(string path, bool expected)
     {
         ArchivePath.IsVirtual(path).Must().Be(expected);
     }
 
     [Fact]
-    public void Mount_wraps_physical_archive_path()
+    public void Mount_WrapsPhysicalArchivePath()
     {
         ArchivePath.Mount(@"C:\backup.zip").Must().Be("archive://C:\\backup.zip!");
     }
 
     [Fact]
-    public void TryParse_splits_host_and_inner()
+    public void TryParse_SplitsHostAndInner()
     {
         ArchivePath.TryParse(@"archive://C:\backup.zip!docs/readme.txt", out var host, out var inner).Must().BeTrue();
         host.Must().Be(@"C:\backup.zip");
@@ -29,21 +29,21 @@ public sealed class ArchivePathTests
     }
 
     [Fact]
-    public void GetParent_at_root_returns_physical_archive_folder()
+    public void GetParent_AtRoot_ReturnsPhysicalArchiveFolder()
     {
         var parent = ArchivePath.GetParent("archive://C:\\backup.zip!");
         parent.Must().Be(@"C:\backup.zip\");
     }
 
     [Fact]
-    public void GetParent_from_nested_inner_path_trims_segment()
+    public void GetParent_FromNestedInnerPath_TrimsSegment()
     {
         var parent = ArchivePath.GetParent("archive://C:\\backup.zip!docs/sub/file.txt");
         parent.Must().Be("archive://C:\\backup.zip!docs/sub/");
     }
 
     [Fact]
-    public void GetBreadcrumbs_builds_archive_segments()
+    public void GetBreadcrumbs_BuildsArchiveSegments()
     {
         var crumbs = ArchivePath.GetBreadcrumbs("archive://C:\\backup.zip!docs/sub/");
         crumbs.Count.Must().Be(3);
@@ -54,7 +54,7 @@ public sealed class ArchivePathTests
     }
 
     [Fact]
-    public void GetBreadcrumbs_paths_have_no_double_slash()
+    public void GetBreadcrumbs_PathsHaveNoDoubleSlash()
     {
         var crumbs = ArchivePath.GetBreadcrumbs("archive://C:\\backup.zip!docs/sub/");
         crumbs.Count.Must().Be(3);
@@ -72,7 +72,7 @@ public sealed class ArchivePathTests
     }
 
     [Fact]
-    public void GetBreadcrumbs_file_at_leaf_has_no_trailing_slash()
+    public void GetBreadcrumbs_FileAtLeaf_HasNoTrailingSlash()
     {
         var crumbs = ArchivePath.GetBreadcrumbs("archive://C:\\backup.zip!docs/file.txt");
         crumbs.Count.Must().Be(3);
@@ -81,14 +81,14 @@ public sealed class ArchivePathTests
     }
 
     [Fact]
-    public void Mount_escapes_exclamation_in_host_path()
+    public void Mount_EscapesExclamationInHostPath()
     {
         var mounted = ArchivePath.Mount(@"C:\my!folder\archive.zip");
         mounted.Must().Be("archive://C:\\my%21folder\\archive.zip!");
     }
 
     [Fact]
-    public void TryParse_unescapes_exclamation_in_host_path()
+    public void TryParse_UnescapesExclamationInHostPath()
     {
         ArchivePath.TryParse(
             @"archive://C:\my%21folder\archive.zip!inner/path",
@@ -99,7 +99,7 @@ public sealed class ArchivePathTests
     }
 
     [Fact]
-    public void TryParse_allows_literal_exclamation_in_inner_path()
+    public void TryParse_AllowsLiteralExclamationInInnerPath()
     {
         ArchivePath.TryParse(
             @"archive://C:\backup.zip!docs/weird!name.txt",
@@ -110,7 +110,7 @@ public sealed class ArchivePathTests
     }
 
     [Fact]
-    public void Combine_handles_exclamation_in_host_and_inner()
+    public void Combine_HandlesExclamationInHostAndInner()
     {
         var path = ArchivePath.Combine(@"C:\my!archive\test.zip", "a!b/c.txt");
         ArchivePath.TryParse(path, out var host, out var inner).Must().BeTrue();
@@ -119,7 +119,7 @@ public sealed class ArchivePathTests
     }
 
     [Fact]
-    public void Mount_and_parse_roundtrip_with_exclamation_in_host()
+    public void MountThenTryParse_RoundtripsExclamationInHost()
     {
         var hostFile = @"C:\my!archive\test.zip";
         var mounted = ArchivePath.Mount(hostFile);
@@ -129,7 +129,7 @@ public sealed class ArchivePathTests
     }
 
     [Fact]
-    public void EscapeHost_encodes_percent_before_exclamation()
+    public void EscapeHost_EncodesPercentBeforeExclamation()
     {
         ArchivePath.EscapeHost(@"C:\a%21b!c.zip").Must().Be(@"C:\a%2521b%21c.zip");
         ArchivePath.UnescapeHost(@"C:\a%2521b%21c.zip").Must().Be(@"C:\a%21b!c.zip");

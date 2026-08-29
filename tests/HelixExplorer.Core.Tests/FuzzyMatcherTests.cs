@@ -5,20 +5,20 @@ namespace HelixExplorer.Core.Tests;
 public sealed class FuzzyMatcherTests
 {
     [Fact]
-    public void Score_empty_query_matches_everything()
+    public void Score_EmptyQuery_MatchesEverything()
     {
         FuzzyMatcher.Score("Toggle Sidebar", string.Empty).Must().Be(0);
     }
 
     [Fact]
-    public void Score_finds_subsequence_with_boundary_bonus()
+    public void Score_Subsequence_AppliesBoundaryBonus()
     {
         var score = FuzzyMatcher.Score("Toggle Sidebar", "ts");
         score.Must().BeGreaterThan(0);
     }
 
     [Fact]
-    public void Score_returns_negative_when_chars_missing()
+    public void Score_MissingCharacters_ReturnsNegative()
     {
         FuzzyMatcher.Score("New Tab", "xyz").Must().Be(-1);
     }

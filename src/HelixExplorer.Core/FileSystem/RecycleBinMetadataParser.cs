@@ -33,12 +33,13 @@ public static class RecycleBinMetadataParser
         string originalPath;
         if (version == 1)
         {
-            // Fixed 260 UTF-16LE characters (520 bytes), NUL-padded.
+            // Fixed 260 UTF-16LE characters (520 bytes), NUL-padded. A short read here means the
+            // file is truncated/corrupt - do not hand back a path built from a partial field.
             var pathBytes = reader.ReadBytes(520);
-            if (pathBytes.Length == 0)
+            if (pathBytes.Length < 520)
                 return null;
 
-            originalPath = Encoding.Unicode.GetString(pathBytes).TrimEnd('\0');
+            originalPath = ExtractPath(pathBytes);
         }
         else
         {
@@ -50,13 +51,26 @@ public static class RecycleBinMetadataParser
             if (pathBytes.Length < pathLength * 2)
                 return null;
 
-            originalPath = Encoding.Unicode.GetString(pathBytes).TrimEnd('\0');
+            originalPath = ExtractPath(pathBytes);
         }
 
         if (string.IsNullOrWhiteSpace(originalPath))
             return null;
 
         return (fileSize, deletedAt, originalPath);
+    }
+
+    /// <summary>
+    /// Truncates at the first NUL rather than trimming trailing NULs: a Windows path can never
+    /// legitimately contain an embedded NUL, so anything after one is either zero-padding beyond
+    /// the real path or leftover disk slack from the field's previous contents - either way it is
+    /// not part of the original path and must not be appended to it.
+    /// </summary>
+    private static string ExtractPath(byte[] pathBytes)
+    {
+        var raw = Encoding.Unicode.GetString(pathBytes);
+        var nulIndex = raw.IndexOf('\0');
+        return nulIndex >= 0 ? raw[..nulIndex] : raw;
     }
 
     public static (long Size, DateTime DeletedAtUtc, string OriginalPath)? TryParseFile(string iFilePath)

@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      # All five Avalonia packages must move together (see DEP-1/DEP-2: they had already drifted
+      # apart once). One grouped PR instead of five separate ones that could land out of order.
+      avalonia:
+        patterns:
+          - "Avalonia*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

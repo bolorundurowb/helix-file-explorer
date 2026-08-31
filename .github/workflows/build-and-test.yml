@@ -19,15 +19,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: "10.0.x"
 
       - name: Cache NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
@@ -36,6 +36,18 @@ jobs:
 
       - name: Restore dependencies
         run: dotnet restore HelixExplorer.slnx
+
+      - name: Check for known-vulnerable packages
+        shell: pwsh
+        run: |
+          # dotnet list --vulnerable always exits 0 - it is a report, not a gate - so without this
+          # check a newly-disclosed vulnerable dependency would print in the log and nobody would
+          # notice until someone actually reads it.
+          $output = dotnet list HelixExplorer.slnx package --vulnerable --include-transitive 2>&1 | Out-String
+          Write-Host $output
+          if ($output -match "has the following vulnerable packages") {
+            throw "Vulnerable package(s) detected - see output above."
+          }
 
       - name: Build
         run: dotnet build HelixExplorer.slnx --no-restore -c Release
@@ -50,14 +62,14 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: test-results
           path: ./coverage/**/*.trx
           retention-days: 14
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/**/coverage.cobertura.xml

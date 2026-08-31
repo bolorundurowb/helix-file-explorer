@@ -11,7 +11,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
@@ -40,7 +40,7 @@ jobs:
 
       - name: Setup .NET
         if: steps.check.outputs.skip != 'true'
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: "10.0.x"
 
@@ -65,7 +65,7 @@ jobs:
 
       - name: Setup PolyInstall
         if: steps.check.outputs.skip != 'true'
-        uses: bolorundurowb/PolyInstall/.github/actions/setup-polyinstall@v2.0.1
+        uses: bolorundurowb/PolyInstall/.github/actions/setup-polyinstall@06ad773af4c3da0dae2735353ff480dcf7638b17 # v2.0.1
         with:
           version: v2.1.1
           rid: win-x64
@@ -96,7 +96,7 @@ jobs:
 
       - name: Create release
         if: steps.check.outputs.skip != 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
           files: dist/**

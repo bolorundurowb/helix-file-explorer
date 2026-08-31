@@ -428,6 +428,89 @@ public class WinFileOperationServiceTests
         }
     }
 
+    [Theory]
+    [InlineData(@"..\escape.txt")]
+    [InlineData(@"..\..\escape.txt")]
+    [InlineData(@"sub\escape.txt")]
+    [InlineData("sub/escape.txt")]
+    public async Task RenameAsync_TraversalNewName_RejectedAndFileUntouched(string maliciousNewName)
+    {
+        // SEC-1: newName must be a single leaf name. Path.Combine would otherwise let a "../"
+        // segment move the file out of its current folder under the guise of a rename.
+        var root = CreateTempDirectory();
+        try
+        {
+            var file = Path.Combine(root, "before.txt");
+            await File.WriteAllTextAsync(file, "x");
+
+            var service = CreateService();
+            var result = await service.RenameAsync(file, maliciousNewName);
+
+            result.Succeeded.Must().Be(0);
+            result.Failed.Must().Be(1);
+            File.Exists(file).Must().BeTrue();
+            (await File.ReadAllTextAsync(file)).Must().Be("x");
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [Fact]
+    public async Task RenameAsync_AbsolutePathNewName_RejectedAndFileUntouched()
+    {
+        // SEC-1: Path.Combine(parent, newName) discards "parent" entirely when newName is rooted,
+        // which would silently turn a rename into a move to an arbitrary location.
+        var root = CreateTempDirectory();
+        var escapeRoot = CreateTempDirectory();
+        try
+        {
+            var file = Path.Combine(root, "before.txt");
+            await File.WriteAllTextAsync(file, "x");
+            var absoluteTarget = Path.Combine(escapeRoot, "escape.txt");
+
+            var service = CreateService();
+            var result = await service.RenameAsync(file, absoluteTarget);
+
+            result.Succeeded.Must().Be(0);
+            result.Failed.Must().Be(1);
+            File.Exists(file).Must().BeTrue();
+            File.Exists(absoluteTarget).Must().BeFalse();
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+            TryDeleteDirectory(escapeRoot);
+        }
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(".")]
+    [InlineData("..")]
+    public async Task RenameAsync_EmptyOrDotNewName_RejectedAndFileUntouched(string invalidNewName)
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var file = Path.Combine(root, "before.txt");
+            await File.WriteAllTextAsync(file, "x");
+
+            var service = CreateService();
+            var result = await service.RenameAsync(file, invalidNewName);
+
+            result.Succeeded.Must().Be(0);
+            result.Failed.Must().Be(1);
+            File.Exists(file).Must().BeTrue();
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
     [Fact]
     public async Task CreateFolderAsync_ReturnsUniquifiedPath()
     {

@@ -117,6 +117,15 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
 
     public async ValueTask<FileOperationResult> RenameAsync(string path, string newName, CancellationToken ct = default)
     {
+        // newName must be a single leaf name. Without this check, Path.Combine silently discards
+        // "parent" for a rooted newName (e.g. "C:\Windows\evil"), and a "../" segment walks the
+        // move target out of the current folder — either turns "rename" into an arbitrary move.
+        if (!TryValidateNewName(newName, out var validationError))
+        {
+            logger.LogError("Rename rejected for '{Path}': {Reason}", path, validationError);
+            return new FileOperationResult(0, 0, 1, [new FileOperationFailure(path, validationError!)]);
+        }
+
         try
         {
             var newPath = await Task.Run(() =>
@@ -146,6 +155,42 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
             logger.LogError(ex, "Rename failed for '{Path}'", path);
             return new FileOperationResult(0, 0, 1, [new FileOperationFailure(path, ex.Message)]);
         }
+    }
+
+    /// <summary>
+    /// Rejects anything that is not a single, plain leaf name: empty/whitespace, <c>.</c>/<c>..</c>,
+    /// a rooted path, a path containing a directory separator, or a name with a character Windows
+    /// itself disallows in a file name.
+    /// </summary>
+    private static bool TryValidateNewName(string? newName, out string? error)
+    {
+        if (string.IsNullOrWhiteSpace(newName))
+        {
+            error = "The new name cannot be empty.";
+            return false;
+        }
+
+        if (newName is "." or "..")
+        {
+            error = $"'{newName}' is not a valid name.";
+            return false;
+        }
+
+        if (Path.IsPathRooted(newName) || newName.Contains('\\') || newName.Contains('/'))
+        {
+            error = "The new name cannot contain a path.";
+            return false;
+        }
+
+        var invalidIndex = newName.IndexOfAny(Path.GetInvalidFileNameChars());
+        if (invalidIndex >= 0)
+        {
+            error = $"The name contains an invalid character: '{newName[invalidIndex]}'.";
+            return false;
+        }
+
+        error = null;
+        return true;
     }
 
     public async ValueTask<string> CreateFolderAsync(string parentPath, string name, CancellationToken ct = default)

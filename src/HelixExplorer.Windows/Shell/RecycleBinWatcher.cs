@@ -1,5 +1,3 @@
-using System.Security.Principal;
-
 namespace HelixExplorer.Windows.Shell;
 
 /// <summary>
@@ -9,7 +7,6 @@ namespace HelixExplorer.Windows.Shell;
 public sealed class RecycleBinWatcher : IDisposable
 {
     private readonly List<FileSystemWatcher> _watchers = [];
-    private readonly string _sid = WindowsIdentity.GetCurrent().User?.Value ?? string.Empty;
     private bool _started;
     private bool _disposed;
 
@@ -17,17 +14,13 @@ public sealed class RecycleBinWatcher : IDisposable
 
     public void Start()
     {
-        if (_started || _disposed || string.IsNullOrEmpty(_sid))
+        if (_started || _disposed)
             return;
 
         Stop();
 
-        foreach (var drive in DriveInfo.GetDrives().Where(d => d.IsReady && d.DriveType != DriveType.Network))
+        foreach (var path in RecycleBinPaths.EnumerateUserBinFolders())
         {
-            var path = Path.Combine(drive.RootDirectory.FullName, "$RECYCLE.BIN", _sid);
-            if (!Directory.Exists(path))
-                continue;
-
             try
             {
                 var watcher = new FileSystemWatcher(path)

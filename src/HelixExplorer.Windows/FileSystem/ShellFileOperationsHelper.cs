@@ -10,7 +10,15 @@ namespace HelixExplorer.Windows.FileSystem;
 /// </summary>
 internal static class ShellFileOperationsHelper
 {
-    public static Task<(bool Success, int SucceededCount)> DeleteToRecycleBinAsync(
+    /// <summary>
+    /// Sends <paramref name="paths"/> to the recycle bin.
+    /// </summary>
+    /// <returns>
+    /// Whether the operation ran to completion, and the source paths the shell confirmed it deleted.
+    /// The caller needs the actual paths, not just a count: the shell may fail any item in the batch,
+    /// and undo has to know which items really produced a bin entry.
+    /// </returns>
+    public static Task<(bool Success, IReadOnlyList<string> DeletedPaths)> DeleteToRecycleBinAsync(
         IReadOnlyList<string> paths,
         IProgress<FileOperationProgress>? progress,
         CancellationToken cancellationToken)
@@ -31,7 +39,41 @@ internal static class ShellFileOperationsHelper
         return STATask.Run(() => CanMoveToRecycleBin(path, cancellationToken), cancellationToken);
     }
 
-    private static (bool Success, int SucceededCount) DeleteToRecycleBin(
+    /// <summary>
+    /// Sends a single item the caller is about to overwrite to the recycle bin, if the shell will
+    /// take it.
+    /// </summary>
+    /// <returns>True when the item is now in the bin and the caller may proceed with the overwrite.</returns>
+    /// <remarks>
+    /// Blocking rather than async because the conflict resolution it serves runs synchronously deep
+    /// inside a recursive copy walk. That walk is already on a <see cref="Task.Run"/> worker with no
+    /// synchronization context, and the shell calls each hop onto their own STA thread, so the wait
+    /// cannot deadlock. Failure is not exceptional: plenty of items (network paths, oversized files,
+    /// a disabled bin) simply cannot be recycled, and the caller falls back to a hard delete.
+    /// </remarks>
+    public static bool TryRecycleDisplacedItem(string path, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (!CanMoveToRecycleBinAsync(path, cancellationToken).GetAwaiter().GetResult())
+                return false;
+
+            var (success, deleted) = DeleteToRecycleBinAsync([path], progress: null, cancellationToken)
+                .GetAwaiter().GetResult();
+
+            return success && deleted.Count > 0;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static (bool Success, IReadOnlyList<string> DeletedPaths) DeleteToRecycleBin(
         IReadOnlyList<string> paths,
         IProgress<FileOperationProgress>? progress,
         CancellationToken cancellationToken)
@@ -41,15 +83,17 @@ internal static class ShellFileOperationsHelper
 
         var total = paths.Count;
         var completed = 0;
-        var succeeded = 0;
+        var deleted = new List<string>(total);
 
         op.PostDeleteItem += (s, e) =>
         {
             completed++;
-            if (e.Result.Succeeded)
-                succeeded++;
+            var parsingName = e.SourceItem?.ParsingName;
 
-            progress?.Report(new FileOperationProgress(completed, total, e.SourceItem?.ParsingName, FileOperationKind.Delete));
+            if (e.Result.Succeeded && !string.IsNullOrEmpty(parsingName))
+                deleted.Add(parsingName);
+
+            progress?.Report(new FileOperationProgress(completed, total, parsingName, FileOperationKind.Delete));
         };
 
         foreach (var path in paths)
@@ -61,7 +105,7 @@ internal static class ShellFileOperationsHelper
         }
 
         op.PerformOperations();
-        return (!op.AnyOperationsAborted, succeeded);
+        return (!op.AnyOperationsAborted, deleted);
     }
 
     private static bool RestoreFromRecycleBin(

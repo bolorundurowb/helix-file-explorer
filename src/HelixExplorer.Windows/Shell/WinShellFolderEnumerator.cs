@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Security.Principal;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Windows.FileSystem;
@@ -23,17 +22,21 @@ public sealed class WinShellFolderEnumerator : IShellFolderEnumerator, IDisposab
     public async ValueTask<IReadOnlyList<FileSystemEntry>> EnumerateAsync(string shellPath, CancellationToken ct = default)
         => await STATask.Run(() => Enumerate(shellPath, ct), ct).ConfigureAwait(false);
 
-    public async ValueTask RestoreAsync(string itemPath, string? destinationPath = null, CancellationToken ct = default)
+    public async ValueTask<bool> RestoreAsync(string itemPath, string? destinationPath = null, CancellationToken ct = default)
     {
         destinationPath ??= ReadRecycleBinMetadata(itemPath)?.OriginalPath;
         if (string.IsNullOrEmpty(destinationPath))
-            throw new InvalidOperationException($"Could not determine original path for '{itemPath}'.");
+            return false;
 
         var success = await ShellFileOperationsHelper.RestoreFromRecycleBinAsync(
             itemPath, destinationPath, ct).ConfigureAwait(false);
 
         if (!success)
-            throw new InvalidOperationException($"Restore failed for '{itemPath}'.");
+            return false;
+
+        // The shell reports success for a queued operation it later abandoned, so confirm the item is
+        // actually back before undo treats the restore as done.
+        return File.Exists(destinationPath) || Directory.Exists(destinationPath);
     }
 
     public async ValueTask EmptyRecycleBinAsync(CancellationToken ct = default)
@@ -61,36 +64,7 @@ public sealed class WinShellFolderEnumerator : IShellFolderEnumerator, IDisposab
         }, ct).ConfigureAwait(false);
     }
 
-    public bool HasRecycleBinItems()
-    {
-        var sid = WindowsIdentity.GetCurrent().User?.Value;
-        if (string.IsNullOrEmpty(sid))
-            return false;
-
-        foreach (var drive in DriveInfo.GetDrives())
-        {
-            if (!drive.IsReady || drive.DriveType == DriveType.Network)
-                continue;
-
-            var recyclePath = Path.Combine(drive.RootDirectory.FullName, "$RECYCLE.BIN", sid);
-            if (!Directory.Exists(recyclePath))
-                continue;
-
-            try
-            {
-                if (Directory.EnumerateFiles(recyclePath, "$I*", SearchOption.TopDirectoryOnly).Any())
-                    return true;
-            }
-            catch (UnauthorizedAccessException)
-            {
-            }
-            catch (IOException)
-            {
-            }
-        }
-
-        return false;
-    }
+    public bool HasRecycleBinItems() => RecycleBinPaths.HasAnyItems();
 
     public event EventHandler? RecycleBinChanged;
 

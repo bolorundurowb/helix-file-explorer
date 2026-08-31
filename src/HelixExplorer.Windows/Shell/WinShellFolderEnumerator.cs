@@ -113,7 +113,21 @@ public sealed class WinShellFolderEnumerator : IShellFolderEnumerator, IDisposab
                         {
                             ct.ThrowIfCancellationRequested();
                             var next = enumIdList.Next(1, childBuf, out var fetched);
-                            if (next.Failed || fetched == 0 || childBuf[0] == IntPtr.Zero)
+                            if (next.Failed)
+                            {
+                                // WIN-5: this used to break identically to the normal end-of-list case
+                                // (fetched == 0), so a genuine IEnumIDList::Next failure silently
+                                // produced a truncated listing that looked exactly like a complete,
+                                // successful one - nothing distinguished "folder has no more items"
+                                // from "the shell stopped telling us about its items".
+                                _logger.LogWarning(
+                                    "IEnumIDList.Next failed for '{ShellPath}' (hr={Hr}); listing may be truncated.",
+                                    shellPath,
+                                    next);
+                                break;
+                            }
+
+                            if (fetched == 0 || childBuf[0] == IntPtr.Zero)
                                 break;
 
                             using var childPidl = new PIDL(childBuf[0]);

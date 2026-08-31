@@ -300,9 +300,13 @@ public sealed class WinFileSystemProvider(
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or DirectoryNotFoundException)
         {
             logger.LogError(ex, "Enumerate failed on '{Path}'", path);
-            // Surface UNC failures so the pane can show Access denied / unavailable instead of an empty folder.
-            if (NetworkPath.IsUnc(path))
-                throw;
+            // WIN-5: this used to rethrow only for UNC paths, so EnumeratePathAsync's own local-vs-UNC
+            // branch (which decides whether to attempt a reconnect) never even saw a local failure -
+            // it was already swallowed here first. An access-denied or vanished-mid-listing local
+            // folder was silently reported as an empty one instead of surfacing an error; always
+            // rethrow and let the caller (which already turns any exception into a friendly message,
+            // see PaneRefreshCoordinator) decide what to show.
+            throw;
         }
 
         var snapshot = entries.ToArray();

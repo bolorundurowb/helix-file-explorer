@@ -107,7 +107,13 @@ public sealed class WinFileSystemProvider(
             return SearchResult.Empty;
 
         var resolved = ResolvePath(path);
-        return await SearchRecursiveAsyncCore(resolved, query.Trim(), options, cancellationToken).ConfigureAwait(false);
+        // Everything else in this class offloads DirectoryInfo enumeration via Task.Run; this one
+        // did not, so a large recursive search ran its synchronous walk (and the between-await name
+        // matching) straight on the caller's thread - the UI thread, for anything a ViewModel awaits
+        // directly - freezing the window for the entire search instead of just showing it busy.
+        return await Task.Run(
+            () => SearchRecursiveAsyncCore(resolved, query.Trim(), options, cancellationToken),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public string ResolvePath(string path)
@@ -181,7 +187,6 @@ public sealed class WinFileSystemProvider(
         };
 
         var capped = false;
-        var rootPrefixLength = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Length;
 
         while (dirQueue.Count > 0)
         {
@@ -198,9 +203,11 @@ public sealed class WinFileSystemProvider(
                     if (isDir && depth < options.MaxDepth)
                         dirQueue.Enqueue((info.FullName, depth + 1));
 
-                    var relative = info.FullName.Length > rootPrefixLength
-                        ? info.FullName[(rootPrefixLength + 1)..]
-                        : info.Name;
+                    // Path.GetRelativePath handles separator/case/trailing-slash normalization that a
+                    // manual TrimEnd + fixed-offset substring did not: that slice assumed info.FullName
+                    // shared path's exact textual prefix plus exactly one separator character, which is
+                    // not guaranteed (e.g. a differently-cased or reparsed segment).
+                    var relative = Path.GetRelativePath(path, info.FullName);
                     var nameMatches = EntryNameMatcher.Matches(info.Name, query)
                                       || EntryNameMatcher.Matches(relative.Replace('\\', '/'), query);
 

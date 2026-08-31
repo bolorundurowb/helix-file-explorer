@@ -93,6 +93,23 @@ public class WinSearchRecursiveTests : IDisposable
     }
 
     [Fact]
+    public async Task Search_MatchesNestedFileByRelativePathGlob()
+    {
+        // WIN-3: the relative path used for matching was a manual TrimEnd + fixed-offset substring;
+        // now Path.GetRelativePath. Exercise an actual relative-path glob match (not just a plain
+        // filename match) so a regression in that computation would be caught.
+        var sub = Path.Combine(_root, "sub");
+        Directory.CreateDirectory(sub);
+        File.WriteAllText(Path.Combine(sub, "notes.txt"), "x");
+        File.WriteAllText(Path.Combine(_root, "notes.txt"), "x");
+
+        var result = await _provider.SearchRecursiveAsync(_root, "sub/*.txt", SearchOptions.Default);
+
+        result.Entries.Must().Contain(e => e.FullPath == Path.Combine(sub, "notes.txt"));
+        result.Entries.Must().NotContain(e => e.FullPath == Path.Combine(_root, "notes.txt"));
+    }
+
+    [Fact]
     public async Task Search_SupportsNameGlobs()
     {
         File.WriteAllText(Path.Combine(_root, "alpha.pdf"), "x");

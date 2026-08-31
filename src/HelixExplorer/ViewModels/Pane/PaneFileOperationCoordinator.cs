@@ -1,5 +1,6 @@
 using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
+using HelixExplorer.Core.FileSystem.Undo;
 using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Localization;
 using HelixExplorer.Services;
@@ -13,8 +14,28 @@ public sealed class PaneFileOperationCoordinator(
     IOsFileClipboard osClipboard,
     IUserDialogService dialogs,
     IFileOperationReporter operationReporter,
+    IFileOperationHistory history,
     ILogger<PaneFileOperationCoordinator> logger)
 {
+    /// <summary>
+    /// Records a completed operation on the undo stack when it left something reversible behind.
+    /// </summary>
+    /// <remarks>
+    /// Merge is excluded outright: it destroys the information needed to tell the merged result apart
+    /// from what the destination already held, so no inverse exists. Everything else is pushed on its
+    /// recorded successes alone, which is why a partly failed batch still yields a usable undo.
+    /// </remarks>
+    private void PushHistory(FileOperationResult result, UndoableOperationKind kind, string description)
+    {
+        if (result.UsedMerge || result.Changes.Count == 0)
+            return;
+
+        history.Push(new FileOperationBatch(kind, description, result.Changes)
+        {
+            ReplacedItemsRecycled = result.ReplacedItemsRecycled
+        });
+    }
+
     public async Task<bool> HasPastePayloadAsync(CancellationToken cancellationToken = default)
         => await ResolvePastePayloadAsync(destinationPath: null, cancellationToken).ConfigureAwait(true) is not null;
 
@@ -66,6 +87,13 @@ public sealed class PaneFileOperationCoordinator(
                     operationReporter.CancellationToken,
                     operationReporter).ConfigureAwait(true);
             }
+
+            PushHistory(
+                result,
+                kind == FileOperationKind.Move ? UndoableOperationKind.Move : UndoableOperationKind.Copy,
+                kind == FileOperationKind.Move
+                    ? UiStrings.UndoMoveDescription(result.Changes.Count)
+                    : UiStrings.UndoCopyDescription(result.Changes.Count));
 
             await refreshAsync().ConfigureAwait(true);
             operationReporter.Complete(
@@ -141,6 +169,13 @@ public sealed class PaneFileOperationCoordinator(
                     operationReporter.CancellationToken,
                     operationReporter).ConfigureAwait(true);
 
+            PushHistory(
+                result,
+                isCopy ? UndoableOperationKind.Copy : UndoableOperationKind.Move,
+                isCopy
+                    ? UiStrings.UndoCopyDescription(result.Changes.Count)
+                    : UiStrings.UndoMoveDescription(result.Changes.Count));
+
             await refreshAsync().ConfigureAwait(true);
             operationReporter.Complete(
                 kind,
@@ -191,6 +226,17 @@ public sealed class PaneFileOperationCoordinator(
                 progress,
                 operationReporter.CancellationToken,
                 operationReporter).ConfigureAwait(true);
+
+            // A permanent delete has no inverse, so only recycle deletes reach the history. Changes
+            // whose bin entry could not be located are dropped: restoring needs the $R path.
+            if (!permanently)
+            {
+                var restorable = result.Changes.Where(c => c.RecycleItemPath is not null).ToList();
+                PushHistory(
+                    result with { Changes = restorable },
+                    UndoableOperationKind.RecycleDelete,
+                    UiStrings.UndoDeleteDescription(restorable.Count));
+            }
 
             await refreshAsync().ConfigureAwait(true);
             operationReporter.Complete(
@@ -345,6 +391,8 @@ public sealed class PaneFileOperationCoordinator(
                 return;
             }
 
+            PushHistory(result, UndoableOperationKind.Rename, UiStrings.UndoRenameDescription(newName));
+
             onClearRename();
             await refreshAsync().ConfigureAwait(true);
         }
@@ -363,7 +411,17 @@ public sealed class PaneFileOperationCoordinator(
     {
         try
         {
-            await fileOps.CreateFolderAsync(currentPath, "New Folder").ConfigureAwait(true);
+            // The service uniquifies the name, so the folder that actually appeared may be
+            // "New Folder (2)". Redo has to recreate that exact path rather than uniquifying again and
+            // landing on a third name.
+            var createdPath = await fileOps.CreateFolderAsync(currentPath, UiStrings.NewFolderDefaultName)
+                .ConfigureAwait(true);
+
+            history.Push(new FileOperationBatch(
+                UndoableOperationKind.CreateFolder,
+                UiStrings.UndoNewFolderDescription,
+                [new FileOperationChange(currentPath, createdPath)]));
+
             await refreshAsync().ConfigureAwait(true);
         }
         catch (Exception ex)

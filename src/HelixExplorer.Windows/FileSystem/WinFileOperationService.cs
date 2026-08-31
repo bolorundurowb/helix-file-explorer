@@ -1,11 +1,19 @@
 using HelixExplorer.Core.FileSystem;
+using HelixExplorer.Core.FileSystem.Undo;
 using HelixExplorer.Core.Infrastructure;
+using HelixExplorer.Windows.Shell;
 using Microsoft.Extensions.Logging;
 
 namespace HelixExplorer.Windows.FileSystem;
 
 public sealed class WinFileOperationService(ILogger<WinFileOperationService> logger) : IFileOperationService
 {
+    /// <summary>
+    /// Slack allowed between this process's clock and the deletion time the shell stamps into a
+    /// <c>$I</c> file, when deciding which bin entries a delete batch produced.
+    /// </summary>
+    private static readonly TimeSpan RecycleTimestampSkew = TimeSpan.FromSeconds(5);
+
     public async ValueTask<FileOperationResult> CopyAsync(
         IReadOnlyList<string> sources,
         string destination,
@@ -46,11 +54,29 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
         if (!permanently)
         {
             control?.WaitIfPaused(ct);
-            var (success, count) = await ShellFileOperationsHelper.DeleteToRecycleBinAsync(paths, progress, ct).ConfigureAwait(false);
-            var recycleFailures = new List<FileOperationFailure>();
-            for (var i = count; i < total; i++)
-                recycleFailures.Add(new FileOperationFailure(paths[i], "Recycle bin operation failed."));
-            return new FileOperationResult(count, 0, recycleFailures.Count, recycleFailures);
+
+            // Stamped before the operation so the bin scan afterwards can ignore everything already
+            // there. The shell writes the deletion time from its own clock, so allow a little skew
+            // rather than losing entries stamped a moment "before" we started.
+            var batchStart = DateTime.UtcNow - RecycleTimestampSkew;
+
+            var (_, deletedPaths) = await ShellFileOperationsHelper
+                .DeleteToRecycleBinAsync(paths, progress, ct).ConfigureAwait(false);
+
+            var deletedSet = new HashSet<string>(deletedPaths, StringComparer.OrdinalIgnoreCase);
+            var recycleFailures = paths
+                .Where(p => !deletedSet.Contains(p))
+                .Select(p => new FileOperationFailure(p, "Recycle bin operation failed."))
+                .ToList();
+
+            var recycleChanges = await Task.Run(
+                () => RecycleBinMatcher.Match(deletedPaths, RecycleBinPaths.ReadEntries(batchStart), batchStart),
+                ct).ConfigureAwait(false);
+
+            return new FileOperationResult(deletedPaths.Count, 0, recycleFailures.Count, recycleFailures)
+            {
+                Changes = recycleChanges
+            };
         }
 
         var succeeded = 0;
@@ -93,22 +119,27 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
     {
         try
         {
-            await Task.Run(() =>
+            var newPath = await Task.Run(() =>
             {
                 ct.ThrowIfCancellationRequested();
 
                 var parent = Path.GetDirectoryName(path) ?? string.Empty;
-                var newPath = Path.Combine(parent, newName);
+                var target = Path.Combine(parent, newName);
 
                 if (File.Exists(path))
-                    File.Move(path, newPath);
+                    File.Move(path, target);
                 else if (Directory.Exists(path))
-                    Directory.Move(path, newPath);
+                    Directory.Move(path, target);
                 else
                     throw new FileNotFoundException("Path not found.", path);
+
+                return target;
             }, ct).ConfigureAwait(false);
 
-            return new FileOperationResult(1, 0, 0, Array.Empty<FileOperationFailure>());
+            return new FileOperationResult(1, 0, 0, Array.Empty<FileOperationFailure>())
+            {
+                Changes = [new FileOperationChange(path, newPath)]
+            };
         }
         catch (Exception ex)
         {
@@ -149,6 +180,10 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
         var succeeded = 0;
         var skipped = 0;
         var failures = new List<FileOperationFailure>();
+        var changes = new List<FileOperationChange>();
+        var usedMerge = false;
+        var usedReplace = false;
+        var replacedItemsRecycled = true;
 
         for (var i = 0; i < total; i++)
         {
@@ -161,13 +196,27 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
             try
             {
                 operation(source, destination, ct, state, conflicts, control);
+
+                usedMerge |= state.UsedMerge;
+                usedReplace |= state.UsedReplace;
+                replacedItemsRecycled &= state.ReplacedItemsRecycled;
+
                 if (state.WasCancelled)
                     break;
 
                 if (state.WasSkipped)
+                {
                     skipped++;
+                }
                 else
+                {
                     succeeded++;
+
+                    // One change per top-level source, never per nested file: undoing a folder paste
+                    // should recycle the folder, not walk back through everything inside it.
+                    if (state.ResolvedDestinationPath is { Length: > 0 } dest)
+                        changes.Add(new FileOperationChange(source, dest));
+                }
             }
             catch (OperationCanceledException)
             {
@@ -182,13 +231,44 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
             progress?.Report(new FileOperationProgress(i + 1, total, source, kind));
         }
 
-        return new FileOperationResult(succeeded, skipped, failures.Count, failures);
+        return new FileOperationResult(succeeded, skipped, failures.Count, failures)
+        {
+            Changes = changes,
+            UsedMerge = usedMerge,
+            UsedReplace = usedReplace,
+            ReplacedItemsRecycled = replacedItemsRecycled
+        };
     }
 
     private sealed class FileOperationRunState
     {
         public bool WasSkipped { get; set; }
         public bool WasCancelled { get; set; }
+
+        /// <summary>
+        /// Where the item actually landed, after Keep Both uniquifying. Null when nothing was written.
+        /// </summary>
+        /// <remarks>
+        /// The only place the post-conflict destination is known is inside the per-item operation, and
+        /// undo needs it: recycling <c>Foo</c> when the paste actually created <c>Foo (2)</c> would
+        /// delete the wrong item.
+        /// </remarks>
+        public string? ResolvedDestinationPath { get; set; }
+
+        public bool UsedMerge { get; set; }
+
+        public bool UsedReplace { get; set; }
+
+        /// <summary>True when every replaced item in this batch went to the bin rather than being erased.</summary>
+        public bool ReplacedItemsRecycled { get; set; } = true;
+
+        /// <summary>Carries conflict outcomes from a nested walk back up to the batch-level state.</summary>
+        public void AbsorbFlags(FileOperationRunState inner)
+        {
+            UsedMerge |= inner.UsedMerge;
+            UsedReplace |= inner.UsedReplace;
+            ReplacedItemsRecycled &= inner.ReplacedItemsRecycled;
+        }
     }
 
     private static void CopyOne(
@@ -207,7 +287,7 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
 
         if (File.Exists(source))
         {
-            if (File.Exists(destPath) && !TryResolveFileConflict(source, destPath, isDirectory: false, conflicts, state, out destPath))
+            if (File.Exists(destPath) && !TryResolveFileConflict(source, destPath, isDirectory: false, conflicts, state, ct, out destPath))
                 return;
 
             File.Copy(source, destPath, overwrite: false);
@@ -222,7 +302,16 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
                 return;
 
             CopyDirectory(source, destPath, ct, conflicts, state, control);
+            if (state.WasCancelled)
+                return;
         }
+        else
+        {
+            return;
+        }
+
+        // Recorded only on the way out, so a skipped or cancelled item leaves nothing for undo.
+        state.ResolvedDestinationPath = destPath;
     }
 
     private static void MoveOne(
@@ -241,7 +330,7 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
 
         if (File.Exists(source))
         {
-            if (File.Exists(destPath) && !TryResolveFileConflict(source, destPath, isDirectory: false, conflicts, state, out destPath))
+            if (File.Exists(destPath) && !TryResolveFileConflict(source, destPath, isDirectory: false, conflicts, state, ct, out destPath))
                 return;
 
             // File.Move copy-and-deletes internally when the destination is on another volume, so it
@@ -257,7 +346,15 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
                 return;
 
             MoveDirectory(source, destPath, ct, conflicts, state, control);
+            if (state.WasCancelled)
+                return;
         }
+        else
+        {
+            return;
+        }
+
+        state.ResolvedDestinationPath = destPath;
     }
 
     /// <summary>
@@ -300,6 +397,7 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
         bool isDirectory,
         IFileConflictResolver? conflicts,
         FileOperationRunState state,
+        CancellationToken ct,
         out string resolvedDestPath)
     {
         resolvedDestPath = destPath;
@@ -335,10 +433,8 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
             if (PathUtilities.PathsEqual(source, resolvedDestPath))
                 return false;
 
-            if (isDirectory)
-                Directory.Delete(resolvedDestPath, recursive: true);
-            else
-                File.Delete(resolvedDestPath);
+            state.UsedReplace = true;
+            DiscardDisplacedItem(resolvedDestPath, isDirectory, state, ct);
             return true;
         }
 
@@ -384,6 +480,11 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
             if (PathUtilities.PathsEqual(source, destPath))
                 return false;
 
+            // A merge cannot be undone: files that existed only in the destination are indistinguishable
+            // afterwards from files the merge brought in, so there is no way to reconstruct the
+            // pre-merge tree. Flagging it here stops the whole batch being pushed onto the history.
+            state.UsedMerge = true;
+
             // Recursively merge source into the existing destination (nested conflicts are resolved by
             // the same resolver). For a move, remove the emptied source afterwards.
             CopyDirectory(source, destPath, ct, conflicts, state, control);
@@ -402,12 +503,40 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
 
             // Copy and move both replace: remove the existing tree so dest-only files are gone,
             // then the caller copies or moves source into the emptied path.
-            Directory.Delete(destPath, recursive: true);
+            state.UsedReplace = true;
+            DiscardDisplacedItem(destPath, isDirectory: true, state, ct);
             return true;
         }
 
         resolvedDestPath = FileOperationPathHelper.EnsureUniqueDirectoryPath(destPath);
         return true;
+    }
+
+    /// <summary>
+    /// Gets rid of an item a Replace is about to overwrite, preferring the recycle bin.
+    /// </summary>
+    /// <remarks>
+    /// Overwriting used to erase the displaced item outright, which made "replace" quietly the most
+    /// destructive thing the app could do and left undo unable to honestly claim it restored anything.
+    /// Routing it through the bin costs one shell call and makes the overwrite recoverable. When the
+    /// shell refuses — network paths, items past the bin's size cap, a bin disabled by policy — fall
+    /// back to the hard delete and record that the batch's replaced data is gone for good.
+    /// </remarks>
+    private static void DiscardDisplacedItem(
+        string path,
+        bool isDirectory,
+        FileOperationRunState state,
+        CancellationToken ct)
+    {
+        if (ShellFileOperationsHelper.TryRecycleDisplacedItem(path, ct))
+            return;
+
+        state.ReplacedItemsRecycled = false;
+
+        if (isDirectory)
+            Directory.Delete(path, recursive: true);
+        else
+            File.Delete(path);
     }
 
     private static FileConflictChoice? ResolveConflict(
@@ -439,8 +568,13 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
             var destFile = Path.Combine(destination, Path.GetFileName(file));
             if (File.Exists(destFile))
             {
+                // A nested conflict gets its own state so a skip here does not mark the whole top-level
+                // item skipped, but its Merge/Replace outcomes still have to reach the batch.
                 var localState = new FileOperationRunState();
-                if (!TryResolveFileConflict(file, destFile, isDirectory: false, conflicts, localState, out destFile))
+                var resolved = TryResolveFileConflict(file, destFile, isDirectory: false, conflicts, localState, ct, out destFile);
+                state.AbsorbFlags(localState);
+
+                if (!resolved)
                 {
                     if (localState.WasCancelled)
                     {
@@ -463,7 +597,10 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
             if (Directory.Exists(destDir))
             {
                 var localState = new FileOperationRunState();
-                if (!TryResolveDirectoryConflict(dir, destDir, ct, conflicts, control, localState, out destDir, isMove: false))
+                var resolved = TryResolveDirectoryConflict(dir, destDir, ct, conflicts, control, localState, out destDir, isMove: false);
+                state.AbsorbFlags(localState);
+
+                if (!resolved)
                 {
                     if (localState.WasCancelled)
                     {

@@ -128,6 +128,55 @@ public static class PathUtilities
         }
     }
 
+    /// <summary>
+    /// Orders paths so that a nested path always precedes the path that contains it, leaving unrelated
+    /// paths in their original relative order.
+    /// </summary>
+    /// <remarks>
+    /// Undo deletes children before parents: recycling a parent first would take its children with it,
+    /// and the child's own recycle would then fail on a path that no longer exists. Sorting by segment
+    /// depth achieves this without an O(n²) containment check, because a contained path always has more
+    /// segments than its container. The sort is stable, so siblings keep the caller's order.
+    /// </remarks>
+    public static IReadOnlyList<string> OrderDeepestFirst(IReadOnlyList<string> paths)
+    {
+        if (paths.Count < 2)
+            return paths;
+
+        return [.. paths.OrderByDescending(SegmentDepth)];
+    }
+
+    /// <summary>
+    /// Inverse of <see cref="OrderDeepestFirst"/>: containers before the paths nested inside them.
+    /// </summary>
+    /// <remarks>
+    /// Restoring from the recycle bin needs the opposite order to deleting — a child cannot be restored
+    /// into a parent directory that has not been recreated yet.
+    /// </remarks>
+    public static IReadOnlyList<string> OrderShallowestFirst(IReadOnlyList<string> paths)
+    {
+        if (paths.Count < 2)
+            return paths;
+
+        return [.. paths.OrderBy(SegmentDepth)];
+    }
+
+    private static int SegmentDepth(string path)
+    {
+        var normalized = NormalizePath(path);
+        if (string.IsNullOrEmpty(normalized))
+            return 0;
+
+        var depth = 0;
+        foreach (var c in normalized)
+        {
+            if (c is '\\' or '/')
+                depth++;
+        }
+
+        return depth;
+    }
+
     private static bool IsSameOrChildPhysicalPath(string directory, string path)
     {
         var dir = NormalizePhysicalPath(directory);

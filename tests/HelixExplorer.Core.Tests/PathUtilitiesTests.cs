@@ -127,15 +127,58 @@ public sealed class PathUtilitiesTests
     [InlineData(@"C:\a", @"D:\b", false)]
     [InlineData(@"C:\a", @"\\server\share\folder", false)]
     [InlineData(@"\\server\share\a", @"\\server\share\b", true)]
-    public void IsSameVolume_compares_path_roots(string source, string destination, bool expected)
+    public void IsSameVolume_ComparesPathRoots(string source, string destination, bool expected)
     {
         PathUtilities.IsSameVolume(source, destination).Must().Be(expected);
     }
 
     [Fact]
-    public void IsSameVolume_empty_is_false()
+    public void IsSameVolume_Empty_ReturnsFalse()
     {
         PathUtilities.IsSameVolume("", @"C:\").Must().BeFalse();
         PathUtilities.IsSameVolume(@"C:\", "").Must().BeFalse();
+    }
+
+    [Fact]
+    public void OrderDeepestFirst_PutsNestedPathsBeforeTheirContainer()
+    {
+        // Undo recycles children first: removing the parent first would take the child with it, and
+        // the child's own removal would then fail on a path that no longer exists.
+        var ordered = PathUtilities.OrderDeepestFirst(
+            [@"C:\a", @"C:\a\b\c", @"C:\a\b"]);
+
+        ordered[0].Must().Be(@"C:\a\b\c");
+        ordered[1].Must().Be(@"C:\a\b");
+        ordered[2].Must().Be(@"C:\a");
+    }
+
+    [Fact]
+    public void OrderDeepestFirst_KeepsUnrelatedSiblingsInInputOrder()
+    {
+        var ordered = PathUtilities.OrderDeepestFirst(
+            [@"C:\one\x", @"C:\two\y", @"C:\three\z"]);
+
+        ordered[0].Must().Be(@"C:\one\x");
+        ordered[1].Must().Be(@"C:\two\y");
+        ordered[2].Must().Be(@"C:\three\z");
+    }
+
+    [Fact]
+    public void OrderShallowestFirst_PutsContainerBeforeNestedPaths()
+    {
+        // Restoring runs the other way: a child cannot go back into a parent that is not there yet.
+        var ordered = PathUtilities.OrderShallowestFirst(
+            [@"C:\a\b\c", @"C:\a", @"C:\a\b"]);
+
+        ordered[0].Must().Be(@"C:\a");
+        ordered[1].Must().Be(@"C:\a\b");
+        ordered[2].Must().Be(@"C:\a\b\c");
+    }
+
+    [Fact]
+    public void OrderDeepestFirst_ReturnsShortInputsUnchanged()
+    {
+        PathUtilities.OrderDeepestFirst([]).Count.Must().Be(0);
+        PathUtilities.OrderDeepestFirst([@"C:\only"]).Count.Must().Be(1);
     }
 }

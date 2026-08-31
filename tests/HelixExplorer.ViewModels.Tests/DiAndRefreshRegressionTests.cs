@@ -1,5 +1,6 @@
 using System.Reflection;
 using HelixExplorer.Core.FileSystem;
+using HelixExplorer.Core.FileSystem.Undo;
 using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Core.Models;
@@ -31,6 +32,11 @@ public class ScopedDiWiringTests
         Descriptor<TabSessionCoordinator>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
         Descriptor<PaneFileOperationCoordinator>(services).Lifetime.Must().Be(ServiceLifetime.Transient);
         Descriptor<PaneShellActionCoordinator>(services).Lifetime.Must().Be(ServiceLifetime.Transient);
+        Descriptor<FileOperationUndoService>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
+
+        // Undo must be process-wide: a scoped history would give each window its own stack, so an
+        // operation run in one window would be invisible to Ctrl+Z in another.
+        Descriptor<IFileOperationHistory>(services).Lifetime.Must().Be(ServiceLifetime.Singleton);
         Descriptor<IWindowHostService>(services).Lifetime.Must().Be(ServiceLifetime.Singleton);
         Descriptor<IAppDatabase>(services).Lifetime.Must().Be(ServiceLifetime.Singleton);
         Descriptor<IFolderViewPreferencesStore>(services).Lifetime.Must().Be(ServiceLifetime.Singleton);

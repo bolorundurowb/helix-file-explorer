@@ -267,6 +267,190 @@ public class WinFileOperationServiceTests
     private static WinFileOperationService CreateService()
         => new(NullLogger<WinFileOperationService>.Instance);
 
+    [Fact]
+    public async Task CopyAsync_RecordsChangeWithUniquifiedDestination()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var sourceDir = Directory.CreateDirectory(Path.Combine(root, "src")).FullName;
+            var destDir = Directory.CreateDirectory(Path.Combine(root, "dest")).FullName;
+
+            var file = Path.Combine(sourceDir, "a.txt");
+            await File.WriteAllTextAsync(file, "x");
+            await File.WriteAllTextAsync(Path.Combine(destDir, "a.txt"), "existing");
+
+            var service = CreateService();
+            var result = await service.CopyAsync(
+                [file],
+                destDir,
+                conflicts: new FixedConflictResolver(FileConflictChoice.KeepBoth));
+
+            // Undo has to recycle the uniquified copy, not the pre-existing "a.txt" it was renamed around.
+            result.Changes.Count.Must().Be(1);
+            result.Changes[0].SourcePath.Must().Be(file);
+            result.Changes[0].DestinationPath.Must().Be(Path.Combine(destDir, "a (1).txt"));
+            result.Changes[0].DestinationPath.Must().NotBe(Path.Combine(destDir, "a.txt"));
+            File.Exists(result.Changes[0].DestinationPath).Must().BeTrue();
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [Fact]
+    public async Task CopyAsync_DirectoryRecordsOnlyTopLevelChange()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var sourceDir = Directory.CreateDirectory(Path.Combine(root, "tree")).FullName;
+            var nested = Directory.CreateDirectory(Path.Combine(sourceDir, "nested")).FullName;
+            await File.WriteAllTextAsync(Path.Combine(sourceDir, "one.txt"), "1");
+            await File.WriteAllTextAsync(Path.Combine(nested, "two.txt"), "2");
+
+            var destDir = Directory.CreateDirectory(Path.Combine(root, "dest")).FullName;
+
+            var service = CreateService();
+            var result = await service.CopyAsync([sourceDir], destDir);
+
+            // One change for the folder, never one per file inside it: undoing a big paste should
+            // recycle a single folder rather than enumerate the whole tree.
+            result.Changes.Count.Must().Be(1);
+            result.Changes[0].DestinationPath.Must().Be(Path.Combine(destDir, "tree"));
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [Fact]
+    public async Task CopyAsync_SkippedSourceRecordsNoChange()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var sourceDir = Directory.CreateDirectory(Path.Combine(root, "src")).FullName;
+            var destDir = Directory.CreateDirectory(Path.Combine(root, "dest")).FullName;
+
+            var file = Path.Combine(sourceDir, "a.txt");
+            await File.WriteAllTextAsync(file, "x");
+            await File.WriteAllTextAsync(Path.Combine(destDir, "a.txt"), "existing");
+
+            var service = CreateService();
+            var result = await service.CopyAsync(
+                [file],
+                destDir,
+                conflicts: new FixedConflictResolver(FileConflictChoice.Skip));
+
+            result.Skipped.Must().Be(1);
+            result.Changes.Count.Must().Be(0);
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [Fact]
+    public async Task CopyAsync_MergeIsFlaggedSoItIsNeverUndoable()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var sourceDir = Directory.CreateDirectory(Path.Combine(root, "src", "shared")).FullName;
+            await File.WriteAllTextAsync(Path.Combine(sourceDir, "new.txt"), "new");
+
+            var destDir = Directory.CreateDirectory(Path.Combine(root, "dest")).FullName;
+            var existing = Directory.CreateDirectory(Path.Combine(destDir, "shared")).FullName;
+            await File.WriteAllTextAsync(Path.Combine(existing, "old.txt"), "old");
+
+            var service = CreateService();
+            var result = await service.CopyAsync(
+                [sourceDir],
+                destDir,
+                conflicts: new FixedConflictResolver(FileConflictChoice.Merge));
+
+            result.UsedMerge.Must().BeTrue();
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [Fact]
+    public async Task MoveAsync_RecordsSourceAndDestination()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var sourceDir = Directory.CreateDirectory(Path.Combine(root, "src")).FullName;
+            var destDir = Directory.CreateDirectory(Path.Combine(root, "dest")).FullName;
+
+            var file = Path.Combine(sourceDir, "moved.txt");
+            await File.WriteAllTextAsync(file, "x");
+
+            var service = CreateService();
+            var result = await service.MoveAsync([file], destDir);
+
+            result.Changes.Count.Must().Be(1);
+            result.Changes[0].SourcePath.Must().Be(file);
+            result.Changes[0].DestinationPath.Must().Be(Path.Combine(destDir, "moved.txt"));
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [Fact]
+    public async Task RenameAsync_RecordsOldAndNewPath()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var file = Path.Combine(root, "before.txt");
+            await File.WriteAllTextAsync(file, "x");
+
+            var service = CreateService();
+            var result = await service.RenameAsync(file, "after.txt");
+
+            result.Changes.Count.Must().Be(1);
+            result.Changes[0].SourcePath.Must().Be(file);
+            result.Changes[0].DestinationPath.Must().Be(Path.Combine(root, "after.txt"));
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [Fact]
+    public async Task CreateFolderAsync_ReturnsUniquifiedPath()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var service = CreateService();
+
+            var first = await service.CreateFolderAsync(root, "New Folder");
+            var second = await service.CreateFolderAsync(root, "New Folder");
+
+            // Redo of a new folder recreates the recorded path, so the caller must keep this return
+            // value rather than assuming the name it asked for.
+            first.Must().Be(Path.Combine(root, "New Folder"));
+            second.Must().NotBe(first);
+            Directory.Exists(second).Must().BeTrue();
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
     private static string CreateTempDirectory()
         => Directory.CreateTempSubdirectory("helix-fileops-tests-").FullName;
 

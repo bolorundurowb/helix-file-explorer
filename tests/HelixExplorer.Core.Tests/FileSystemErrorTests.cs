@@ -20,7 +20,7 @@ public sealed class FileSystemErrorTests
     }
 
     [Fact]
-    public void DescribeFileOperation_same_root_is_cross_volume_message()
+    public void DescribeFileOperation_SameRoot_ReturnsCrossVolumeMessage()
     {
         var message = FileSystemError.DescribeFileOperation(
             new IOException("Source and destination path must have the same root."));
@@ -28,7 +28,7 @@ public sealed class FileSystemErrorTests
     }
 
     [Fact]
-    public void DescribeFileOperation_invalid_operation_keeps_message()
+    public void DescribeFileOperation_InvalidOperation_KeepsMessage()
     {
         FileSystemError.DescribeFileOperation(new InvalidOperationException("Cannot copy a folder into itself."))
             .Must().Contain("itself");

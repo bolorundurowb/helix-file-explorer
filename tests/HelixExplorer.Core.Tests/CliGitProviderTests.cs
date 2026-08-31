@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using HelixExplorer.Core.Git;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -5,6 +6,63 @@ namespace HelixExplorer.Core.Tests;
 
 public sealed class CliGitProviderTests
 {
+    [Fact]
+    public async Task CheckoutBranchAsync_UnknownBranch_ReturnsFalse()
+    {
+        // CORE-2/CORE-3 regression: git exits non-zero for an unknown branch rather than throwing,
+        // so treating "did not throw" as success silently reported a failed checkout as if the
+        // working tree had actually switched branches.
+        if (!IsGitAvailable())
+            return;
+
+        var root = CreateTempDirectory();
+        try
+        {
+            RunGitCommand(root, "init");
+            var provider = new CliGitProvider(NullLogger<CliGitProvider>.Instance);
+
+            var succeeded = await provider.CheckoutBranchAsync(root, "definitely-does-not-exist-branch");
+
+            succeeded.Must().BeFalse();
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    private static bool IsGitAvailable()
+    {
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo("git", "--version")
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            });
+            return process is not null && process.WaitForExit(5000) && process.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static void RunGitCommand(string workingDirectory, string arguments)
+    {
+        using var process = Process.Start(new ProcessStartInfo("git", arguments)
+        {
+            WorkingDirectory = workingDirectory,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        })!;
+        process.WaitForExit(10000);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]

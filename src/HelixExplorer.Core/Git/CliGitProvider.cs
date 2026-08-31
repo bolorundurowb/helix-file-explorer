@@ -44,9 +44,12 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
 
         try
         {
-            var output = await RunGitWithArgsAsync(root, StatusArgs, cancellationToken)
+            var result = await RunGitWithArgsAsync(root, StatusArgs, cancellationToken)
                 .ConfigureAwait(false);
-            var snapshot = GitPorcelainParser.Parse(output, root);
+            if (result.ExitCode != 0)
+                logger.LogWarning("git status exited {ExitCode} for '{Path}': {Stderr}", result.ExitCode, path, result.StandardError);
+
+            var snapshot = GitPorcelainParser.Parse(result.StandardOutput, root);
             _statusCache.Store(root, snapshot);
             return snapshot;
         }
@@ -86,10 +89,13 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
 
         try
         {
-            var output = await RunGitWithArgsAsync(root, ListBranchesArgs, cancellationToken)
+            var result = await RunGitWithArgsAsync(root, ListBranchesArgs, cancellationToken)
                 .ConfigureAwait(false);
+            if (result.ExitCode != 0)
+                logger.LogWarning("git branch exited {ExitCode} for '{Path}': {Stderr}", result.ExitCode, path, result.StandardError);
+
             var list = new List<string>();
-            foreach (var line in output.Split('\n'))
+            foreach (var line in result.StandardOutput.Split('\n'))
             {
                 var branch = line.Trim();
                 if (branch.Length > 0)
@@ -118,8 +124,21 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
         try
         {
             // Checkout must update the index; do not Kill on cancel or a mid-write death leaves index.lock.
-            await RunGitWithArgsAsync(root, ["checkout", branch], cancellationToken, killOnCancel: false)
+            var result = await RunGitWithArgsAsync(root, ["checkout", branch], cancellationToken, killOnCancel: false)
                 .ConfigureAwait(false);
+
+            if (result.ExitCode != 0)
+            {
+                // git does not throw for a failed checkout (conflicting local changes, unknown
+                // branch, ...) - it exits non-zero and writes to stderr. Treating any non-throwing
+                // completion as success meant a failed checkout was silently reported as if the
+                // branch had actually switched.
+                logger.LogError(
+                    "Git checkout failed for branch '{Branch}' in '{Path}' (exit {ExitCode}): {Stderr}",
+                    branch, path, result.ExitCode, result.StandardError);
+                return false;
+            }
+
             // Working tree changed: drop any cached status so the next refresh reflects the new branch.
             _statusCache.Invalidate(root);
             return true;
@@ -153,7 +172,15 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
         return null;
     }
 
-    private static async Task<string> RunGitWithArgsAsync(
+    /// <summary>
+    /// Hard ceiling on any git invocation, independent of the caller's cancellation token. Index
+    /// writers ignore that token (killOnCancel: false, so a mid-write kill cannot leave
+    /// index.lock behind), so without this a hung git process - e.g. blocked on a credential
+    /// prompt the env vars below failed to suppress - would wait forever.
+    /// </summary>
+    private static readonly TimeSpan HardTimeout = TimeSpan.FromSeconds(60);
+
+    private static async Task<GitCommandResult> RunGitWithArgsAsync(
         string workingDir,
         string[] args,
         CancellationToken token,
@@ -165,9 +192,17 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            RedirectStandardInput = true,
             CreateNoWindow = true,
             StandardOutputEncoding = Encoding.UTF8
         };
+
+        // Never let git fall back to an interactive prompt: there is no terminal for the user to
+        // answer one on, and a credential/host-key prompt would otherwise hang the process (and,
+        // for index writers, hang forever - see HardTimeout).
+        psi.Environment["GIT_TERMINAL_PROMPT"] = "0";
+        psi.Environment["GIT_ASKPASS"] = string.Empty;
+        psi.Environment["GCM_INTERACTIVE"] = "never";
 
         foreach (var arg in args)
             psi.ArgumentList.Add(arg);
@@ -175,35 +210,48 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
         using var process = new Process { StartInfo = psi, EnableRaisingEvents = false };
 
         if (!process.Start())
-            return string.Empty;
+            return new GitCommandResult(-1, string.Empty, string.Empty);
 
-        CancellationTokenRegistration reg = default;
+        // Closed rather than left open: an inherited/open stdin is another way a prompt (or a
+        // program git shells out to) can block waiting for input that will never arrive.
+        try { process.StandardInput.Close(); } catch (InvalidOperationException) { }
+
+        using var hardTimeoutCts = new CancellationTokenSource(HardTimeout);
+        var killReg = hardTimeoutCts.Token.Register(static state => TryKill((Process)state!), process);
+
+        CancellationTokenRegistration cancelReg = default;
         if (killOnCancel)
         {
             // Safe for read-only probes that use --no-optional-locks. Do not enable for index writers.
-            reg = token.Register(static state =>
-            {
-                try
-                {
-                    ((Process)state!).Kill(entireProcessTree: true);
-                }
-                catch
-                {
-                    // Ignore races where the process finished between cancel and Kill.
-                }
-            }, process);
+            cancelReg = token.Register(static state => TryKill((Process)state!), process);
         }
 
-        await using (reg)
+        await using (killReg)
+        await using (cancelReg)
         {
             // Do not cancel stream reads: a cancelled ReadToEnd can leave the child blocked on a full pipe.
             var stdoutTask = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
             var stderrTask = process.StandardError.ReadToEndAsync(CancellationToken.None);
             await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
-            // Index writers must run to completion; only status/list may abandon via Kill + cancelled wait.
+            // Index writers must run to completion (or hit HardTimeout above); only status/list
+            // may abandon early via Kill + a cancelled wait tied to the caller's token.
             var waitToken = killOnCancel ? token : CancellationToken.None;
             await process.WaitForExitAsync(waitToken).ConfigureAwait(false);
-            return stdoutTask.Result;
+            return new GitCommandResult(process.ExitCode, stdoutTask.Result, stderrTask.Result);
         }
     }
+
+    private static void TryKill(Process process)
+    {
+        try
+        {
+            process.Kill(entireProcessTree: true);
+        }
+        catch
+        {
+            // Ignore races where the process finished between cancel/timeout and Kill.
+        }
+    }
+
+    private readonly record struct GitCommandResult(int ExitCode, string StandardOutput, string StandardError);
 }

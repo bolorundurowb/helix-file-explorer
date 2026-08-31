@@ -53,11 +53,23 @@ public sealed class RollingFileLoggerProvider : ILoggerProvider
             if (_disposed)
                 return;
 
-            EnsureWriter();
-            _writer!.WriteLine(line);
-            _writer.Flush();
-            RollIfNeeded();
-            CloseWriter();
+            try
+            {
+                // A logging call must never throw: Log(...) is invoked from arbitrary call sites
+                // throughout the app, including catch blocks, and a failure here (disk full, log
+                // directory removed out from under the process, antivirus holding a lock, ...) must
+                // not crash whatever unrelated code happened to log something.
+                EnsureWriter();
+                _writer!.WriteLine(line);
+                _writer.Flush();
+                RollIfNeeded();
+            }
+            catch
+            {
+                // Best-effort: drop the line rather than propagate. Force a reopen attempt next
+                // call instead of retrying the same (possibly still-broken) writer indefinitely.
+                CloseWriter();
+            }
         }
     }
 
@@ -78,7 +90,9 @@ public sealed class RollingFileLoggerProvider : ILoggerProvider
     private void OpenWriter(string path)
     {
         var isNewFile = !File.Exists(path) || new FileInfo(path).Length == 0;
-        var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+        // FileShare.Delete: the user (or a cleanup tool) deleting a log file while it is the active
+        // one should not be blocked just because this process still holds it open.
+        var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
         _writer = new StreamWriter(stream, Encoding.UTF8) { AutoFlush = false };
         _currentFilePath = path;
 

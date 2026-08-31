@@ -12,12 +12,14 @@ using Avalonia.VisualTree;
 using HelixExplorer.Controls;
 using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
+using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Sorting;
 using HelixExplorer.Input;
 using HelixExplorer.Services;
 using HelixExplorer.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace HelixExplorer.Views;
@@ -41,6 +43,7 @@ public sealed partial class PaneView : UserControl
     }
 
     private PaneViewModel? _pane;
+    private ILogger? _logger;
     private IExternalFileDragPayloadBuilder? _dragPayloadBuilder;
     private HelixExplorer.Core.Infrastructure.IExternalFileDragService? _externalFileDragService;
     private Point? _pressPoint;
@@ -230,17 +233,26 @@ public sealed partial class PaneView : UserControl
 
     private async void OnEntryContextMenuOpening(object? sender, CancelEventArgs e)
     {
-        if (sender is not ContextMenu menu)
-            return;
+        // async void: nothing awaits this handler, so an unhandled exception here would escape
+        // straight past the UI thread's normal handling instead of being observable/loggable.
+        try
+        {
+            if (sender is not ContextMenu menu)
+                return;
 
-        if (menu.PlacementTarget is not Control { DataContext: PaneViewModel pane })
-            return;
+            if (menu.PlacementTarget is not Control { DataContext: PaneViewModel pane })
+                return;
 
-        menu.DataContext = pane;
-        // Resolve clipboard validity before command state is applied so Paste enablement matches
-        // the current internal/OS payload (including external Explorer copies).
-        await pane.RefreshPasteAvailabilityAsync().ConfigureAwait(true);
-        pane.NotifyCommandsCanExecuteChanged();
+            menu.DataContext = pane;
+            // Resolve clipboard validity before command state is applied so Paste enablement matches
+            // the current internal/OS payload (including external Explorer copies).
+            await pane.RefreshPasteAvailabilityAsync().ConfigureAwait(true);
+            pane.NotifyCommandsCanExecuteChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "OnEntryContextMenuOpening failed");
+        }
     }
 
     private void OnDetailsContextRequested(object? sender, ContextRequestedEventArgs e)
@@ -995,45 +1007,52 @@ public sealed partial class PaneView : UserControl
 
     private async void OnMillerColumnActivated(object? sender, MillerColumnActivatedEventArgs e)
     {
-        if (Pane is null || e.Item is not EntryItemViewModel entry)
-            return;
-
-        if (!entry.IsDirectory && !ArchivePath.IsArchiveFile(entry.FullPath))
-            return;
-
-        var requestVersion = ++_millerRequestVersion;
-
-        var keep = e.ColumnIndex + 1;
-        while (_millerColumns.Count > keep)
+        try
         {
-            var last = _millerColumns[^1];
-            MillerPanel.Children.Remove(last);
-            _millerColumns.RemoveAt(_millerColumns.Count - 1);
+            if (Pane is null || e.Item is not EntryItemViewModel entry)
+                return;
+
+            if (!entry.IsDirectory && !ArchivePath.IsArchiveFile(entry.FullPath))
+                return;
+
+            var requestVersion = ++_millerRequestVersion;
+
+            var keep = e.ColumnIndex + 1;
+            while (_millerColumns.Count > keep)
+            {
+                var last = _millerColumns[^1];
+                MillerPanel.Children.Remove(last);
+                _millerColumns.RemoveAt(_millerColumns.Count - 1);
+            }
+
+            while (_millerColumns.Count >= MaxMillerColumns)
+            {
+                var first = _millerColumns[0];
+                MillerPanel.Children.Remove(first);
+                _millerColumns.RemoveAt(0);
+                for (var i = 0; i < _millerColumns.Count; i++)
+                    MillerColumnPanel.SetColumnIndex(_millerColumns[i], i);
+            }
+
+            var children = await Pane.EnumerateMillerChildrenAsync(entry.FullPath).ConfigureAwait(true);
+            if (requestVersion != _millerRequestVersion || Pane is null)
+                return;
+            var column = BuildMillerColumn(children, keep);
+            MillerPanel.Children.Add(column);
+            _millerColumns.Add(column);
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                var width = MillerPanel.Bounds.Width;
+                var viewport = MillerScroll.Viewport.Width;
+                if (width > viewport)
+                    MillerScroll.Offset = new Vector(width - viewport, 0);
+            });
         }
-
-        while (_millerColumns.Count >= MaxMillerColumns)
+        catch (Exception ex)
         {
-            var first = _millerColumns[0];
-            MillerPanel.Children.Remove(first);
-            _millerColumns.RemoveAt(0);
-            for (var i = 0; i < _millerColumns.Count; i++)
-                MillerColumnPanel.SetColumnIndex(_millerColumns[i], i);
+            Logger.LogError(ex, "OnMillerColumnActivated failed");
         }
-
-        var children = await Pane.EnumerateMillerChildrenAsync(entry.FullPath).ConfigureAwait(true);
-        if (requestVersion != _millerRequestVersion || Pane is null)
-            return;
-        var column = BuildMillerColumn(children, keep);
-        MillerPanel.Children.Add(column);
-        _millerColumns.Add(column);
-
-        Dispatcher.UIThread.Post(() =>
-        {
-            var width = MillerPanel.Bounds.Width;
-            var viewport = MillerScroll.Viewport.Width;
-            if (width > viewport)
-                MillerScroll.Offset = new Vector(width - viewport, 0);
-        });
     }
 
     private void OnListPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -1280,7 +1299,9 @@ public sealed partial class PaneView : UserControl
         var dragEntries = _dragSelectionSnapshot;
         ResetPointerInteraction(e);
 
-        _ = StartDragOutAsync(pressArgs, dragEntries);
+        // Fire-and-forget: nothing here awaits the drag gesture, so without this an exception
+        // partway through (payload resolution, native drag setup, ...) would go unobserved.
+        FireAndForgetSafe.Run(StartDragOutAsync(pressArgs, dragEntries), Logger);
     }
 
     private void UpdateMarquee(Control host, Point start, Point current, KeyModifiers modifiers)
@@ -1509,6 +1530,14 @@ public sealed partial class PaneView : UserControl
     /// <summary>
     /// Falls back to a direct construct when <see cref="App.Services"/> is unavailable (design-time previews).
     /// </summary>
+    /// <summary>
+    /// Same App.Services fallback pattern as <see cref="DragPayloadBuilder"/>: async void event
+    /// handlers below need somewhere to report an exception instead of letting it go unhandled.
+    /// </summary>
+    private ILogger Logger =>
+        _logger ??= App.Services?.GetService<ILoggerFactory>()?.CreateLogger<PaneView>()
+            ?? NullLogger<PaneView>.Instance;
+
     private IExternalFileDragPayloadBuilder DragPayloadBuilder =>
         _dragPayloadBuilder ??= App.Services?.GetService<IExternalFileDragPayloadBuilder>()
             ?? new AvaloniaExternalFileDragPayloadBuilder(
@@ -1621,39 +1650,46 @@ public sealed partial class PaneView : UserControl
 
     private async void OnDrop(object? sender, DragEventArgs e)
     {
-        if (Pane is null)
-            return;
-
-        if (!e.DataTransfer.Contains(DataFormat.File))
-            return;
-
-        var targetEntry = FindEntryUnderDrag(e);
-        var destinationPath = Pane.ResolveDropDestination(targetEntry);
-        if (string.IsNullOrEmpty(destinationPath))
-            return;
-
-        ClearDropTarget();
-
-        var files = e.DataTransfer.TryGetFiles();
-        if (files is null || files.Length == 0)
-            return;
-
-        var paths = new List<string>(files.Length);
-        foreach (var file in files)
+        try
         {
-            var local = file.TryGetLocalPath();
-            if (!string.IsNullOrEmpty(local))
-                paths.Add(local);
+            if (Pane is null)
+                return;
+
+            if (!e.DataTransfer.Contains(DataFormat.File))
+                return;
+
+            var targetEntry = FindEntryUnderDrag(e);
+            var destinationPath = Pane.ResolveDropDestination(targetEntry);
+            if (string.IsNullOrEmpty(destinationPath))
+                return;
+
+            ClearDropTarget();
+
+            var files = e.DataTransfer.TryGetFiles();
+            if (files is null || files.Length == 0)
+                return;
+
+            var paths = new List<string>(files.Length);
+            foreach (var file in files)
+            {
+                var local = file.TryGetLocalPath();
+                if (!string.IsNullOrEmpty(local))
+                    paths.Add(local);
+            }
+
+            if (paths.Count == 0)
+                return;
+
+            var isCopy = e.KeyModifiers.HasFlag(KeyModifiers.Control)
+                         || e.DragEffects == DragDropEffects.Copy;
+            await Pane.HandleDropAsync(paths, destinationPath, isCopy);
+
+            e.Handled = true;
         }
-
-        if (paths.Count == 0)
-            return;
-
-        var isCopy = e.KeyModifiers.HasFlag(KeyModifiers.Control)
-                     || e.DragEffects == DragDropEffects.Copy;
-        await Pane.HandleDropAsync(paths, destinationPath, isCopy);
-
-        e.Handled = true;
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "OnDrop failed");
+        }
     }
 
 }

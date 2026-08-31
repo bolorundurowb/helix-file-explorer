@@ -9,12 +9,25 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using HelixExplorer.ViewModels;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace HelixExplorer.Views;
 
 public partial class MainWindow : Window
 {
     private DispatcherTimer? _layoutSaveTimer;
+    private ILogger? _logger;
+
+    /// <summary>
+    /// Same App.Services fallback pattern used throughout the Views layer (see PaneView):
+    /// async void event handlers below need somewhere to report an exception instead of letting
+    /// it go unhandled.
+    /// </summary>
+    private ILogger Logger =>
+        _logger ??= App.Services?.GetService<ILoggerFactory>()?.CreateLogger<MainWindow>()
+            ?? NullLogger<MainWindow>.Instance;
 
     public MainWindow()
     {
@@ -312,39 +325,48 @@ public partial class MainWindow : Window
 
     private async void OnSidebarDrop(object? sender, DragEventArgs e)
     {
-        if (sender is not Border { DataContext: SidebarItemViewModel item }
-            || !item.IsNavigable
-            || string.IsNullOrEmpty(item.Path))
-            return;
-
-        if (DataContext is not MainWindowViewModel vm)
-            return;
-
-        if (!e.DataTransfer.Contains(DataFormat.File))
-            return;
-
-        ClearSidebarDropTarget();
-
-        var files = e.DataTransfer.TryGetFiles();
-        if (files is null || files.Length == 0)
-            return;
-
-        var paths = new List<string>(files.Length);
-        foreach (var file in files)
+        // async void: nothing awaits this handler, so an unhandled exception here would escape
+        // straight past the UI thread's normal handling instead of being observable/loggable.
+        try
         {
-            var local = file.TryGetLocalPath();
-            if (!string.IsNullOrEmpty(local))
-                paths.Add(local);
+            if (sender is not Border { DataContext: SidebarItemViewModel item }
+                || !item.IsNavigable
+                || string.IsNullOrEmpty(item.Path))
+                return;
+
+            if (DataContext is not MainWindowViewModel vm)
+                return;
+
+            if (!e.DataTransfer.Contains(DataFormat.File))
+                return;
+
+            ClearSidebarDropTarget();
+
+            var files = e.DataTransfer.TryGetFiles();
+            if (files is null || files.Length == 0)
+                return;
+
+            var paths = new List<string>(files.Length);
+            foreach (var file in files)
+            {
+                var local = file.TryGetLocalPath();
+                if (!string.IsNullOrEmpty(local))
+                    paths.Add(local);
+            }
+
+            if (paths.Count == 0)
+                return;
+
+            var isCopy = e.KeyModifiers.HasFlag(KeyModifiers.Control)
+                         || e.DragEffects == DragDropEffects.Copy;
+            await vm.HandleSidebarDropAsync(paths, item.Path, isCopy);
+
+            e.Handled = true;
         }
-
-        if (paths.Count == 0)
-            return;
-
-        var isCopy = e.KeyModifiers.HasFlag(KeyModifiers.Control)
-                     || e.DragEffects == DragDropEffects.Copy;
-        await vm.HandleSidebarDropAsync(paths, item.Path, isCopy);
-
-        e.Handled = true;
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "OnSidebarDrop failed");
+        }
     }
 
     private SidebarItemViewModel? _sidebarDropTarget;
@@ -372,25 +394,39 @@ public partial class MainWindow : Window
 
     private async void OnBranchButtonClick(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is not MainWindowViewModel { ActivePane: { } pane })
-            return;
+        try
+        {
+            if (DataContext is not MainWindowViewModel { ActivePane: { } pane })
+                return;
 
-        await pane.OpenBranchFlyoutCommand.ExecuteAsync(null);
-        if (sender is Button button)
-            FlyoutBase.ShowAttachedFlyout(button);
+            await pane.OpenBranchFlyoutCommand.ExecuteAsync(null);
+            if (sender is Button button)
+                FlyoutBase.ShowAttachedFlyout(button);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "OnBranchButtonClick failed");
+        }
     }
 
     private async void OnBranchSelected(object? sender, TappedEventArgs e)
     {
-        if (sender is not ListBox { SelectedItem: string branch })
-            return;
+        try
+        {
+            if (sender is not ListBox { SelectedItem: string branch })
+                return;
 
-        if (DataContext is not MainWindowViewModel { ActivePane: { } pane })
-            return;
+            if (DataContext is not MainWindowViewModel { ActivePane: { } pane })
+                return;
 
-        await pane.CheckoutBranchCommand.ExecuteAsync(branch);
-        if (BranchButton is not null)
-            FlyoutBase.GetAttachedFlyout(BranchButton)?.Hide();
+            await pane.CheckoutBranchCommand.ExecuteAsync(branch);
+            if (BranchButton is not null)
+                FlyoutBase.GetAttachedFlyout(BranchButton)?.Hide();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "OnBranchSelected failed");
+        }
     }
 
     private void OnSidebarSetColorClick(object? sender, RoutedEventArgs e)

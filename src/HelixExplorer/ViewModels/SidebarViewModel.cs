@@ -14,6 +14,13 @@ public sealed class SidebarViewModel(
 {
     public ObservableCollection<SidebarItemViewModel> Items { get; } = new();
 
+    /// <summary>
+    /// Bumped by every <see cref="Rebuild"/>. Lets an in-flight <see cref="LoadIconsAsync"/> from a
+    /// superseded rebuild notice it is stale and stop, instead of racing a later call's Clear/Add
+    /// against its own enumeration of <see cref="Items"/> or writing icons nobody asked for anymore.
+    /// </summary>
+    private int _iconLoadGeneration;
+
     public void Rebuild(
         IReadOnlyList<string>? pinnedPaths,
         IReadOnlyList<string>? unpinnedPaths,
@@ -37,8 +44,17 @@ public sealed class SidebarViewModel(
 
     public async Task LoadIconsAsync()
     {
-        foreach (var item in Items)
+        var generation = ++_iconLoadGeneration;
+        // Snapshot before awaiting anything: a later Rebuild() can Clear()/Add() into Items while
+        // this call is suspended on GetBitmapAsync, and enumerating the live collection concurrently
+        // with that mutation throws.
+        var snapshot = Items.ToArray();
+
+        foreach (var item in snapshot)
         {
+            if (generation != _iconLoadGeneration)
+                return;
+
             if (!item.IsNavigable || string.IsNullOrEmpty(item.Path) || item.UsesVectorIcon)
                 continue;
 
@@ -50,11 +66,15 @@ public sealed class SidebarViewModel(
                     size: 16,
                     preferThumbnail: false,
                     CancellationToken.None).ConfigureAwait(true);
+
+                if (generation != _iconLoadGeneration)
+                    return;
                 item.Icon = icon;
             }
             catch
             {
-                item.Icon = null;
+                if (generation == _iconLoadGeneration)
+                    item.Icon = null;
             }
         }
     }

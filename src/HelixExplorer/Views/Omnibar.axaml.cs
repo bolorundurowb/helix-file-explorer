@@ -5,12 +5,25 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using HelixExplorer.Controls;
 using HelixExplorer.ViewModels;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace HelixExplorer.Views;
 
 public sealed partial class Omnibar : UserControl
 {
     private PaneViewModel? _pane;
+    private ILogger? _logger;
+
+    /// <summary>
+    /// Same App.Services fallback pattern used throughout the Views layer (see PaneView):
+    /// OnBreadcrumbDrop below is async void and needs somewhere to report an exception instead
+    /// of letting it go unhandled.
+    /// </summary>
+    private ILogger Logger =>
+        _logger ??= App.Services?.GetService<ILoggerFactory>()?.CreateLogger<Omnibar>()
+            ?? NullLogger<Omnibar>.Instance;
 
     public Omnibar()
     {
@@ -150,32 +163,39 @@ public sealed partial class Omnibar : UserControl
 
     private async void OnBreadcrumbDrop(object? sender, DragEventArgs e)
     {
-        if (_pane is null || sender is not BreadcrumbItem { SegmentPath: var path }
-            || string.IsNullOrEmpty(path))
-            return;
-
-        if (!e.DataTransfer.Contains(DataFormat.File))
-            return;
-
-        var files = e.DataTransfer.TryGetFiles();
-        if (files is null || files.Length == 0)
-            return;
-
-        var paths = new List<string>(files.Length);
-        foreach (var file in files)
+        try
         {
-            var local = file.TryGetLocalPath();
-            if (!string.IsNullOrEmpty(local))
-                paths.Add(local);
+            if (_pane is null || sender is not BreadcrumbItem { SegmentPath: var path }
+                || string.IsNullOrEmpty(path))
+                return;
+
+            if (!e.DataTransfer.Contains(DataFormat.File))
+                return;
+
+            var files = e.DataTransfer.TryGetFiles();
+            if (files is null || files.Length == 0)
+                return;
+
+            var paths = new List<string>(files.Length);
+            foreach (var file in files)
+            {
+                var local = file.TryGetLocalPath();
+                if (!string.IsNullOrEmpty(local))
+                    paths.Add(local);
+            }
+
+            if (paths.Count == 0)
+                return;
+
+            var isCopy = e.KeyModifiers.HasFlag(KeyModifiers.Control)
+                         || e.DragEffects == DragDropEffects.Copy;
+            await _pane.HandleDropAsync(paths, path, isCopy);
+
+            e.Handled = true;
         }
-
-        if (paths.Count == 0)
-            return;
-
-        var isCopy = e.KeyModifiers.HasFlag(KeyModifiers.Control)
-                     || e.DragEffects == DragDropEffects.Copy;
-        await _pane.HandleDropAsync(paths, path, isCopy);
-
-        e.Handled = true;
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "OnBreadcrumbDrop failed");
+        }
     }
 }

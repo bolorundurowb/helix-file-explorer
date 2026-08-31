@@ -94,6 +94,18 @@ public sealed class SqliteAppDatabase : IAppDatabase
             sync.CommandText = "PRAGMA synchronous = NORMAL;";
             sync.ExecuteNonQuery();
         }
+        using (var busyTimeout = _connection.CreateCommand())
+        {
+            // Nothing stops a user from launching a second Helix Explorer process (no
+            // single-instance guard), and both processes write to the same helix.db. WAL lets
+            // readers proceed during a writer, but writer-vs-writer contention still exists, and
+            // without busy_timeout SQLite returns SQLITE_BUSY immediately instead of waiting a
+            // moment for the other process's (millisecond-scale) transaction to commit. None of
+            // the store call sites catch SqliteException today, so an immediate SQLITE_BUSY would
+            // surface as an unhandled exception on whatever thread is saving/loading preferences.
+            busyTimeout.CommandText = "PRAGMA busy_timeout = 3000;";
+            busyTimeout.ExecuteNonQuery();
+        }
     }
 
     private void ApplySchema()

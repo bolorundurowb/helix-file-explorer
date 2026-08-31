@@ -19,7 +19,7 @@ dotnet run --project src/HelixExplorer -- --path "C:\Users"
 Release installer publish (matches CI):
 
 ```powershell
-dotnet publish src/HelixExplorer/HelixExplorer.csproj -c Release -r win-x64 --self-contained true -p:DebugType=none -p:DebugSymbols=false -o publish/win-x64
+dotnet publish src/HelixExplorer/HelixExplorer.csproj -c Release -r win-x64 --self-contained true -p:DebugType=embedded -o publish/win-x64
 ```
 
 Bump product version only in `Directory.Build.props` (release workflow reads it for tags/`HELIX_VERSION`).

@@ -60,8 +60,7 @@ jobs:
           -r win-x64
           --self-contained true
           -p:Version=${{ steps.version.outputs.version }}
-          -p:DebugType=none
-          -p:DebugSymbols=false
+          -p:DebugType=embedded
           -o publish/win-x64
 
       - name: Setup PolyInstall

@@ -11,6 +11,7 @@
     <PackageReference Include="Vanara.PInvoke.CredUI" Version="5.0.7" />
     <PackageReference Include="Vanara.PInvoke.Mpr" Version="5.0.7" />
     <PackageReference Include="Vanara.Windows.Shell" Version="5.0.7" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.400" PrivateAssets="All" />
   </ItemGroup>
 
   <ItemGroup>

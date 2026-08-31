@@ -14,6 +14,7 @@ using HelixExplorer.Input;
 using HelixExplorer.Localization;
 using HelixExplorer.Services;
 using HelixExplorer.ViewModels.Pane;
+using Microsoft.Extensions.Logging;
 
 namespace HelixExplorer.ViewModels;
 
@@ -38,6 +39,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly IUserDialogService _dialogs;
     private readonly HomePageViewModel _homePage;
     private readonly SettingsPageViewModel _settingsPage;
+    private readonly ILogger<TabViewModel> _tabLogger;
     private readonly string _homePath;
     private readonly List<string> _recentPaths = new();
     private IReadOnlyList<NetworkLocationInfo> _lastNetworkLocations = [];
@@ -68,7 +70,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         FileOperationReporter operationReporter,
         FileOperationUndoService undo,
         IUserDialogService dialogs,
-        HomePageViewModel homePage)
+        HomePageViewModel homePage,
+        ILogger<TabViewModel> tabLogger)
     {
         _themeService = themeService;
         _accentBrushes = accentBrushes;
@@ -89,6 +92,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _dialogs = dialogs;
         OperationReporter = operationReporter;
         _homePage = homePage;
+        _tabLogger = tabLogger;
         _settingsPage = new SettingsPageViewModel(this);
         _homePage.NavigateRequested += OnHomeNavigateRequested;
         _operationReporter.PropertyChanged += OnOperationReporterPropertyChanged;
@@ -654,7 +658,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             _paneFactory,
             _homePage,
             kind,
-            kind == TabKind.Settings ? _settingsPage : null);
+            kind == TabKind.Settings ? _settingsPage : null,
+            _tabLogger);
         tab.CloseRequested += OnTabCloseRequested;
         tab.SortChanged += OnTabSortChanged;
         tab.LayoutChanged += OnTabLayoutChanged;

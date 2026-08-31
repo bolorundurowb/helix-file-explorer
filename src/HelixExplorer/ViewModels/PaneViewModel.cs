@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 using Avalonia.Input;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -1148,7 +1147,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"EnumerateMillerChildrenAsync failed for '{path}': {ex.Message}");
+            _logger.LogError(ex, "EnumerateMillerChildrenAsync failed for '{Path}'", path);
             entries = Array.Empty<FileSystemEntry>();
         }
 
@@ -1527,7 +1526,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"CompressToZip failed: {ex.Message}");
+            _logger.LogError(ex, "CompressToZip failed");
             StatusText = UiStrings.CompressToZipFailed;
             IsLoading = false;
         }
@@ -1608,7 +1607,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"ExtractHere failed: {ex.Message}");
+            _logger.LogError(ex, "ExtractHere failed");
             StatusText = UiStrings.ExtractFailed;
             IsLoading = false;
         }
@@ -1805,7 +1804,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"OpenBranchFlyout failed: {ex.Message}");
+            _logger.LogError(ex, "OpenBranchFlyout failed");
             StatusText = UiStrings.ListBranchesFailed;
         }
     }
@@ -1830,7 +1829,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"CheckoutBranch failed: {ex.Message}");
+            _logger.LogError(ex, "CheckoutBranch failed for '{Branch}'", branch);
             StatusText = UiStrings.CheckoutBranchFailed(branch);
         }
     }
@@ -1859,7 +1858,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"CopyPath failed: {ex.Message}");
+            _logger.LogError(ex, "CopyPath failed");
             StatusText = UiStrings.CopyPathFailed;
         }
     }

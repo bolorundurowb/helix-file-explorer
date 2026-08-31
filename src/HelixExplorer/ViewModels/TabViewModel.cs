@@ -7,6 +7,8 @@ using System.Diagnostics;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Session;
 using HelixExplorer.ViewModels.Pane;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace HelixExplorer.ViewModels;
 
@@ -17,6 +19,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     private readonly IPaneViewModelFactory _paneFactory;
     private readonly HomePageViewModel _home;
     private readonly SettingsPageViewModel? _settings;
+    private readonly ILogger _logger;
     private bool _showHiddenFiles;
     private bool _showFileExtensions = true;
     private DirectorySortMode _directorySort = DirectorySortMode.MixedWithFiles;
@@ -28,13 +31,15 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         IPaneViewModelFactory paneFactory,
         HomePageViewModel home,
         TabKind kind = TabKind.Browser,
-        SettingsPageViewModel? settings = null)
+        SettingsPageViewModel? settings = null,
+        ILogger<TabViewModel>? logger = null)
     {
         _clipboard = clipboard;
         _archive = archive;
         _paneFactory = paneFactory;
         _home = home;
         _settings = settings;
+        _logger = logger ?? NullLogger<TabViewModel>.Instance;
         Kind = kind;
         _clipboard.Changed += OnClipboardChanged;
         LeftPane = CreatePane();
@@ -160,7 +165,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Failed to open '{entry.FullPath}': {ex.Message}");
+            _logger.LogError(ex, "Failed to open '{Path}'", entry.FullPath);
             pane.StatusText = $"Could not open {entry.Name}";
         }
     }

@@ -138,4 +138,47 @@ public sealed class PathUtilitiesTests
         PathUtilities.IsSameVolume("", @"C:\").Must().BeFalse();
         PathUtilities.IsSameVolume(@"C:\", "").Must().BeFalse();
     }
+
+    [Fact]
+    public void OrderDeepestFirst_puts_nested_paths_before_their_container()
+    {
+        // Undo recycles children first: removing the parent first would take the child with it, and
+        // the child's own removal would then fail on a path that no longer exists.
+        var ordered = PathUtilities.OrderDeepestFirst(
+            [@"C:\a", @"C:\a\b\c", @"C:\a\b"]);
+
+        ordered[0].Must().Be(@"C:\a\b\c");
+        ordered[1].Must().Be(@"C:\a\b");
+        ordered[2].Must().Be(@"C:\a");
+    }
+
+    [Fact]
+    public void OrderDeepestFirst_keeps_unrelated_siblings_in_input_order()
+    {
+        var ordered = PathUtilities.OrderDeepestFirst(
+            [@"C:\one\x", @"C:\two\y", @"C:\three\z"]);
+
+        ordered[0].Must().Be(@"C:\one\x");
+        ordered[1].Must().Be(@"C:\two\y");
+        ordered[2].Must().Be(@"C:\three\z");
+    }
+
+    [Fact]
+    public void OrderShallowestFirst_puts_container_before_nested_paths()
+    {
+        // Restoring runs the other way: a child cannot go back into a parent that is not there yet.
+        var ordered = PathUtilities.OrderShallowestFirst(
+            [@"C:\a\b\c", @"C:\a", @"C:\a\b"]);
+
+        ordered[0].Must().Be(@"C:\a");
+        ordered[1].Must().Be(@"C:\a\b");
+        ordered[2].Must().Be(@"C:\a\b\c");
+    }
+
+    [Fact]
+    public void OrderDeepestFirst_returns_short_inputs_unchanged()
+    {
+        PathUtilities.OrderDeepestFirst([]).Count.Must().Be(0);
+        PathUtilities.OrderDeepestFirst([@"C:\only"]).Count.Must().Be(1);
+    }
 }

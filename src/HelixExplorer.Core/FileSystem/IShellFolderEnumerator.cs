@@ -7,10 +7,15 @@ public interface IShellFolderEnumerator
     ValueTask<IReadOnlyList<FileSystemEntry>> EnumerateAsync(string shellPath, CancellationToken ct = default);
 
     /// <summary>
-    /// <paramref name="destinationPath"/> can be omitted when the implementation can derive it
-    /// from shell item metadata.
+    /// Moves a recycle-bin item back to <paramref name="destinationPath"/>, or to its recorded
+    /// original path when none is given.
     /// </summary>
-    ValueTask RestoreAsync(string itemPath, string? destinationPath = null, CancellationToken ct = default);
+    /// <returns>
+    /// True when the item is verifiably back in place. Undo branches on this rather than catching an
+    /// exception, because a failed restore is an expected outcome (the bin was emptied, the target is
+    /// occupied) rather than an error.
+    /// </returns>
+    ValueTask<bool> RestoreAsync(string itemPath, string? destinationPath = null, CancellationToken ct = default);
 
     ValueTask EmptyRecycleBinAsync(CancellationToken ct = default);
 

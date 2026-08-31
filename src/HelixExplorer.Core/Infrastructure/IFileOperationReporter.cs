@@ -11,6 +11,16 @@ public interface IFileOperationControl
 
 public interface IFileOperationReporter : IFileOperationControl
 {
+    /// <summary>
+    /// True while an operation is in flight in this reporter's window.
+    /// </summary>
+    /// <remarks>
+    /// On the interface rather than the concrete reporter because undo has to refuse to start while a
+    /// forward operation is still running: applying an inverse against a half-written destination
+    /// would act on paths the running batch is still changing.
+    /// </remarks>
+    bool IsBusy { get; }
+
     void Begin(FileOperationKind kind, int totalItems, string title);
 
     void Report(FileOperationProgress progress);

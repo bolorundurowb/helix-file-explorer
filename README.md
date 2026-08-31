@@ -31,12 +31,12 @@ Use it when you need dual-pane workflows, tabs that restore between sessions, ar
 
 ## Screenshots
 
-| Home | Split Pane |
-|------|-----------|
+| Home                                                                   | Split Pane                                                 |
+|------------------------------------------------------------------------|------------------------------------------------------------|
 | ![Home page with quick access and drives](assets/screenshots/home.jpg) | ![Dual pane split view](assets/screenshots/split-pane.jpg) |
 
-| Status Centre | Tabs & Accents |
-|--------------|----------------|
+| Status Centre                                                                 | Tabs & Accents                                                 |
+|-------------------------------------------------------------------------------|----------------------------------------------------------------|
 | ![File operations in the status centre](assets/screenshots/status-centre.jpg) | ![Tabs with accent colors](assets/screenshots/tab-accents.jpg) |
 
 ## Installation
@@ -82,37 +82,37 @@ Tip: Press `Ctrl+F` to filter the current folder, or `Ctrl+Shift+F` to search re
 
 ### Keyboard shortcuts
 
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+T` | New tab |
-| `Ctrl+W` | Close tab |
-| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab |
-| `Ctrl+D` | Toggle dual pane |
-| `Ctrl+F` | Filter current folder |
-| `Ctrl+Shift+F` | Search files and content |
-| `Ctrl+X` / `C` / `V` | Cut / Copy / Paste |
-| `Ctrl+A` | Select all |
-| `Ctrl+Shift+C` | Copy path |
-| `Ctrl+Shift+N` | New folder |
-| `Ctrl+Shift+P` | Command palette |
-| `Ctrl+Shift+T` | Cycle theme |
-| Ctrl+` | Open in Terminal (customizable) |
-| `Delete` | Move to Recycle Bin |
-| `Shift+Delete` | Permanently delete |
-| `F2` | Rename |
-| `F5` | Refresh |
-| `Ctrl+Scroll` | Thumbnail size (Grid view) |
+| Shortcut                      | Action                          |
+|-------------------------------|---------------------------------|
+| `Ctrl+T`                      | New tab                         |
+| `Ctrl+W`                      | Close tab                       |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab             |
+| `Ctrl+D`                      | Toggle dual pane                |
+| `Ctrl+F`                      | Filter current folder           |
+| `Ctrl+Shift+F`                | Search files and content        |
+| `Ctrl+X` / `C` / `V`          | Cut / Copy / Paste              |
+| `Ctrl+A`                      | Select all                      |
+| `Ctrl+Shift+C`                | Copy path                       |
+| `Ctrl+Shift+N`                | New folder                      |
+| `Ctrl+Shift+P`                | Command palette                 |
+| `Ctrl+Shift+T`                | Cycle theme                     |
+| Ctrl+`                        | Open in Terminal (customizable) |
+| `Delete`                      | Move to Recycle Bin             |
+| `Shift+Delete`                | Permanently delete              |
+| `F2`                          | Rename                          |
+| `F5`                          | Refresh                         |
+| `Ctrl+Scroll`                 | Thumbnail size (Grid view)      |
 
 ## Configuration
 
 Open **Settings** from the app to adjust:
 
-| Area | What you can change |
-|------|---------------------|
-| Appearance | Theme, accent color, UI font |
-| Layout | Default view mode, dual pane, split orientation, thumbnail size |
+| Area            | What you can change                                                    |
+|-----------------|------------------------------------------------------------------------|
+| Appearance      | Theme, accent color, UI font                                           |
+| Layout          | Default view mode, dual pane, split orientation, thumbnail size        |
 | Files & folders | Hidden files, file extensions, sort order, size units (binary/decimal) |
-| General | Open in Terminal shortcut, automatic update checks |
+| General         | Open in Terminal shortcut, automatic update checks                     |
 
 Pinned folders, folder colors, window size/position, and open tabs are remembered automatically.
 

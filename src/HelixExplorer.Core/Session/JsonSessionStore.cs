@@ -27,6 +27,10 @@ public sealed class JsonSessionStore(string path) : ISessionStore
         if (!File.Exists(path))
             return new SessionDocument();
 
+        // Deliberately broad: same "corrupt/unreadable file degrades to defaults" pattern used by
+        // JsonSettingsStore.Load. A malformed or unreadable session.json should just start a fresh
+        // session, not crash the app on launch.
+#pragma warning disable CA1031
         try
         {
             string json;
@@ -38,6 +42,7 @@ public sealed class JsonSessionStore(string path) : ISessionStore
         {
             return new SessionDocument();
         }
+#pragma warning restore CA1031
     }
 
     public void Save(SessionDocument document)
@@ -52,6 +57,10 @@ public sealed class JsonSessionStore(string path) : ISessionStore
 
         lock (_gate)
         {
+            // Deliberately broad: cleanup-then-rethrow. The write/move sequence can fail in more
+            // ways than one exception type, and every one of them should still trigger the same
+            // temp-file cleanup before the original failure propagates to the caller.
+#pragma warning disable CA1031
             try
             {
                 File.WriteAllText(tempPath, json);
@@ -62,6 +71,7 @@ public sealed class JsonSessionStore(string path) : ISessionStore
                 try { File.Delete(tempPath); } catch { /* best-effort */ }
                 throw;
             }
+#pragma warning restore CA1031
         }
     }
 }

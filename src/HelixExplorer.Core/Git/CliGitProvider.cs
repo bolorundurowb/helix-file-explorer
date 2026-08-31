@@ -57,11 +57,17 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
         {
             throw;
         }
+        // Deliberately broad: a git-status refresh is best-effort UI chrome, not a required
+        // operation, and the git process/parsing pipeline can fail in many ways (git missing, repo
+        // corrupted, unexpected porcelain output, ...). Degrading to an empty snapshot and logging
+        // is strictly better than letting any one of them crash pane refresh.
+#pragma warning disable CA1031
         catch (Exception ex)
         {
             logger.LogError(ex, "Git status query failed for '{Path}'", path);
             return GitStatusSnapshot.Empty;
         }
+#pragma warning restore CA1031
     }
 
     /// <summary>Per-directory cache avoids repeated upward directory walks.</summary>
@@ -108,11 +114,15 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
         {
             throw;
         }
+        // Deliberately broad: same rationale as GetStatusAsync above - listing branches is
+        // best-effort chrome (e.g. a branch-switch flyout), and an empty list degrades gracefully.
+#pragma warning disable CA1031
         catch (Exception ex)
         {
             logger.LogError(ex, "Git branch list failed for '{Path}'", path);
             return Array.Empty<string>();
         }
+#pragma warning restore CA1031
     }
 
     public async ValueTask<bool> CheckoutBranchAsync(string path, string branch, CancellationToken cancellationToken = default)
@@ -147,11 +157,16 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
         {
             throw;
         }
+        // Deliberately broad: same rationale as GetStatusAsync above - a checkout failure is
+        // reported to the caller as `false` (already the contract for a non-zero git exit code
+        // just above), so an unexpected exception here should degrade the same way, not crash.
+#pragma warning disable CA1031
         catch (Exception ex)
         {
             logger.LogError(ex, "Git checkout failed for branch '{Branch}' in '{Path}'", branch, path);
             return false;
         }
+#pragma warning restore CA1031
     }
 
     internal static string? FindRepoRoot(string? path)
@@ -247,10 +262,16 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
         {
             process.Kill(entireProcessTree: true);
         }
+        // Deliberately broad: this runs from a timeout/cancellation callback with no caller able to
+        // observe an exception. Process.Kill can throw several different types depending on exactly
+        // when the process exited underneath it (already-exited vs. exiting-right-now races); any of
+        // them means the same thing here - nothing left to kill - so this is intentionally swallowed.
+#pragma warning disable CA1031
         catch
         {
             // Ignore races where the process finished between cancel/timeout and Kill.
         }
+#pragma warning restore CA1031
     }
 
     private readonly record struct GitCommandResult(int ExitCode, string StandardOutput, string StandardError);

@@ -146,6 +146,11 @@ public sealed class SqliteAppDatabase : IAppDatabase
             return;
 
         LegacySettingsDto? legacy;
+        // Deliberately broad: this is a one-time, best-effort legacy-data migration. Any failure
+        // reading or deserializing the old settings.json (missing, corrupt, locked, unexpected
+        // shape) should just skip the migration - the two maps being migrated are non-critical view
+        // preferences and folder colors, not something worth crashing startup over.
+#pragma warning disable CA1031
         try
         {
             var json = File.ReadAllText(_settingsFile);
@@ -155,6 +160,7 @@ public sealed class SqliteAppDatabase : IAppDatabase
         {
             return;
         }
+#pragma warning restore CA1031
 
         if (legacy is null)
             return;
@@ -263,6 +269,10 @@ public sealed class SqliteAppDatabase : IAppDatabase
         {
             if (_initialized)
             {
+                // Deliberately broad: this is a best-effort WAL checkpoint on Dispose. A failure here
+                // (connection already in a bad state, disk issue) must not prevent the connection
+                // from still being disposed immediately below.
+#pragma warning disable CA1031
                 try
                 {
                     using var checkpoint = _connection.CreateCommand();
@@ -273,6 +283,7 @@ public sealed class SqliteAppDatabase : IAppDatabase
                 {
                     // Best-effort checkpoint on shutdown.
                 }
+#pragma warning restore CA1031
             }
             _connection.Dispose();
         }

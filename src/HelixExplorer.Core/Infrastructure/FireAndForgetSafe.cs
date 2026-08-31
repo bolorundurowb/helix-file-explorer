@@ -56,10 +56,16 @@ public static class FireAndForgetSafe
         catch (OperationCanceledException)
         {
         }
+        // Deliberately broad: this IS the fire-and-forget safety net - by construction there is no
+        // caller left to observe an exception from `work()` by the time it's thrown, so catching and
+        // logging every possible exception type here (rather than a chosen subset) is the entire
+        // point of this helper, not a shortcut around it.
+#pragma warning disable CA1031
         catch (Exception ex)
         {
             logger.LogError(ex, "Fire-and-forget task failed in {Caller} ({File})", caller, file);
         }
+#pragma warning restore CA1031
     }
 }
 

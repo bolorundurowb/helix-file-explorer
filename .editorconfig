@@ -1,0 +1,86 @@
+# EditorConfig: https://editorconfig.org
+# Values here follow this codebase's OBSERVED style (checked across HelixExplorer.Core,
+# HelixExplorer, and HelixExplorer.Windows) rather than generic defaults, so this file does not
+# itself imply a mass reformat. Line-ending split matches .gitattributes: everything is LF except
+# the CRLF-forced VS tooling files (.slnx/.csproj/.props/.ps1).
+root = true
+
+[*]
+charset = utf-8
+indent_style = space
+indent_size = 4
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{slnx,csproj,props,ps1}]
+end_of_line = crlf
+
+[*.{json,yml,yaml}]
+indent_size = 2
+
+[*.cs]
+indent_size = 4
+
+# Using directives: System.* first, then alphabetical; no blank line between groups (observed
+# throughout - e.g. System.Collections.Concurrent / System.Text / HelixExplorer.Core.* /
+# Microsoft.Extensions.Logging with no separating blank line), directives outside the namespace.
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+csharp_using_directive_placement = outside_namespace:suggestion
+
+# File-scoped namespaces are used everywhere in this codebase (AGENTS.md calls this out explicitly).
+csharp_style_namespace_declarations = file_scoped:suggestion
+
+# Braces: Allman (open brace on its own line) for member/type/control-flow blocks, but a single-
+# statement if/return body is routinely left brace-less on one line (e.g. `if (x is null) return;`).
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+csharp_new_line_before_members_in_object_initializers = true
+csharp_new_line_before_members_in_anonymous_types = true
+csharp_new_line_between_query_expression_clauses = true
+csharp_prefer_braces = when_multiline:suggestion
+
+# `var` is used pervasively, including where the type is not immediately apparent from the RHS.
+csharp_style_var_for_built_in_types = true:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = true:suggestion
+
+# No `this.` qualification anywhere in the codebase.
+dotnet_style_qualification_for_field = false:suggestion
+dotnet_style_qualification_for_property = false:suggestion
+dotnet_style_qualification_for_method = false:suggestion
+dotnet_style_qualification_for_event = false:suggestion
+
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_properties = when_on_single_line:suggestion
+csharp_style_prefer_primary_constructors = true:suggestion
+
+# Private/internal fields are `_camelCase` everywhere (e.g. `_options`, `_writer`, `_gate`).
+dotnet_naming_rule.private_fields_underscore_camel_case.severity = suggestion
+dotnet_naming_rule.private_fields_underscore_camel_case.symbols = private_fields
+dotnet_naming_rule.private_fields_underscore_camel_case.style = underscore_camel_case
+
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private, internal
+
+dotnet_naming_style.underscore_camel_case.capitalization = camel_case
+dotnet_naming_style.underscore_camel_case.required_prefix = _
+
+# --- DEP-3 safety valve -----------------------------------------------------------------------
+# AnalysisMode=Recommended is being enabled for HelixExplorer.Core only (see its .csproj), and
+# TreatWarningsAsErrors=true is global, so any rule that fires anywhere in Core turns into a hard
+# build error. This repo has no .NET SDK available in the environment this change was authored in,
+# so the actual hit count for any given rule could not be verified by compiling. CA1062 (validate
+# arguments of public methods), CA1304, and CA1305 (culture-specific overloads) are exactly the
+# rules most likely to fire dozens of times across a 100+ file project that was not written with
+# those specific rules in mind, with no realistic way to have audited every call site by reading
+# alone. Dialed to `suggestion` (not `none`) as a deliberate, temporary risk valve: still visible in
+# the IDE and to anyone who runs analysis, just not build-breaking, until a real compiler pass can
+# confirm the actual hit count and each site can be fixed or suppressed on its own merits.
+[src/HelixExplorer.Core/**.cs]
+dotnet_diagnostic.CA1062.severity = suggestion
+dotnet_diagnostic.CA1304.severity = suggestion
+dotnet_diagnostic.CA1305.severity = suggestion

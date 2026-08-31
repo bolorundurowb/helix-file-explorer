@@ -115,6 +115,13 @@ public static class PathUtilities
         if (string.IsNullOrEmpty(source) || string.IsNullOrEmpty(destination))
             return false;
 
+        // Deliberately broad: Path.GetFullPath/GetPathRoot can throw for malformed input (invalid
+        // characters, a bare "C:" segment in an unexpected position, reserved device names, ...).
+        // This helper only decides "same volume, so Directory.Move is safe" vs. "copy then delete";
+        // without a compiler available to enumerate the exact exception surface with confidence,
+        // treating any failure as "cannot confirm same volume" and falling back to the safer
+        // copy-then-delete path is the correct degrade, not a narrower catch that risks missing one.
+#pragma warning disable CA1031
         try
         {
             var sourceRoot = Path.GetPathRoot(Path.GetFullPath(source));
@@ -126,6 +133,7 @@ public static class PathUtilities
         {
             return false;
         }
+#pragma warning restore CA1031
     }
 
     /// <summary>
@@ -235,6 +243,10 @@ public static class PathUtilities
 
             return full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         }
+        // Deliberately broad: already documented above (Path.GetFullPath's invalid-path exception
+        // surface) and already has a working fallback; narrowing risks leaving some malformed-path
+        // case uncaught with no fallback normalization at all.
+#pragma warning disable CA1031
         catch
         {
             // Path.GetFullPath can throw for paths containing invalid characters. Fall back to a
@@ -247,6 +259,7 @@ public static class PathUtilities
 
             return normalized;
         }
+#pragma warning restore CA1031
     }
 
     private static string NormalizeArchivePath(string path)

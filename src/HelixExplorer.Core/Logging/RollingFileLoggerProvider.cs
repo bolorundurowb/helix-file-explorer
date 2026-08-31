@@ -53,6 +53,10 @@ public sealed class RollingFileLoggerProvider : ILoggerProvider
             if (_disposed)
                 return;
 
+            // Deliberately broad: a logging call must never throw (see comment above - this can run
+            // from inside arbitrary catch blocks throughout the app), so every possible failure mode
+            // of the writer/filesystem needs to be swallowed here, not just a chosen subset.
+#pragma warning disable CA1031
             try
             {
                 // A logging call must never throw: Log(...) is invoked from arbitrary call sites
@@ -70,6 +74,7 @@ public sealed class RollingFileLoggerProvider : ILoggerProvider
                 // call instead of retrying the same (possibly still-broken) writer indefinitely.
                 CloseWriter();
             }
+#pragma warning restore CA1031
         }
     }
 
@@ -148,6 +153,9 @@ public sealed class RollingFileLoggerProvider : ILoggerProvider
 
         foreach (var file in files)
         {
+            // Deliberately broad: same "logging must never throw" rationale as Write() above -
+            // pruning is opportunistic cleanup, and a locked/already-gone file must not propagate.
+#pragma warning disable CA1031
             try
             {
                 file.Delete();
@@ -156,6 +164,7 @@ public sealed class RollingFileLoggerProvider : ILoggerProvider
             {
                 // Best-effort cleanup; logging must not throw.
             }
+#pragma warning restore CA1031
         }
     }
 

@@ -36,11 +36,17 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
             if (Directory.Exists(ExtractionRoot))
                 Directory.Delete(ExtractionRoot, recursive: true);
         }
+        // CA1031 flags the catch clause's declared type (Exception), not the `when` filter, so this
+        // multi-type catch - the only way to catch two unrelated exception types in C# without a
+        // shared base - reads as "general" to the analyzer despite already being narrowed to exactly
+        // IOException/UnauthorizedAccessException.
+#pragma warning disable CA1031
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // Best-effort: files may still be open (e.g. a preview handler). Leave them for next run.
             logger.LogWarning(ex, "Failed to clean up archive extraction directory '{Root}'", ExtractionRoot);
         }
+#pragma warning restore CA1031
     }
 
     public async ValueTask<IReadOnlyList<FileSystemEntry>> EnumerateAsync(
@@ -115,10 +121,17 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
             {
                 throw;
             }
+            // Deliberately broad: SharpCompress and the underlying archive I/O can fail in many
+            // ways (corrupt archive, unsupported format quirk, disk error mid-extract). The contract
+            // for this method is already "return null on failure" (see the earlier bound-check
+            // return above), so any unexpected exception should degrade the same way, not crash the
+            // caller trying to preview or open a file inside an archive.
+#pragma warning disable CA1031
             catch (Exception ex)
             {
                 logger.LogError(ex, "Archive extract failed for '{VirtualPath}'", virtualPath);
             }
+#pragma warning restore CA1031
 
             return null;
         }, token).ConfigureAwait(false);
@@ -362,11 +375,17 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
                 }
             }
         }
+        // CA1031 flags the catch clause's declared type (Exception), not the `when` filter, so this
+        // multi-type catch - the only way to catch several unrelated exception types in C# without a
+        // shared base - reads as "general" to the analyzer despite already being narrowed to exactly
+        // these four types.
+#pragma warning disable CA1031
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
                                        or NotSupportedException or InvalidOperationException)
         {
             logger.LogError(ex, "Archive enumerate failed for '{ArchivePath}'", archivePath);
         }
+#pragma warning restore CA1031
 
         return poolList.ToArray();
     }

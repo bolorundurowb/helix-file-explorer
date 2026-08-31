@@ -286,7 +286,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         }
 
         settings.SidebarWidth = SidebarWidth;
-        SaveSettings(settings);
+        FlushSettings();
     }
 
     public void SyncSidebarWidth(double width)
@@ -608,13 +608,11 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     private AppSettings GetSettings() => _settingsCoordinator.Load();
 
-    private void SaveSettings(AppSettings settings)
-    {
-        // Callers mutate the cached instance from GetSettings(); flush writes it immediately.
-        _ = settings;
-        _settingsCoordinator.Flush();
-    }
-
+    // ARCH-12: there used to be a second method here, SaveSettings(AppSettings settings), whose
+    // parameter was entirely unused (explicitly discarded) - callers mutate the shared cached
+    // instance from GetSettings() in place, so "saving" always meant flushing that cache
+    // regardless of what was passed in. Its signature implied you could save an arbitrary
+    // AppSettings instance; you could not. Deleted as a dead alias of this method.
     private void FlushSettings() => _settingsCoordinator.Flush();
 
     private void ApplyViewSettingsToTabs()
@@ -1305,7 +1303,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         if (!_sidebar.TryPin(path, settings))
             return;
 
-        SaveSettings(settings);
+        FlushSettings();
         RebuildSidebar();
         SelectedTab?.ActivePane?.NotifyPinStateChanged();
     }
@@ -1316,7 +1314,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         if (!_sidebar.TryUnpin(path, settings))
             return;
 
-        SaveSettings(settings);
+        FlushSettings();
         RebuildSidebar();
         SelectedTab?.ActivePane?.NotifyPinStateChanged();
     }

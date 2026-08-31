@@ -111,6 +111,27 @@ public class ScopedDiWiringTests
         ((Action)(() => provider.GetRequiredService<FileOperationReporter>())).Throws<InvalidOperationException>();
     }
 
+    [Fact]
+    public void RealScopes_DisposingOneWindow_DoesNotDisposeSharedVolumeWatcher()
+    {
+        // IVolumeChangeWatcher is a singleton shared across every window's scope. Regression guard
+        // for ARCH-1: MainWindowViewModel.Dispose() must only unsubscribe from it, never dispose it
+        // out from under other still-open windows (which would also make Start() throw
+        // ObjectDisposedException the next time a window opens).
+        using var provider = CreateAppServices().BuildServiceProvider(validateScopes: true);
+
+        using var scopeA = provider.CreateScope();
+        var windowA = scopeA.ServiceProvider.GetRequiredService<MainWindowViewModel>();
+
+        using var scopeB = provider.CreateScope();
+        _ = scopeB.ServiceProvider.GetRequiredService<MainWindowViewModel>();
+
+        windowA.Dispose();
+
+        var watcher = provider.GetRequiredService<IVolumeChangeWatcher>();
+        watcher.Start();
+    }
+
     private static ServiceCollection CreateAppServices()
     {
         var services = new ServiceCollection();

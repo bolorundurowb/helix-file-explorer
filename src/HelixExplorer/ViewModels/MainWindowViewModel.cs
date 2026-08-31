@@ -1377,8 +1377,11 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
         _networkAvailability.AvailabilityChanged -= OnNetworkAvailabilityChanged;
         _folderColors.ColorsChanged -= OnFolderColorsChanged;
+        // IVolumeChangeWatcher is a singleton (shared across every window's scope): unsubscribe
+        // only. Disposing it here would kill volume-change notifications for every other open
+        // window and make Start() throw ObjectDisposedException for the next window opened. The
+        // DI root disposes it once, at application shutdown.
         _volumeWatcher.VolumesChanged -= OnVolumesChanged;
-        _volumeWatcher.Dispose();
         _themeService.ThemeChanged -= OnThemeServiceChanged;
         _operationReporter.PropertyChanged -= OnOperationReporterPropertyChanged;
         _operationReporter.Dispose();

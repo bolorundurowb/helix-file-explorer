@@ -14,7 +14,6 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
     /// </summary>
     private static readonly TimeSpan RecycleTimestampSkew = TimeSpan.FromSeconds(5);
 
-
     public async ValueTask<FileOperationResult> CopyAsync(
         IReadOnlyList<string> sources,
         string destination,

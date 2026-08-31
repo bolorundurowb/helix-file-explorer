@@ -96,6 +96,34 @@ public class JsonSettingsStoreTests
     }
 
     [Fact]
+    public void Load_CorruptJson_QuarantinesFileAndReturnsDefaults()
+    {
+        // CORE-5: previously returned defaults with zero trace and left the corrupt file where the
+        // next Save() would silently overwrite it - no evidence anything had gone wrong ever existed.
+        var path = Path.Combine(Path.GetTempPath(), "helix-settings-" + Guid.NewGuid().ToString("N") + ".json");
+        var directory = Path.GetDirectoryName(path)!;
+        var fileName = Path.GetFileName(path);
+        try
+        {
+            File.WriteAllText(path, "{ not actually json");
+
+            var loaded = new JsonSettingsStore(path).Load();
+
+            loaded.Theme.Must().Be(ThemeMode.System);
+            File.Exists(path).Must().BeFalse();
+            Directory.EnumerateFiles(directory, fileName + ".corrupt-*").Any().Must().BeTrue();
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+            foreach (var leftover in Directory.EnumerateFiles(directory, fileName + ".corrupt-*"))
+            {
+                try { File.Delete(leftover); } catch { }
+            }
+        }
+    }
+
+    [Fact]
     public async Task Save_ConcurrentCalls_DoNotThrowAndLeaveValidJson()
     {
         var path = Path.Combine(Path.GetTempPath(), "helix-settings-" + Guid.NewGuid().ToString("N") + ".json");

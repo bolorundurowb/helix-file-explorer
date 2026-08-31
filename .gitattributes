@@ -1,0 +1,19 @@
+# Auto-detect text files and normalize line endings to LF in the repository.
+* text=auto eol=lf
+
+# Visual Studio project/solution files: force CRLF (VS tooling expectation).
+*.slnx text eol=crlf
+*.csproj text eol=crlf
+*.props text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary assets: never touch line endings.
+*.ico binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.bmp binary
+*.svg binary
+*.ttf binary
+*.otf binary

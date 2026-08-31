@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
+using HelixExplorer.Core.FileSystem.Undo;
 using HelixExplorer.Core.Formatting;
 using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Infrastructure;
@@ -39,6 +40,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     private readonly IUserDialogService _dialogs;
     private readonly IWindowHostService _windowHost;
     private readonly IShellFolderEnumerator _shellEnumerator;
+    private readonly IFileOperationHistory _history;
     private readonly ILogger<PaneViewModel> _logger;
     private readonly PaneSelectionModel _selection = new();
     private readonly PaneNavigationController _navigation;
@@ -95,6 +97,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         IUserDialogService dialogs,
         IWindowHostService windowHost,
         IShellFolderEnumerator shell,
+        IFileOperationHistory history,
         IPaneCoordinatorFactory coordinatorFactory,
         ILogger<PaneViewModel> logger)
     {
@@ -112,6 +115,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         _dialogs = dialogs;
         _windowHost = windowHost;
         _shellEnumerator = shell;
+        _history = history;
         _logger = logger;
         _navigation = new PaneNavigationController(fileSystem, archive);
         _fileOperations = coordinatorFactory.CreateFileOperationCoordinator();
@@ -1506,6 +1510,17 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         {
             IsLoading = true;
             await _archive.CreateZipAsync(sources, destination).ConfigureAwait(true);
+
+            // Sources are carried on the batch because redoing a compress has to rebuild the archive,
+            // and the zip path alone does not say what went into it.
+            _history.Push(new FileOperationBatch(
+                UndoableOperationKind.Compress,
+                UiStrings.UndoCompressDescription(Path.GetFileName(destination)),
+                [new FileOperationChange(hostDir, destination)])
+            {
+                Sources = sources
+            });
+
             await RefreshAsync(showLoading: false).ConfigureAwait(true);
             IsLoading = false;
             StatusText = UiStrings.CreatedArchive(Path.GetFileName(destination));
@@ -1536,6 +1551,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         try
         {
             IsLoading = true;
+            var extractChanges = new List<FileOperationChange>();
 
             foreach (var archivePath in physicalArchives)
             {
@@ -1547,6 +1563,9 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
                     hostDir,
                     Path.GetFileNameWithoutExtension(archivePath)));
                 await _archive.ExtractArchiveToDirectoryAsync(archivePath, destination).ConfigureAwait(true);
+
+                // One folder per archive, so undo recycles the folder rather than the extracted tree.
+                extractChanges.Add(new FileOperationChange(archivePath, destination));
             }
 
             if (virtualPaths.Count > 0)
@@ -1554,12 +1573,30 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
                 var hostDir = PaneFileOperationCoordinator.GetPhysicalHostDirectory(CurrentPath, IsArchive);
                 if (string.IsNullOrEmpty(hostDir))
                 {
-                    StatusText = "Could not determine extract location";
+                    StatusText = UiStrings.ExtractLocationUnknown;
                     IsLoading = false;
                     return;
                 }
 
+                // Extracting into an existing folder gives no list of what it created, and walking the
+                // extracted tree to find out would be expensive. Diffing the top level before and
+                // after is cheap and yields exactly the entries undo needs to remove.
+                var before = SnapshotTopLevelNames(hostDir);
                 await _archive.ExtractVirtualEntriesAsync(virtualPaths, hostDir).ConfigureAwait(true);
+
+                foreach (var created in SnapshotTopLevelNames(hostDir).Except(before, StringComparer.OrdinalIgnoreCase))
+                    extractChanges.Add(new FileOperationChange(hostDir, Path.Combine(hostDir, created)));
+            }
+
+            if (extractChanges.Count > 0)
+            {
+                _history.Push(new FileOperationBatch(
+                    UndoableOperationKind.Extract,
+                    UiStrings.UndoExtractDescription(extractChanges.Count),
+                    extractChanges)
+                {
+                    Sources = [.. physicalArchives, .. virtualPaths]
+                });
             }
 
             if (!IsArchive)
@@ -1574,6 +1611,26 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
             Debug.WriteLine($"ExtractHere failed: {ex.Message}");
             StatusText = UiStrings.ExtractFailed;
             IsLoading = false;
+        }
+    }
+
+    /// <summary>
+    /// Immediate child names of <paramref name="directory"/>, for before/after diffing.
+    /// </summary>
+    private static HashSet<string> SnapshotTopLevelNames(string directory)
+    {
+        try
+        {
+            return new HashSet<string>(
+                Directory.EnumerateFileSystemEntries(directory, "*", SearchOption.TopDirectoryOnly)
+                    .Select(Path.GetFileName)
+                    .OfType<string>(),
+                StringComparer.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // An unreadable directory just means no undo entry for this extract, not a failed extract.
+            return [];
         }
     }
 
@@ -1865,17 +1922,23 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
 
         try
         {
+            var failed = 0;
             foreach (var entry in SelectedEntries)
             {
                 var destination = entry.OriginalPath;
                 if (string.IsNullOrEmpty(destination))
                     destination = entry.FullPath;
 
-                await _shellEnumerator.RestoreAsync(entry.FullPath, destination).ConfigureAwait(true);
+                // Restore reports failure rather than throwing, so one unrestorable item no longer
+                // abandons the rest of the selection.
+                if (!await _shellEnumerator.RestoreAsync(entry.FullPath, destination).ConfigureAwait(true))
+                    failed++;
             }
 
             await RefreshAsync(showLoading: false);
-            StatusText = UiStrings.RestoredFromRecycleBin;
+            StatusText = failed == 0
+                ? UiStrings.RestoredFromRecycleBin
+                : UiStrings.RestorePartiallyFailed(failed);
         }
         catch (Exception ex)
         {

@@ -35,6 +35,9 @@
         <KeyBinding Gesture="Ctrl+D" Command="{Binding ToggleDualPaneCommand}" />
         <KeyBinding Gesture="Ctrl+F" Command="{Binding FocusFilterCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+F" Command="{Binding FocusSearchCommand}" />
+        <KeyBinding Gesture="Ctrl+Z" Command="{Binding UndoCommand}" />
+        <KeyBinding Gesture="Ctrl+Y" Command="{Binding RedoCommand}" />
+        <KeyBinding Gesture="Ctrl+Shift+Z" Command="{Binding RedoCommand}" />
         <KeyBinding Gesture="Ctrl+X" Command="{Binding CutCommand}" />
         <KeyBinding Gesture="Ctrl+C" Command="{Binding CopyCommand}" />
         <KeyBinding Gesture="Ctrl+V" Command="{Binding PasteCommand}" />

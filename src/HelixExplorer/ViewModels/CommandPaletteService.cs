@@ -45,6 +45,8 @@ public sealed class CommandPaletteService
         _allCommands.Add(new CommandItem("Invert Selection", "Selection", vm => vm.InvertSelectionCommand.Execute(null), "Ctrl+Shift+A"));
         _allCommands.Add(new CommandItem("Copy Path", "File", vm => vm.CopyPathCommand.Execute(null), "Ctrl+Shift+C"));
         _allCommands.Add(new CommandItem("Pin Current Folder", "View", vm => vm.PinCurrentFolderCommand.Execute(null)));
+        _allCommands.Add(new CommandItem("Undo", "File", vm => _ = vm.UndoCommand.ExecuteAsync(null), "Ctrl+Z"));
+        _allCommands.Add(new CommandItem("Redo", "File", vm => _ = vm.RedoCommand.ExecuteAsync(null), "Ctrl+Y"));
         _allCommands.Add(new CommandItem("Cut", "File", vm => vm.CutCommand.Execute(null), "Ctrl+X"));
         _allCommands.Add(new CommandItem("Copy", "File", vm => vm.CopyCommand.Execute(null), "Ctrl+C"));
         _allCommands.Add(new CommandItem("Paste", "File", vm => vm.PasteCommand.Execute(null), "Ctrl+V"));

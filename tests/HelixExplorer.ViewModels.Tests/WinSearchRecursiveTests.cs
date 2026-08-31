@@ -120,7 +120,7 @@ public class WinSearchRecursiveTests : IDisposable
         public ValueTask<IReadOnlyList<FileSystemEntry>> EnumerateAsync(string shellPath, CancellationToken ct = default)
             => ValueTask.FromResult<IReadOnlyList<FileSystemEntry>>(Array.Empty<FileSystemEntry>());
 
-        public ValueTask RestoreAsync(string itemPath, string? destinationPath = null, CancellationToken ct = default) => ValueTask.CompletedTask;
+        public ValueTask<bool> RestoreAsync(string itemPath, string? destinationPath = null, CancellationToken ct = default) => ValueTask.FromResult(true);
 
         public ValueTask EmptyRecycleBinAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
 

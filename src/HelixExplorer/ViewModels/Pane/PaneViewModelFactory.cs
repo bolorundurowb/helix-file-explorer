@@ -1,5 +1,6 @@
 using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
+using HelixExplorer.Core.FileSystem.Undo;
 using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Core.Settings;
@@ -34,6 +35,7 @@ public sealed class PaneViewModelFactory(IServiceProvider serviceProvider) : IPa
             serviceProvider.GetRequiredService<IUserDialogService>(),
             serviceProvider.GetRequiredService<IWindowHostService>(),
             serviceProvider.GetRequiredService<IShellFolderEnumerator>(),
+            serviceProvider.GetRequiredService<IFileOperationHistory>(),
             serviceProvider.GetRequiredService<IPaneCoordinatorFactory>(),
             serviceProvider.GetRequiredService<ILogger<PaneViewModel>>());
     }

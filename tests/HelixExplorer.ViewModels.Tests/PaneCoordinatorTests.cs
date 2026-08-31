@@ -1,5 +1,6 @@
 using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
+using HelixExplorer.Core.FileSystem.Undo;
 using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Core.Models;
 using HelixExplorer.ViewModels.Pane;
@@ -574,6 +575,7 @@ public class PaneFileOperationPasteAvailabilityTests
             new FakeOsClipboard(osPayload),
             new UnusedDialogs(),
             new UnusedReporter(),
+            new FileOperationHistory(),
             NullLogger<PaneFileOperationCoordinator>.Instance);
     }
 
@@ -619,6 +621,7 @@ public class PaneFileOperationPasteAvailabilityTests
     private sealed class UnusedReporter : IFileOperationReporter
     {
         public CancellationToken CancellationToken => CancellationToken.None;
+        public bool IsBusy => false;
         public void WaitIfPaused(CancellationToken cancellationToken) { }
         public void Begin(FileOperationKind kind, int totalItems, string title) { }
         public void Report(FileOperationProgress progress) { }

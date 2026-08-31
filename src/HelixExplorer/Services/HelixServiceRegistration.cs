@@ -1,6 +1,7 @@
 using Avalonia.Threading;
 using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
+using HelixExplorer.Core.FileSystem.Undo;
 using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Core.Persistence;
@@ -75,6 +76,12 @@ public static class HelixServiceRegistration
         services.AddScoped<HomePageViewModel>();
         services.AddScoped<FileOperationReporter>();
         services.AddScoped<IFileOperationReporter>(sp => sp.GetRequiredService<FileOperationReporter>());
+
+        // Singleton so undo is process-wide like Explorer's: an operation run in one window is
+        // undoable from another, because they act on the same filesystem. The executor stays scoped so
+        // progress appears in the window the user pressed the shortcut in.
+        services.AddSingleton<IFileOperationHistory, FileOperationHistory>();
+        services.AddScoped<FileOperationUndoService>();
         services.AddScoped<MainWindowViewModel>();
         services.AddTransient<MainWindow>();
         return services;

@@ -34,6 +34,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly CommandPaletteService _commandPalette;
     private readonly TabSessionCoordinator _tabSession;
     private readonly FileOperationReporter _operationReporter;
+    private readonly FileOperationUndoService _undo;
     private readonly IUserDialogService _dialogs;
     private readonly HomePageViewModel _homePage;
     private readonly SettingsPageViewModel _settingsPage;
@@ -65,6 +66,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         CommandPaletteService commandPalette,
         TabSessionCoordinator tabSession,
         FileOperationReporter operationReporter,
+        FileOperationUndoService undo,
         IUserDialogService dialogs,
         HomePageViewModel homePage)
     {
@@ -83,12 +85,14 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _commandPalette = commandPalette;
         _tabSession = tabSession;
         _operationReporter = operationReporter;
+        _undo = undo;
         _dialogs = dialogs;
         OperationReporter = operationReporter;
         _homePage = homePage;
         _settingsPage = new SettingsPageViewModel(this);
         _homePage.NavigateRequested += OnHomeNavigateRequested;
         _operationReporter.PropertyChanged += OnOperationReporterPropertyChanged;
+        _undo.Changed += OnHistoryChanged;
 
         _homePath = _quickAccess.GetPath(KnownFolderKind.Home)
                     ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -1088,6 +1092,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         OpenInTerminalCommand.NotifyCanExecuteChanged();
         RestoreFromRecycleBinCommand.NotifyCanExecuteChanged();
         EmptyRecycleBinCommand.NotifyCanExecuteChanged();
+        UndoCommand.NotifyCanExecuteChanged();
+        RedoCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand]
@@ -1165,6 +1171,60 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     [RelayCommand(CanExecute = nameof(CanEmptyRecycleBin))]
     private void EmptyRecycleBin() => ActivePane?.EmptyRecycleBinCommand.Execute(null);
+
+    private bool CanUndoFileOperation() => CanUseGlobalFileShortcuts() && _undo.CanUndo;
+
+    private bool CanRedoFileOperation() => CanUseGlobalFileShortcuts() && _undo.CanRedo;
+
+    /// <summary>Description of the pending undo, for a menu item or tooltip.</summary>
+    public string? UndoDescription => _undo.UndoDescription;
+
+    public string? RedoDescription => _undo.RedoDescription;
+
+    [RelayCommand(CanExecute = nameof(CanUndoFileOperation))]
+    private async Task Undo()
+    {
+        var status = await _undo.UndoAsync().ConfigureAwait(true);
+        SetActivePaneStatus(status);
+        await RefreshActivePaneAsync().ConfigureAwait(true);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRedoFileOperation))]
+    private async Task Redo()
+    {
+        var status = await _undo.RedoAsync().ConfigureAwait(true);
+        SetActivePaneStatus(status);
+        await RefreshActivePaneAsync().ConfigureAwait(true);
+    }
+
+    private void SetActivePaneStatus(string status)
+    {
+        if (ActivePane is { } pane)
+            pane.StatusText = status;
+    }
+
+    /// <summary>
+    /// Refreshes after an inverse, since the panes an undo touched may not be the active one and the
+    /// directory watcher does not fire for every shell-mediated change.
+    /// </summary>
+    private async Task RefreshActivePaneAsync()
+    {
+        if (ActivePane is { } pane)
+            await pane.RefreshAsync(showLoading: false).ConfigureAwait(true);
+    }
+
+    private void OnHistoryChanged(object? sender, EventArgs e)
+    {
+        // History changes arrive from whichever window ran the operation, so marshal before touching
+        // this window's command state.
+        Dispatcher.UIThread.Post(() =>
+        {
+            UndoCommand.NotifyCanExecuteChanged();
+            RedoCommand.NotifyCanExecuteChanged();
+            OnPropertyChanged(nameof(UndoDescription));
+            OnPropertyChanged(nameof(RedoDescription));
+        });
+    }
 
     [RelayCommand(CanExecute = nameof(CanRenameSelection))]
     private void Rename() => SelectedTab?.ActivePane?.BeginRenameCommand.Execute(null);
@@ -1322,6 +1382,10 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _themeService.ThemeChanged -= OnThemeServiceChanged;
         _operationReporter.PropertyChanged -= OnOperationReporterPropertyChanged;
         _operationReporter.Dispose();
+
+        // The history outlives this window, so a window that forgets to unsubscribe keeps its whole
+        // view-model graph alive for the rest of the process.
+        _undo.Changed -= OnHistoryChanged;
 
         // WindowHostService owns the session-save policy so secondary scoped windows do not
         // overwrite the persisted session when their scopes are disposed.

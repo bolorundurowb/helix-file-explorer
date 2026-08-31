@@ -85,8 +85,30 @@ public class SqliteAppDatabaseTests
             using var db = new SqliteAppDatabase(new JsonSettingsStore(settingsPath), dbPath, settingsPath);
             db.Initialize();
             db.Initialize();
-            // No exception means success.
-            true.Must().BeTrue();
+
+            // TEST-4: "no exception" was previously asserted as true.Must().BeTrue() - a tautology
+            // that passes no matter what Initialize() does. Idempotent means the second call is a
+            // no-op, not just "did not throw": confirm user_version was not bumped again (a naive
+            // migration step that reapplies instead of gating on the current version would still
+            // not throw, but would leave the schema at a different version than a single Initialize()
+            // call does) and that both tables are still there.
+            using var versionCmd = db.Connection.CreateCommand();
+            versionCmd.CommandText = "PRAGMA user_version;";
+            var version = Convert.ToInt32(versionCmd.ExecuteScalar() ?? 0, System.Globalization.CultureInfo.InvariantCulture);
+            version.Must().Be(1);
+
+            using var tableCmd = db.Connection.CreateCommand();
+            tableCmd.CommandText = """
+                SELECT name FROM sqlite_master
+                WHERE type = 'table' AND name IN ('folder_view_preferences', 'folder_colors')
+                ORDER BY name;
+                """;
+            using var reader = tableCmd.ExecuteReader();
+            var names = new List<string>();
+            while (reader.Read())
+                names.Add(reader.GetString(0));
+
+            names.Must().BeSequenceEqual(new[] { "folder_colors", "folder_view_preferences" });
         }
         finally
         {

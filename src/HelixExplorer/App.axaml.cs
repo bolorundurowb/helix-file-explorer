@@ -101,6 +101,25 @@ public partial class App : Application
 
     private void OnShutdownRequested(object? sender, ShutdownRequestedEventArgs e)
     {
+        // ShutdownRequested can fire while more than one window is still open (e.g. an OS
+        // session end, not the user closing the last window), so WindowHostService._scopes
+        // may not be empty yet. Force every remaining window closed here so each one's
+        // Closed handler (scope disposal, and SaveSession for the last one) runs to
+        // completion before the DI root below tears down the services SaveSession depends
+        // on. Snapshot with ToArray(): Windows shrinks as each Close() call fires Closed.
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            var remaining = desktop.Windows.ToArray();
+            if (remaining.Length > 0)
+            {
+                _host?.Services.GetService<ILoggerFactory>()?.CreateLogger("HelixExplorer")
+                    .LogInformation("Shutdown requested with {WindowCount} window(s) still open; draining before host dispose.", remaining.Length);
+
+                foreach (var window in remaining)
+                    window.Close();
+            }
+        }
+
         _host?.Services.GetService<ApplicationStartupCoordinator>()?.Dispose();
         _host?.Services.GetService<IArchiveProvider>()?.CleanupExtractedFiles();
         _host?.Dispose();

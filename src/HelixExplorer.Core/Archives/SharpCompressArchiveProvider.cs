@@ -77,7 +77,13 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
                 foreach (var entry in archive.Entries)
                 {
                     token.ThrowIfCancellationRequested();
-                    if (entry.IsDirectory)
+                    // Tar symlink entries (LinkTarget set) are never extracted: SharpCompress only
+                    // materializes them as real filesystem symlinks via a caller-supplied
+                    // SymbolicLinkHandler, which we do not configure, but a future ExtractionOptions
+                    // change could enable a symlink-then-write-through escape (CVE-2026-44788-style)
+                    // if this guard were removed. There is no legitimate reason for this file
+                    // browser to recreate archive-embedded symlinks.
+                    if (entry.IsDirectory || entry.LinkTarget is not null)
                         continue;
 
                     var key = (entry.Key ?? string.Empty).Replace('\\', '/').Trim('/');
@@ -157,7 +163,8 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
             foreach (var entry in archive.Entries)
             {
                 token.ThrowIfCancellationRequested();
-                if (entry.IsDirectory)
+                // See ExtractEntryAsync: never materialize archive-embedded symlinks.
+                if (entry.IsDirectory || entry.LinkTarget is not null)
                     continue;
 
                 var key = (entry.Key ?? string.Empty).Replace('\\', '/').TrimStart('/').TrimEnd('/');
@@ -207,7 +214,8 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
                 foreach (var entry in archive.Entries)
                 {
                     token.ThrowIfCancellationRequested();
-                    if (entry.IsDirectory)
+                    // See ExtractEntryAsync: never materialize archive-embedded symlinks.
+                    if (entry.IsDirectory || entry.LinkTarget is not null)
                         continue;
 
                     var key = (entry.Key ?? string.Empty).Replace('\\', '/').TrimStart('/').TrimEnd('/');

@@ -189,14 +189,25 @@ public sealed class PaneRefreshCoordinator(
                 _refreshCts = null;
                 _refreshInFlight = false;
 
-                if (!host.IsDisposed)
+                // IPaneRefreshHost documents every mutation callback as UI-thread-only, but this
+                // finally can run on a thread-pool thread: the try body awaits with
+                // ConfigureAwait(false) above, so nothing guarantees the continuation that reaches
+                // here is back on the UI thread. Marshal explicitly so RestartWatcher/RequestRefresh
+                // match the contract every other host member relies on.
+                var pendingWatcherRefresh = _watcherRefreshPending;
+                _watcherRefreshPending = false;
+
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    // Re-check: a newer refresh may have started while this dispatch was queued.
+                    if (generation != _refreshGeneration || host.IsDisposed)
+                        return;
+
                     host.RestartWatcher();
 
-                if (_watcherRefreshPending && !host.IsDisposed)
-                {
-                    _watcherRefreshPending = false;
-                    host.RequestRefresh();
-                }
+                    if (pendingWatcherRefresh)
+                        host.RequestRefresh();
+                });
             }
 
             cts.Dispose();

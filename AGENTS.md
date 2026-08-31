@@ -9,9 +9,9 @@ Instructions for coding agents working in **Helix Explorer** — a Windows file 
 Requires Windows 10/11 and the .NET 10 SDK.
 
 ```powershell
-dotnet restore HelixExplorer.sln
-dotnet build HelixExplorer.sln -c Release
-dotnet test HelixExplorer.sln -c Release
+dotnet restore HelixExplorer.slnx
+dotnet build HelixExplorer.slnx -c Release
+dotnet test HelixExplorer.slnx -c Release
 dotnet run --project src/HelixExplorer
 dotnet run --project src/HelixExplorer -- --path "C:\Users"
 ```
@@ -88,8 +88,8 @@ Use `AppPaths` / `AppVersion` instead of hard-coding paths.
 
 Before finishing a change:
 
-1. `dotnet build HelixExplorer.sln -c Release` succeeds with zero warnings.
-2. `dotnet test HelixExplorer.sln -c Release` passes for touched areas (full suite when DI/architecture changes).
+1. `dotnet build HelixExplorer.slnx -c Release` succeeds with zero warnings.
+2. `dotnet test HelixExplorer.slnx -c Release` passes for touched areas (full suite when DI/architecture changes).
 3. Boundaries above still hold (Core stays UI-free; Windows stays behind interfaces).
 4. User-facing behavior matches the request; no unrelated files modified.
 5. No obvious performance regression on listing, filtering, or UI responsiveness for the touched paths.

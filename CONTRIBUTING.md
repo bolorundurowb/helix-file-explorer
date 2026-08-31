@@ -18,8 +18,8 @@ Requirements:
 Clone the repository, then from the repo root:
 
 ```powershell
-dotnet restore HelixExplorer.sln
-dotnet build HelixExplorer.sln
+dotnet restore HelixExplorer.slnx
+dotnet build HelixExplorer.slnx
 dotnet run --project src/HelixExplorer
 ```
 
@@ -32,7 +32,7 @@ dotnet run --project src/HelixExplorer -- --path "C:\Users"
 Run tests:
 
 ```powershell
-dotnet test HelixExplorer.sln
+dotnet test HelixExplorer.slnx
 ```
 
 ## Pull requests

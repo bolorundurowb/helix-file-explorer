@@ -48,6 +48,10 @@ jobs:
         if: steps.check.outputs.skip != 'true'
         run: dotnet restore HelixExplorer.slnx
 
+      - name: Run tests
+        if: steps.check.outputs.skip != 'true'
+        run: dotnet test HelixExplorer.slnx -c Release
+
       - name: Publish application
         if: steps.check.outputs.skip != 'true'
         run: >-

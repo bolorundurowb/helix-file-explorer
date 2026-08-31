@@ -96,7 +96,7 @@ public sealed class WinTerminalLauncher : ITerminalLauncher
             return true;
         }
 
-        var powershell = ResolveExecutableOnPath("powershell.exe");
+        var powershell = ResolveWindowsPowerShell();
         if (powershell is not null
             && TryStart(new ProcessStartInfo
             {
@@ -111,13 +111,39 @@ public sealed class WinTerminalLauncher : ITerminalLauncher
         if (TryOpenGitBash(directoryPath))
             return true;
 
-        var cmd = ResolveExecutableOnPath("cmd.exe") ?? "cmd.exe";
+        var cmd = ResolveSystemExecutable("cmd.exe") ?? "cmd.exe";
         return TryStart(new ProcessStartInfo
         {
             FileName = cmd,
             WorkingDirectory = directoryPath,
             UseShellExecute = true
         });
+    }
+
+    /// <summary>
+    /// Resolves <c>cmd.exe</c> (and other binaries that live directly under System32) by absolute
+    /// path via <see cref="Environment.SpecialFolder.System"/> rather than PATH. Unlike pwsh (a
+    /// third-party install with no fixed location), cmd is a fixed part of the OS, and resolving it
+    /// through PATH would let a user-writable directory earlier on PATH shadow it with an
+    /// attacker-controlled "cmd.exe".
+    /// </summary>
+    private static string? ResolveSystemExecutable(string fileName)
+    {
+        var system32 = Environment.GetFolderPath(Environment.SpecialFolder.System);
+        var candidate = Path.Combine(system32, fileName);
+        return File.Exists(candidate) ? candidate : null;
+    }
+
+    /// <summary>
+    /// Windows PowerShell (distinct from PowerShell Core / pwsh) always lives at this fixed path
+    /// under System32 on every Windows install that has it. See <see cref="ResolveSystemExecutable"/>
+    /// for why this is not resolved through PATH.
+    /// </summary>
+    private static string? ResolveWindowsPowerShell()
+    {
+        var system32 = Environment.GetFolderPath(Environment.SpecialFolder.System);
+        var candidate = Path.Combine(system32, "WindowsPowerShell", "v1.0", "powershell.exe");
+        return File.Exists(candidate) ? candidate : null;
     }
 
     private static bool TryOpenGitBash(string directoryPath)

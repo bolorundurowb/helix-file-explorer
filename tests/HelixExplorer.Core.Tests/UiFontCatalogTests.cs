@@ -36,4 +36,27 @@ public class UiFontCatalogTests
     {
         UiFontCatalog.ResolveFontFamilySource(UiFontFamily.Inter).Must().Be("fonts:Inter#Inter");
     }
+
+    [Fact]
+    public void ResolveFontFamilySource_IbmPlexSans_UsesBundledCollection()
+    {
+        UiFontCatalog.ResolveFontFamilySource(UiFontFamily.IbmPlexSans).Must().Be("fonts:Helix#IBM Plex Sans");
+    }
+
+    [Fact]
+    public void ResolveFontFamilySource_PlusJakartaSans_UsesBundledCollection()
+    {
+        UiFontCatalog.ResolveFontFamilySource(UiFontFamily.PlusJakartaSans).Must().Be("fonts:Helix#Plus Jakarta Sans");
+    }
+
+    [Fact]
+    public void Options_AreExactlySystemDmSansInterIbmPlexAndPlusJakarta()
+    {
+        UiFontCatalog.Options.Count.Must().Be(5);
+        UiFontCatalog.GetDisplayName(UiFontFamily.System).Must().Be("System default");
+        UiFontCatalog.GetDisplayName(UiFontFamily.DmSans).Must().Be("DM Sans");
+        UiFontCatalog.GetDisplayName(UiFontFamily.Inter).Must().Be("Inter");
+        UiFontCatalog.GetDisplayName(UiFontFamily.IbmPlexSans).Must().Be("IBM Plex Sans");
+        UiFontCatalog.GetDisplayName(UiFontFamily.PlusJakartaSans).Must().Be("Plus Jakarta Sans");
+    }
 }

@@ -298,7 +298,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         // Drop stale listing state before chrome/filter work so ClearFilter cannot republish
         // the previous folder's entries under the new CurrentPath.
         ClearListingState();
-        _listing.ClearEntryPool();
+        _refreshCoordinator.ReleaseVisuals(_listing.ClearEntryPool());
 
         if (!isHomeRoute)
             ApplyFolderViewPreferences(value);
@@ -1022,6 +1022,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         var previousSelectedEntryPath = SelectedEntry?.FullPath;
 
         var result = _listing.ApplySortAndPublish(request);
+        _refreshCoordinator.ReleaseVisuals(result.EvictedEntries);
 
         _groupingUtcNow = request.GroupingUtcNow;
         TotalCount = result.TotalCount;
@@ -1411,7 +1412,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
                 newName,
                 refreshAsync: async () =>
                 {
-                    _listing.RemoveFromPool(oldPath);
+                    _refreshCoordinator.ReleaseVisual(_listing.RemoveFromPool(oldPath));
                     await RefreshAsync(showLoading: false).ConfigureAwait(true);
                 },
                 onClearRename: ClearRenameState,
@@ -2129,6 +2130,9 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
             _isRecycleBinWatcherSubscribed = false;
         }
         _searchCoordinator.Dispose();
+        // Closing a tab must not leave every one of its entries' cached visuals permanently
+        // referenced by the shared FileVisualService - see ClearEntryPool's remarks.
+        _refreshCoordinator.ReleaseVisuals(_listing.ClearEntryPool());
         _refreshCoordinator.Dispose();
         IsLoading = false;
     }

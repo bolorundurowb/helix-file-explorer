@@ -252,6 +252,26 @@ public sealed class PaneRefreshCoordinator(
             ct);
     }
 
+    /// <summary>
+    /// Releases one entry's cached visual reference. Must be called whenever an
+    /// <see cref="EntryItemViewModel"/> is dropped from a pane's entry pool (navigation away, rename,
+    /// filter/hidden-file exclusion, disposal) - otherwise the shared <see cref="FileVisualService"/>
+    /// keeps a permanent reference count on that bitmap and can never dispose it, even once it is
+    /// evicted from the visual cache's own LRU lookup.
+    /// </summary>
+    public void ReleaseVisual(EntryItemViewModel? entry)
+    {
+        if (entry is not null)
+            visuals.Release(entry.EntryImage);
+    }
+
+    /// <summary>Batch form of <see cref="ReleaseVisual"/> for a set of evicted entries.</summary>
+    public void ReleaseVisuals(IEnumerable<EntryItemViewModel> entries)
+    {
+        foreach (var entry in entries)
+            visuals.Release(entry.EntryImage);
+    }
+
     public void CancelRefresh()
     {
         var previous = Interlocked.Exchange(ref _refreshCts, null);

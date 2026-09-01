@@ -13,9 +13,27 @@ public sealed class PaneListingCoordinator
 
     public IReadOnlyDictionary<string, EntryItemViewModel> EntryPool => _entryPool;
 
-    public void ClearEntryPool() => _entryPool.Clear();
+    /// <summary>
+    /// Drops every pooled entry and hands them back so the caller can release each one's cached
+    /// visual (<see cref="Services.FileVisualService.Release"/>). A bare <c>Clear()</c> used to just
+    /// drop the dictionary entries, permanently leaking every entry's decoded icon/thumbnail bitmap:
+    /// nothing else in the app ever releases that reference once the ViewModel becomes unreachable,
+    /// and a leaked reference count blocks the visual cache from ever disposing the bitmap, even after
+    /// LRU-evicting it from its own lookup table.
+    /// </summary>
+    public IReadOnlyList<EntryItemViewModel> ClearEntryPool()
+    {
+        if (_entryPool.Count == 0)
+            return [];
 
-    public void RemoveFromPool(string path) => _entryPool.Remove(path);
+        var evicted = _entryPool.Values.ToList();
+        _entryPool.Clear();
+        return evicted;
+    }
+
+    /// <summary>Removes one pooled entry, returning it (if present) so its cached visual can be released.</summary>
+    public EntryItemViewModel? RemoveFromPool(string path)
+        => _entryPool.Remove(path, out var item) ? item : null;
 
     public ListingPublishResult ApplySortAndPublish(ListingPublishRequest request)
     {
@@ -69,12 +87,17 @@ public sealed class PaneListingCoordinator
             nextEntries.Add(item);
         }
 
+        var evicted = new List<EntryItemViewModel>();
         foreach (var stale in _entryPool.Keys.Where(k => !usedPaths.Contains(k)).ToList())
-            _entryPool.Remove(stale);
+        {
+            if (_entryPool.Remove(stale, out var item))
+                evicted.Add(item);
+        }
 
         return new ListingPublishResult(
             nextEntries,
             visualTargets,
+            evicted,
             totalCount,
             _viewBuffer.Count,
             listingSizeBytes);
@@ -113,6 +136,7 @@ public sealed class ListingPublishRequest
 public readonly record struct ListingPublishResult(
     IReadOnlyList<EntryItemViewModel> Entries,
     IReadOnlyList<EntryItemViewModel> VisualTargets,
+    IReadOnlyList<EntryItemViewModel> EvictedEntries,
     int TotalCount,
     int ItemCount,
     long ListingSizeBytes);

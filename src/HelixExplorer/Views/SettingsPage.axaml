@@ -189,6 +189,24 @@
                                         <TextBlock Text="Purple" FontSize="11" HorizontalAlignment="Center" Margin="0,2,0,0" />
                                     </StackPanel>
                                 </Button>
+                                <Button Classes="settingsNavItem" Width="64" Height="64" Margin="0,0,10,10"
+                                        Click="OnAccentClick" Tag="#00B294">
+                                    <StackPanel VerticalAlignment="Center">
+                                        <PathIcon Data="{DynamicResource HelixFolderIconGeometry}"
+                                                  Width="30" Height="30" HorizontalAlignment="Center"
+                                                  Foreground="#00B294" />
+                                        <TextBlock Text="Teal" FontSize="11" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Classes="settingsNavItem" Width="64" Height="64" Margin="0,0,10,10"
+                                        Click="OnAccentClick" Tag="#E3008C">
+                                    <StackPanel VerticalAlignment="Center">
+                                        <PathIcon Data="{DynamicResource HelixFolderIconGeometry}"
+                                                  Width="30" Height="30" HorizontalAlignment="Center"
+                                                  Foreground="#E3008C" />
+                                        <TextBlock Text="Pink" FontSize="11" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </Button>
                             </WrapPanel>
                         </StackPanel>
                     </Border>

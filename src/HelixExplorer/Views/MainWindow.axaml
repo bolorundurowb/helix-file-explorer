@@ -137,6 +137,8 @@
                                                         <MenuItem Header="Green" Tag="#107C10" Click="OnSidebarSetColorClick" />
                                                         <MenuItem Header="Blue" Tag="#0078D4" Click="OnSidebarSetColorClick" />
                                                         <MenuItem Header="Purple" Tag="#8764B8" Click="OnSidebarSetColorClick" />
+                                                        <MenuItem Header="Teal" Tag="#00B294" Click="OnSidebarSetColorClick" />
+                                                        <MenuItem Header="Pink" Tag="#E3008C" Click="OnSidebarSetColorClick" />
                                                     </MenuItem>
                                                     <MenuItem Header="Clear color" Click="OnSidebarClearColorClick" />
                                                 </ContextMenu>

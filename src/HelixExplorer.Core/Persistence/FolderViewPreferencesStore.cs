@@ -20,10 +20,9 @@ public sealed class FolderViewPreferencesStore : IFolderViewPreferencesStore
 
     public bool TryGet(string normalizedPath, out FolderViewPreferences preferences)
     {
-        preferences = new FolderViewPreferences();
-        lock (_db.ConnectionGate)
+        var found = _db.Execute(connection =>
         {
-            using var cmd = _db.Connection.CreateCommand();
+            using var cmd = connection.CreateCommand();
             cmd.CommandText = """
                 SELECT view_mode, sort_column, sort_descending, directory_sort,
                        thumbnail_size, group_by, collapsed_group_keys
@@ -33,26 +32,31 @@ public sealed class FolderViewPreferencesStore : IFolderViewPreferencesStore
             cmd.Parameters.AddWithValue("@path", normalizedPath);
             using var reader = cmd.ExecuteReader();
             if (!reader.Read())
-                return false;
+                return (Found: false, Preferences: new FolderViewPreferences());
 
-            preferences.ViewMode = (LayoutMode)reader.GetInt64(0);
-            preferences.SortColumn = (SortColumn)reader.GetInt64(1);
-            preferences.SortDescending = reader.GetInt64(2) != 0;
-            preferences.DirectorySort = (DirectorySortMode)reader.GetInt64(3);
-            preferences.ThumbnailSize = reader.GetDouble(4);
-            preferences.GroupBy = (GroupByMode)reader.GetInt64(5);
+            var value = new FolderViewPreferences
+            {
+                ViewMode = (LayoutMode)reader.GetInt64(0),
+                SortColumn = (SortColumn)reader.GetInt64(1),
+                SortDescending = reader.GetInt64(2) != 0,
+                DirectorySort = (DirectorySortMode)reader.GetInt64(3),
+                ThumbnailSize = reader.GetDouble(4),
+                GroupBy = (GroupByMode)reader.GetInt64(5)
+            };
             var keysJson = reader.GetString(6);
-            preferences.CollapsedGroupKeys =
+            value.CollapsedGroupKeys =
                 JsonSerializer.Deserialize<List<string>>(keysJson, CollapsedKeysOptions) ?? [];
-            return true;
-        }
+            return (Found: true, Preferences: value);
+        });
+        preferences = found.Preferences;
+        return found.Found;
     }
 
     public void Upsert(string normalizedPath, FolderViewPreferences preferences)
     {
-        lock (_db.ConnectionGate)
+        _db.Execute(connection =>
         {
-            using var cmd = _db.Connection.CreateCommand();
+            using var cmd = connection.CreateCommand();
             cmd.CommandText = """
                 INSERT INTO folder_view_preferences
                     (path, view_mode, sort_column, sort_descending, directory_sort,
@@ -79,17 +83,17 @@ public sealed class FolderViewPreferencesStore : IFolderViewPreferencesStore
             cmd.Parameters.AddWithValue("@collapsedGroupKeys",
                 JsonSerializer.Serialize(preferences.CollapsedGroupKeys ?? new List<string>(), CollapsedKeysOptions));
             cmd.ExecuteNonQuery();
-        }
+        });
     }
 
     public void Delete(string normalizedPath)
     {
-        lock (_db.ConnectionGate)
+        _db.Execute(connection =>
         {
-            using var cmd = _db.Connection.CreateCommand();
+            using var cmd = connection.CreateCommand();
             cmd.CommandText = "DELETE FROM folder_view_preferences WHERE path = @path;";
             cmd.Parameters.AddWithValue("@path", normalizedPath);
             cmd.ExecuteNonQuery();
-        }
+        });
     }
 }

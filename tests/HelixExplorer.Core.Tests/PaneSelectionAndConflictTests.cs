@@ -35,6 +35,24 @@ public class FileConflictResolverTests
         second.Must().Be(FileConflictChoice.Skip);
         resolver.ApplyToAllChosen.Must().BeTrue();
     }
+
+    [Fact]
+    public void ResolveSync_WithSynchronizationContext_ThrowsInsteadOfDeadlocking()
+    {
+        var resolver = new FileConflictResolver(new FakeDialogs());
+        var previous = SynchronizationContext.Current;
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(new SynchronizationContext());
+            Action resolve = () => resolver.ResolveSync(new FileConflictInfo("a", "b", false));
+
+            Ensure.Throws<InvalidOperationException>(resolve);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+    }
 }
 
 public class ShellPathTests

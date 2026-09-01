@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Windows.Shell;
 using Vanara.PInvoke;
@@ -55,9 +56,8 @@ internal static class ShellFileOperationsHelper
     {
         try
         {
-            if (!CanMoveToRecycleBinAsync(path, cancellationToken).GetAwaiter().GetResult())
-                return false;
-
+            // The delete itself is the authoritative recyclability probe. Asking SHQueryRecycleBin
+            // first doubled STA/COM traffic for every conflict and still could not guarantee success.
             var (success, deleted) = DeleteToRecycleBinAsync([path], progress: null, cancellationToken)
                 .GetAwaiter().GetResult();
 
@@ -135,39 +135,38 @@ internal static class ShellFileOperationsHelper
     private static bool CanMoveToRecycleBin(string path, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-
-        using var op = CreateOperation();
-        op.Options |= ShellFileOperations.OperationFlags.RecycleOnDelete;
-
-        var canRecycle = true;
-        var testComplete = false;
-
-        op.PreDeleteItem += (s, e) =>
-        {
-            if (!e.Flags.HasFlag(ShellFileOperations.TransferFlags.DeleteRecycleIfPossible))
-                canRecycle = false;
-
-            testComplete = true;
-            throw new OperationCanceledException("Recycle bin test aborted after pre-flight check.");
-        };
-
-        using var item = new ShellItem(path);
-        op.QueueDeleteOperation(item);
+        if (string.IsNullOrWhiteSpace(path) || NetworkPath.IsUnc(path))
+            return false;
 
         try
         {
-            op.PerformOperations();
+            var attrs = File.GetAttributes(path);
+            if ((attrs & FileAttributes.ReparsePoint) != 0)
+                return false;
         }
-        catch (OperationCanceledException)
-        {
-            // Abort is success for CanRecycle dry-run; don't treat as failure.
-        }
-        catch
+        catch (Exception)
         {
             return false;
         }
 
-        return testComplete && canRecycle;
+        var root = Path.GetPathRoot(path);
+        if (string.IsNullOrEmpty(root))
+            return false;
+
+        try
+        {
+            var drive = new DriveInfo(root);
+            if (drive.DriveType is DriveType.Network or DriveType.NoRootDirectory)
+                return false;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+
+        var info = new Shell32.SHQUERYRBINFO { cbSize = (uint)Marshal.SizeOf<Shell32.SHQUERYRBINFO>() };
+        var hr = Shell32.SHQueryRecycleBin(root, ref info);
+        return hr.Succeeded;
     }
 
     private static ShellFileOperations CreateOperation()

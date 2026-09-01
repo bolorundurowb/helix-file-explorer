@@ -4,5 +4,7 @@ public enum UiFontFamily
 {
     System,
     DmSans,
-    Inter
+    Inter,
+    IbmPlexSans,
+    PlusJakartaSans
 }

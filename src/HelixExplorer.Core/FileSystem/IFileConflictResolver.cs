@@ -27,7 +27,7 @@ public sealed class FileConflictResolver(IUserDialogService dialogs, bool canApp
         if (_applyToAll.HasValue)
             return _applyToAll.Value;
 
-        var resolution = await dialogs.ResolveConflictAsync(conflict, canApplyToAll).ConfigureAwait(true);
+        var resolution = await dialogs.ResolveConflictAsync(conflict, canApplyToAll).ConfigureAwait(false);
         if (resolution is null)
             return null;
 
@@ -38,5 +38,12 @@ public sealed class FileConflictResolver(IUserDialogService dialogs, bool canApp
     }
 
     public FileConflictChoice? ResolveSync(FileConflictInfo conflict)
-        => ResolveAsync(conflict).GetAwaiter().GetResult();
+    {
+        if (SynchronizationContext.Current is not null)
+            throw new InvalidOperationException("Synchronous conflict resolution must run off the UI thread.");
+
+        // The shell API is synchronous, so its worker thread must bridge to the dialog task.
+        // ResolveAsync itself never captures this worker context.
+        return ResolveAsync(conflict).ConfigureAwait(false).GetAwaiter().GetResult();
+    }
 }

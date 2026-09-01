@@ -71,6 +71,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         FileOperationUndoService undo,
         IUserDialogService dialogs,
         HomePageViewModel homePage,
+        SettingsPageViewModel settingsPage,
         ILogger<TabViewModel> tabLogger)
     {
         _themeService = themeService;
@@ -93,7 +94,9 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         OperationReporter = operationReporter;
         _homePage = homePage;
         _tabLogger = tabLogger;
-        _settingsPage = new SettingsPageViewModel(this);
+        _settingsPage = settingsPage;
+        _settingsPage.Attach(this);
+        _settingsPage.OpenUrlRequested += OnOpenUrlRequested;
         _homePage.NavigateRequested += OnHomeNavigateRequested;
         _operationReporter.PropertyChanged += OnOperationReporterPropertyChanged;
         _undo.Changed += OnHistoryChanged;
@@ -230,12 +233,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         if (!AutoCheckForUpdates || _settingsPage.IsCheckingForUpdates)
             return;
 
-        var command = _settingsPage.CheckForUpdatesCommand;
-        if (command.CanExecute(null))
-            command.Execute(null);
-
-        while (_settingsPage.IsCheckingForUpdates)
-            await Task.Delay(200).ConfigureAwait(true);
+        await _settingsPage.CheckForUpdatesAsync().ConfigureAwait(true);
 
         if (_settingsPage.HasUpdate && _settingsPage.UpdateReleaseUrl is { Length: > 0 } url)
         {
@@ -376,7 +374,10 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         HasNetworkNotice = true;
     }
 
-    private void OnNetworkAvailabilityChanged(object? sender, EventArgs e) => UpdateNetworkNotice();
+    // Raised from the availability provider's background refresh, so marshal before touching
+    // observable state (same reason as OnVolumesChanged).
+    private void OnNetworkAvailabilityChanged(object? sender, EventArgs e)
+        => Dispatcher.UIThread.Post(UpdateNetworkNotice);
 
     private void NoteNetworkBrowsing(string? path)
     {
@@ -1060,8 +1061,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         _homePage.SetRecentFiles(_recentPaths);
         _homePage.SetNetworkLocations(_lastNetworkLocations);
-        _homePage.RefreshPins();
-        _homePage.RefreshDrives();
+        _ = _homePage.RefreshAsync();
     }
 
     private void OnHomeNavigateRequested(object? sender, string path)
@@ -1369,6 +1369,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         }
     }
 
+    private void OnOpenUrlRequested(object? sender, string url) => OpenUrl(url);
+
     public void Dispose()
     {
         if (_disposed)
@@ -1387,6 +1389,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _volumeWatcher.VolumesChanged -= OnVolumesChanged;
         _themeService.ThemeChanged -= OnThemeServiceChanged;
         _operationReporter.PropertyChanged -= OnOperationReporterPropertyChanged;
+        _settingsPage.OpenUrlRequested -= OnOpenUrlRequested;
         _operationReporter.Dispose();
 
         // The history outlives this window, so a window that forgets to unsubscribe keeps its whole

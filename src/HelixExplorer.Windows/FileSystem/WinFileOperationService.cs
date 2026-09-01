@@ -339,6 +339,15 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
         }
         else if (Directory.Exists(source))
         {
+            // A recursive copy must never traverse a junction/symlink into an unrelated tree.
+            // Recreating every reparse tag safely needs tag-specific data, so unsupported links are
+            // reported as skipped instead of silently producing a dangerous or misleading copy.
+            if (IsDirectoryReparsePoint(source))
+            {
+                state.WasSkipped = true;
+                return;
+            }
+
             // Dest under source would recurse into the newly created tree forever.
             if (PathUtilities.IsSameOrChildPath(source, destPath))
                 throw new InvalidOperationException("Cannot copy a folder into itself or one of its subfolders.");
@@ -386,6 +395,12 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
         {
             if (PathUtilities.IsSameOrChildPath(source, destPath))
                 throw new InvalidOperationException("Cannot move a folder into itself or one of its subfolders.");
+
+            if (IsDirectoryReparsePoint(source) && !PathUtilities.IsSameVolume(source, destPath))
+            {
+                state.WasSkipped = true;
+                return;
+            }
 
             if (Directory.Exists(destPath) && !TryResolveDirectoryConflict(source, destPath, ct, conflicts, control, state, out destPath, isMove: true))
                 return;
@@ -638,6 +653,10 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
         {
             ct.ThrowIfCancellationRequested();
             control?.WaitIfPaused(ct);
+
+            if (IsDirectoryReparsePoint(dir))
+                continue;
+
             var destDir = Path.Combine(destination, Path.GetFileName(dir));
             if (Directory.Exists(destDir))
             {
@@ -660,6 +679,19 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
             CopyDirectory(dir, destDir, ct, conflicts, state, control);
             if (state.WasCancelled)
                 return;
+        }
+    }
+
+    internal static bool IsDirectoryReparsePoint(string path)
+    {
+        try
+        {
+            return (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
+        }
+        catch (Exception)
+        {
+            // Let the subsequent normal file-system operation surface its more useful error.
+            return false;
         }
     }
 

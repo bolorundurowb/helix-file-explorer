@@ -122,6 +122,8 @@ public partial class App : Application
 
         _host?.Services.GetService<ApplicationStartupCoordinator>()?.Dispose();
         _host?.Services.GetService<IArchiveProvider>()?.CleanupExtractedFiles();
+        if (_host?.Services.GetService<IWindowHostService>() is WindowHostService windowHost)
+            windowHost.Shutdown();
         _host?.Dispose();
         _host = null;
         Services = null;

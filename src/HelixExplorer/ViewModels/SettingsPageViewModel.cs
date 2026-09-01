@@ -1,25 +1,20 @@
 using System.Collections.ObjectModel;
 using System.Reflection;
-using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HelixExplorer.Core.Theming;
+using HelixExplorer.Services;
 
 namespace HelixExplorer.ViewModels;
 
 public sealed partial class SettingsPageViewModel : ObservableObject
 {
     private static readonly Assembly AppAssembly = typeof(SettingsPageViewModel).Assembly;
-    private static readonly HttpClient _httpClient = new()
-    {
-        DefaultRequestHeaders = { { "User-Agent", "HelixExplorer" } }
-    };
-    private const string ReleasesUrl =
-        "https://api.github.com/repos/bolorundurowb/helix-file-explorer/releases/latest";
+    private readonly IUpdateChecker _updateChecker;
 
-    public SettingsPageViewModel(MainWindowViewModel main)
+    public SettingsPageViewModel(IUpdateChecker updateChecker)
     {
-        Main = main;
+        _updateChecker = updateChecker;
         AppVersion = AppAssembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
                      ?? AppAssembly.GetName().Version?.ToString(3)
                      ?? "0.0.0";
@@ -44,11 +39,13 @@ public sealed partial class SettingsPageViewModel : ObservableObject
         _selectedSection.IsSelected = true;
     }
 
-    public MainWindowViewModel Main { get; }
-
     public string AppVersion { get; }
 
     public string CopyrightNotice { get; }
+
+    public MainWindowViewModel Main { get; private set; } = null!;
+
+    internal void Attach(MainWindowViewModel main) => Main = main;
 
     public ObservableCollection<SettingsSection> Sections { get; }
 
@@ -67,6 +64,8 @@ public sealed partial class SettingsPageViewModel : ObservableObject
     public bool HasUpdate => !string.IsNullOrEmpty(UpdateReleaseUrl);
 
     private readonly string _currentVersion;
+
+    public event EventHandler<string>? OpenUrlRequested;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SelectedTitle))]
@@ -97,7 +96,7 @@ public sealed partial class SettingsPageViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task CheckForUpdates()
+    public async Task CheckForUpdatesAsync(CancellationToken cancellationToken = default)
     {
         if (IsCheckingForUpdates)
             return;
@@ -108,38 +107,9 @@ public sealed partial class SettingsPageViewModel : ObservableObject
 
         try
         {
-            var response = await _httpClient.GetAsync(ReleasesUrl).ConfigureAwait(true);
-            if (!response.IsSuccessStatusCode)
-            {
-                UpdateStatus = "Could not check for updates. Try again later.";
-                return;
-            }
-
-            var json = await response.Content.ReadAsStringAsync().ConfigureAwait(true);
-            using var doc = JsonDocument.Parse(json);
-            var tagName = doc.RootElement.GetProperty("tag_name").GetString();
-            var htmlUrl = doc.RootElement.GetProperty("html_url").GetString();
-
-            if (string.IsNullOrEmpty(tagName))
-            {
-                UpdateStatus = "No release information found.";
-                return;
-            }
-
-            var latestVersion = tagName.TrimStart('v', 'V');
-            if (IsNewerVersion(latestVersion, _currentVersion))
-            {
-                UpdateStatus = $"Update available: v{latestVersion} (current: v{_currentVersion})";
-                UpdateReleaseUrl = htmlUrl;
-            }
-            else
-            {
-                UpdateStatus = $"You are up to date (v{_currentVersion})";
-            }
-        }
-        catch (Exception)
-        {
-            UpdateStatus = "Could not check for updates. Try again later.";
+            var result = await _updateChecker.CheckAsync(_currentVersion, cancellationToken).ConfigureAwait(true);
+            UpdateStatus = result.Status;
+            UpdateReleaseUrl = result.HasUpdate ? result.ReleaseUrl : null;
         }
         finally
         {
@@ -151,16 +121,7 @@ public sealed partial class SettingsPageViewModel : ObservableObject
     private void OpenReleaseUrl()
     {
         if (UpdateReleaseUrl is { Length: > 0 } url)
-            Main.OpenUrl(url);
-    }
-
-    private static bool IsNewerVersion(string latest, string current)
-    {
-        if (!Version.TryParse(latest, out var latestVer))
-            return false;
-        if (!Version.TryParse(current, out var currentVer))
-            return false;
-        return latestVer > currentVer;
+            OpenUrlRequested?.Invoke(this, url);
     }
 }
 

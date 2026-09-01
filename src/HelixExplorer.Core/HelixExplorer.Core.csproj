@@ -2,12 +2,10 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
 
-    <!--
-      DEP-3: Core is first to opt into analyzers (not HelixExplorer/HelixExplorer.Windows yet -
-      one project at a time). TreatWarningsAsErrors is already global (Directory.Build.props), so
-      every rule this turns on is a potential build break; see the root .editorconfig's "DEP-3
-      safety valve" section for the handful of rules dialed back pending a real compiler pass.
-    -->
+    <!-- Analyzers roll out one project at a time; Core is first. The four rules Core does not
+         comply with are demoted to suggestions in .editorconfig (with per-rule reasons) rather
+         than excluded from TreatWarningsAsErrors, so the build stays warning-free and every other
+         Recommended rule breaks the build. -->
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisMode>Recommended</AnalysisMode>
   </PropertyGroup>

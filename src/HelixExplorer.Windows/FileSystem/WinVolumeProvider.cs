@@ -6,7 +6,31 @@ namespace HelixExplorer.Windows.FileSystem;
 
 public sealed class WinVolumeProvider(ILogger<WinVolumeProvider> logger) : IVolumeProvider
 {
+    private readonly object _gate = new();
+    private IReadOnlyList<VolumeInfo>? _snapshot;
+
     public IReadOnlyList<VolumeInfo> GetVolumes()
+    {
+        lock (_gate)
+        {
+            _snapshot ??= ReadVolumes();
+            return _snapshot;
+        }
+    }
+
+    public async ValueTask<IReadOnlyList<VolumeInfo>> GetVolumesAsync(CancellationToken cancellationToken = default)
+    {
+        return await Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var volumes = ReadVolumes();
+            lock (_gate)
+                _snapshot = volumes;
+            return volumes;
+        }, cancellationToken).ConfigureAwait(false);
+    }
+
+    private IReadOnlyList<VolumeInfo> ReadVolumes()
     {
         var drives = DriveInfo.GetDrives();
         var result = new List<VolumeInfo>(drives.Length);

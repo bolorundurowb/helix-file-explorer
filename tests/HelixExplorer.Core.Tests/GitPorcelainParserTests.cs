@@ -118,4 +118,38 @@ public class GitPorcelainParserTests
 
         snapshot.GetStatusForPath(@"C:\repo\file!name.txt").Must().Be(GitFileStatus.Modified);
     }
+
+    [Fact]
+    public void Parse_Rename_DoesNotTreatOrigPathAsStatusLine()
+    {
+        var output = NulDelimited(
+            "# branch.head main",
+            "2 R. N... 100644 100644 100644 1111111111111111111111111111111111111111 2222222222222222222222222222222222222222 R100 new-name.txt",
+            "2024-report.txt");
+
+        var snapshot = GitPorcelainParser.Parse(output, @"C:\repo");
+
+        snapshot.GetStatusForPath(@"C:\repo\new-name.txt").Must().NotBe(GitFileStatus.None);
+        snapshot.GetStatusForPath(@"C:\repo\2024-report.txt").Must().Be(GitFileStatus.None);
+    }
+
+    [Theory]
+    [InlineData("? old-name.txt")]
+    [InlineData("u old-name.txt")]
+    [InlineData("1 old-name.txt")]
+    [InlineData("2 old-name.txt")]
+    public void Parse_Rename_ConsumesExactlyOneOriginalPathRecord(string originalPath)
+    {
+        var output = NulDelimited(
+            "# branch.head main",
+            "2 R. N... 100644 100644 100644 1111111111111111111111111111111111111111 2222222222222222222222222222222222222222 R100 new-name.txt",
+            originalPath,
+            "? actual-untracked.txt");
+
+        var snapshot = GitPorcelainParser.Parse(output, @"C:\repo");
+
+        snapshot.Status.Untracked.Must().Be(1);
+        snapshot.GetStatusForPath(@"C:\repo\actual-untracked.txt").Must().Be(GitFileStatus.Untracked);
+        snapshot.GetStatusForPath(@"C:\repo\old-name.txt").Must().Be(GitFileStatus.None);
+    }
 }

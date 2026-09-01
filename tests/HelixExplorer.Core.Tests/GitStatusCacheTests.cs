@@ -50,4 +50,18 @@ public class GitStatusCacheTests
         cache.Invalidate(@"C:\repo");
         cache.TryGet(@"C:\repo", out _).Must().BeFalse();
     }
+
+    [Fact]
+    public void Store_OverCapacity_EvictsOldestEntry()
+    {
+        var cache = new GitStatusCache(TimeSpan.FromMinutes(1), maxEntries: 2);
+        cache.Store(@"C:\one", Snapshot());
+        cache.Store(@"C:\two", Snapshot());
+        cache.Store(@"C:\three", Snapshot());
+
+        cache.Count.Must().Be(2);
+        cache.TryGet(@"C:\one", out _).Must().BeFalse();
+        cache.TryGet(@"C:\two", out _).Must().BeTrue();
+        cache.TryGet(@"C:\three", out _).Must().BeTrue();
+    }
 }

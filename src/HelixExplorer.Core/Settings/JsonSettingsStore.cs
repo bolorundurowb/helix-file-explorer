@@ -18,6 +18,7 @@ public sealed class JsonSettingsStore(string path, ILogger<JsonSettingsStore>? l
 
     private readonly ILogger _logger = logger ?? NullLogger<JsonSettingsStore>.Instance;
     private readonly object _gate = new();
+    private AppSettings? _cached;
 
     public JsonSettingsStore() : this(AppPaths.SettingsFile)
     {
@@ -30,8 +31,17 @@ public sealed class JsonSettingsStore(string path, ILogger<JsonSettingsStore>? l
 
     public AppSettings Load()
     {
+        lock (_gate)
+        {
+            if (_cached is not null)
+                return _cached;
+        }
+
         if (!File.Exists(path))
-            return new AppSettings();
+        {
+            lock (_gate)
+                return _cached ??= new AppSettings();
+        }
 
         string json;
         try
@@ -49,13 +59,16 @@ public sealed class JsonSettingsStore(string path, ILogger<JsonSettingsStore>? l
             // Transient access problem, not corrupt data: do not quarantine a file that may be
             // perfectly fine once whatever is locking it lets go.
             _logger.LogError(ex, "Failed to read settings file '{Path}'; using defaults for this session.", path);
-            return new AppSettings();
+            lock (_gate)
+                return _cached ??= new AppSettings();
         }
 #pragma warning restore CA1031
 
         try
         {
-            return JsonSerializer.Deserialize<AppSettings>(json, Options) ?? new AppSettings();
+            var loaded = JsonSerializer.Deserialize<AppSettings>(json, Options) ?? new AppSettings();
+            lock (_gate)
+                return _cached ??= loaded;
         }
         // Deliberately broad: JsonSerializer.Deserialize can fail in more ways than JsonException
         // (e.g. a custom converter throwing something else), and every one of them means the same
@@ -69,7 +82,8 @@ public sealed class JsonSettingsStore(string path, ILogger<JsonSettingsStore>? l
             // setting is bad enough without also erasing the evidence needed to find out why.
             _logger.LogError(ex, "Settings file '{Path}' is corrupt; quarantining it and starting from defaults.", path);
             QuarantineCorruptFile();
-            return new AppSettings();
+            lock (_gate)
+                return _cached ??= new AppSettings();
         }
 #pragma warning restore CA1031
     }
@@ -86,6 +100,7 @@ public sealed class JsonSettingsStore(string path, ILogger<JsonSettingsStore>? l
 
         lock (_gate)
         {
+            _cached = settings;
             try
             {
                 using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))

@@ -18,6 +18,13 @@ public interface IAppDatabase : IDisposable
     void Initialize();
 
     /// <summary>
+    /// Runs one unit of connection work under the database synchronization gate.
+    /// </summary>
+    T Execute<T>(Func<SqliteConnection, T> operation);
+
+    void Execute(Action<SqliteConnection> operation);
+
+    /// <summary>
     /// The shared, already-open connection. Store commands are created on this
     /// connection while holding <see cref="ConnectionGate"/>.
     /// </summary>

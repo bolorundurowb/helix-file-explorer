@@ -13,6 +13,7 @@ namespace HelixExplorer.Services;
 public sealed class AvaloniaOsFileClipboard : IOsFileClipboard
 {
     private ClipboardOperation? _lastPublishedOperation;
+    private string[]? _lastPublishedPaths;
 
     public async Task SetFilesAsync(IReadOnlyList<string> paths, ClipboardOperation operation, CancellationToken ct = default)
     {
@@ -33,6 +34,7 @@ public sealed class AvaloniaOsFileClipboard : IOsFileClipboard
 
         await clipboard.SetDataAsync(transfer).ConfigureAwait(true);
         _lastPublishedOperation = operation;
+        _lastPublishedPaths = paths.ToArray();
     }
 
     public async Task<(IReadOnlyList<string> Paths, ClipboardOperation Operation)?> TryGetFilesAsync(CancellationToken ct = default)
@@ -61,7 +63,7 @@ public sealed class AvaloniaOsFileClipboard : IOsFileClipboard
         if (paths.Count == 0)
             return null;
 
-        var operation = _lastPublishedOperation ?? ClipboardOperation.Copy;
+        var operation = ClipboardOperationTag.Resolve(paths, _lastPublishedPaths, _lastPublishedOperation);
         return (paths, operation);
     }
 

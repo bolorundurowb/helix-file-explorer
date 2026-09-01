@@ -13,9 +13,9 @@ public sealed class FolderColorStore : IFolderColorStore
     public IReadOnlyDictionary<string, uint> LoadAll()
     {
         var result = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
-        lock (_db.ConnectionGate)
+        _db.Execute(connection =>
         {
-            using var cmd = _db.Connection.CreateCommand();
+            using var cmd = connection.CreateCommand();
             cmd.CommandText = "SELECT path, color_argb FROM folder_colors;";
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
@@ -24,15 +24,15 @@ public sealed class FolderColorStore : IFolderColorStore
                 var color = (uint)reader.GetInt64(1);
                 result[path] = color;
             }
-        }
+        });
         return result;
     }
 
     public void Upsert(string normalizedPath, uint argb)
     {
-        lock (_db.ConnectionGate)
+        _db.Execute(connection =>
         {
-            using var cmd = _db.Connection.CreateCommand();
+            using var cmd = connection.CreateCommand();
             cmd.CommandText = """
                 INSERT INTO folder_colors (path, color_argb)
                 VALUES (@path, @color)
@@ -41,17 +41,17 @@ public sealed class FolderColorStore : IFolderColorStore
             cmd.Parameters.AddWithValue("@path", normalizedPath);
             cmd.Parameters.AddWithValue("@color", (long)argb);
             cmd.ExecuteNonQuery();
-        }
+        });
     }
 
     public void Delete(string normalizedPath)
     {
-        lock (_db.ConnectionGate)
+        _db.Execute(connection =>
         {
-            using var cmd = _db.Connection.CreateCommand();
+            using var cmd = connection.CreateCommand();
             cmd.CommandText = "DELETE FROM folder_colors WHERE path = @path;";
             cmd.Parameters.AddWithValue("@path", normalizedPath);
             cmd.ExecuteNonQuery();
-        }
+        });
     }
 }

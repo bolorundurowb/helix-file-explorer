@@ -34,9 +34,12 @@ public sealed class VirtualizingFileGrid : TemplatedControl
     private bool _rebuildScheduled;
     private int _lastColumnCount = -1;
     private int _lastItemCount;
-    private string _lastItemsPathsKey = string.Empty;
+    private int _lastItemsFingerprint;
     private List<object> _lastItems = [];
     private List<GridRow> _lastRows = [];
+    private IDataTemplate? _rowTemplate;
+    private IDataTemplate? _cachedItemTemplate;
+    private IDataTemplate? _cachedHeaderTemplate;
 
     static VirtualizingFileGrid()
     {
@@ -159,7 +162,19 @@ public sealed class VirtualizingFileGrid : TemplatedControl
         if (_rows is null || ItemTemplate is null)
             return;
 
-        _rows.ItemTemplate = new FuncDataTemplate<GridRow>((row, _) =>
+        if (_rowTemplate is not null
+            && ReferenceEquals(_cachedItemTemplate, ItemTemplate)
+            && ReferenceEquals(_cachedHeaderTemplate, HeaderTemplate))
+        {
+            _rows.ItemTemplate = _rowTemplate;
+            return;
+        }
+
+        _cachedItemTemplate = ItemTemplate;
+        _cachedHeaderTemplate = HeaderTemplate;
+        var itemTemplate = ItemTemplate;
+        var headerTemplate = HeaderTemplate;
+        _rowTemplate = new FuncDataTemplate<GridRow>((row, _) =>
         {
             // One container serves both row kinds: a header band swaps in the (stretched) header
             // content, a tile row swaps in the horizontal stack. Swapping inside a single container
@@ -170,7 +185,7 @@ public sealed class VirtualizingFileGrid : TemplatedControl
 
             void UpdateStackChildren(StackPanel s, GridRow? gridRow)
             {
-                if (gridRow?.Items is null || ItemTemplate is null)
+                if (gridRow?.Items is null)
                 {
                     foreach (var child in s.Children)
                     {
@@ -190,7 +205,7 @@ public sealed class VirtualizingFileGrid : TemplatedControl
                 {
                     for (int i = currentChildCount; i < items.Count; i++)
                     {
-                        var content = ItemTemplate.Build(items[i]);
+                        var content = itemTemplate.Build(items[i]);
                         if (content is not null)
                         {
                             s.Children.Add(content);
@@ -224,7 +239,7 @@ public sealed class VirtualizingFileGrid : TemplatedControl
                 if (gridRow?.Header is { } header)
                 {
                     UpdateStackChildren(stack, null);
-                    headerContent ??= HeaderTemplate?.Build(header);
+                    headerContent ??= headerTemplate?.Build(header);
                     if (headerContent is null)
                     {
                         host.Children.Clear();
@@ -276,16 +291,38 @@ public sealed class VirtualizingFileGrid : TemplatedControl
                 stack.Children.Clear();
             };
 
+            host.AttachedToVisualTree += (sender, _) =>
+            {
+                if (sender is Panel p)
+                    UpdateHost(p.DataContext as GridRow);
+            };
+
             UpdateHost(row);
 
             return host;
         });
+        _rows.ItemTemplate = _rowTemplate;
     }
 
     private void RebuildRows()
     {
         if (_rows is null)
             return;
+
+        var viewportWidth = Bounds.Width;
+        if (viewportWidth <= 0)
+            viewportWidth = 800;
+        var columns = GetColumnCount(viewportWidth);
+
+        if (columns != _lastColumnCount && _lastItems.Count > 0 && _lastItems.Count == _lastItemCount)
+        {
+            var packed = BuildRows(_lastItems, columns);
+            _rows.ItemsSource = packed;
+            _rows.SelectedItem = null;
+            _lastColumnCount = columns;
+            _lastRows = packed;
+            return;
+        }
 
         var items = ItemsSource?.Cast<object>().ToList() ?? [];
         if (items.Count == 0)
@@ -294,32 +331,27 @@ public sealed class VirtualizingFileGrid : TemplatedControl
             _rows.SelectedItem = null;
             _lastColumnCount = -1;
             _lastItemCount = 0;
-            _lastItemsPathsKey = string.Empty;
+            _lastItemsFingerprint = 0;
             _lastItems = [];
             _lastRows = [];
             return;
         }
 
-        var viewportWidth = Bounds.Width;
-        if (viewportWidth <= 0)
-            viewportWidth = 800;
-
-        var columns = GetColumnCount(viewportWidth);
-        var pathsKey = BuildItemsPathsKey(items);
+        var fingerprint = BuildItemsFingerprint(items);
         if (columns == _lastColumnCount
             && items.Count == _lastItemCount
-            && pathsKey == _lastItemsPathsKey
+            && fingerprint == _lastItemsFingerprint
+            && ItemsMatch(items, _lastItems)
             && _rows.ItemsSource is IList<GridRow>)
             return;
 
         var rows = BuildRows(items, columns);
 
         _rows.ItemsSource = rows;
-        // Rows are layout-only; never keep ListBox selection chrome after recycle/rebuild.
         _rows.SelectedItem = null;
         _lastColumnCount = columns;
         _lastItemCount = items.Count;
-        _lastItemsPathsKey = pathsKey;
+        _lastItemsFingerprint = fingerprint;
         _lastItems = items;
         _lastRows = rows;
     }
@@ -358,20 +390,27 @@ public sealed class VirtualizingFileGrid : TemplatedControl
         return rows;
     }
 
-    private static string BuildItemsPathsKey(IReadOnlyList<object> items)
+    private static int BuildItemsFingerprint(IReadOnlyList<object> items)
     {
-        if (items.Count == 0)
-            return string.Empty;
-
-        return string.Join('\n', items.Select(GetItemPathKey));
+        var hash = new HashCode();
+        foreach (var item in items)
+            hash.Add(System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(item));
+        return hash.ToHashCode();
     }
 
-    private static string GetItemPathKey(object item) => item switch
+    private static bool ItemsMatch(IReadOnlyList<object> left, IReadOnlyList<object> right)
     {
-        EntryItemViewModel entry => entry.FullPath,
-        GroupHeaderViewModel header => " group:" + header.Key,
-        _ => item.GetHashCode().ToString()
-    };
+        if (left.Count != right.Count)
+            return false;
+
+        for (var i = 0; i < left.Count; i++)
+        {
+            if (!ReferenceEquals(left[i], right[i]))
+                return false;
+        }
+
+        return true;
+    }
 
     public int GetColumnCount(double viewportWidth)
     {

@@ -29,6 +29,6 @@ public sealed class InternalClipboardService : IClipboardService
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    private static IReadOnlyList<string> Snapshot(IReadOnlyList<string> paths)
+    private static string[] Snapshot(IReadOnlyList<string> paths)
         => paths is string[] array ? array.ToArray() : paths.ToArray();
 }

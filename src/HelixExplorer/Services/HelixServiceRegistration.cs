@@ -60,13 +60,14 @@ public static class HelixServiceRegistration
                 },
                 () => store.Load().Theme);
         });
-        services.AddTransient<PaneRefreshCoordinator>();
-        services.AddTransient<PaneFileOperationCoordinator>();
-        services.AddTransient<PaneSearchCoordinator>();
-        services.AddTransient<PaneShellActionCoordinator>();
-        services.AddScoped<IPaneCoordinatorFactory, PaneCoordinatorFactory>();
         services.AddScoped<IPaneViewModelFactory, PaneViewModelFactory>();
         services.AddScoped<AppSettingsCoordinator>();
+        services.AddSingleton(new HttpClient
+        {
+            DefaultRequestHeaders = { { "User-Agent", "HelixExplorer" } }
+        });
+        services.AddSingleton<IUpdateChecker, GitHubUpdateChecker>();
+        services.AddScoped<SettingsPageViewModel>();
         services.AddScoped<SidebarViewModel>();
         services.AddScoped<CommandPaletteService>();
         services.AddScoped<TabSessionCoordinator>();

@@ -1465,7 +1465,7 @@ public sealed partial class PaneView : UserControl
 
         // Copy is the default/preferred effect so browser upload fields treat the drop as an upload;
         // Move stays available for internal Explorer targets that request it via modifier keys.
-        var effects = DragDropEffects.Copy | DragDropEffects.Move;
+        var effects = Avalonia.Input.DragDropEffects.Copy | Avalonia.Input.DragDropEffects.Move;
         await DragDrop.DoDragDropAsync(pressArgs, transfer, effects).ConfigureAwait(true);
     }
 
@@ -1565,8 +1565,8 @@ public sealed partial class PaneView : UserControl
         UpdateDropTarget(targetEntry);
 
         e.DragEffects = e.KeyModifiers.HasFlag(KeyModifiers.Control)
-            ? DragDropEffects.Copy
-            : DragDropEffects.Move;
+            ? Avalonia.Input.DragDropEffects.Copy
+            : Avalonia.Input.DragDropEffects.Move;
         e.Handled = true;
     }
 
@@ -1681,7 +1681,7 @@ public sealed partial class PaneView : UserControl
                 return;
 
             var isCopy = e.KeyModifiers.HasFlag(KeyModifiers.Control)
-                         || e.DragEffects == DragDropEffects.Copy;
+                         || e.DragEffects == Avalonia.Input.DragDropEffects.Copy;
             await Pane.HandleDropAsync(paths, destinationPath, isCopy);
 
             e.Handled = true;

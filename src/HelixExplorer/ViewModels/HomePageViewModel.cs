@@ -12,18 +12,17 @@ public sealed partial class HomePageViewModel : ObservableObject
 {
     private readonly IQuickAccessProvider _quickAccess;
     private readonly IVolumeProvider _volumes;
-    private readonly ISettingsStore _settingsStore;
+    private readonly AppSettingsCoordinator _settings;
+    private Task? _refreshTask;
 
     public HomePageViewModel(
         IQuickAccessProvider quickAccess,
         IVolumeProvider volumes,
-        ISettingsStore settingsStore)
+        AppSettingsCoordinator settings)
     {
         _quickAccess = quickAccess;
         _volumes = volumes;
-        _settingsStore = settingsStore;
-        RefreshPins();
-        RefreshDrives();
+        _settings = settings;
     }
 
     public event EventHandler<string>? NavigateRequested;
@@ -46,48 +45,61 @@ public sealed partial class HomePageViewModel : ObservableObject
     private void OpenItem(string? path) => RequestNavigate(path);
 
     [RelayCommand]
-    private void Refresh()
+    public Task RefreshAsync()
     {
-        RefreshPins();
-        RefreshDrives();
+        var active = Volatile.Read(ref _refreshTask);
+        if (active is not null && !active.IsCompleted)
+            return active;
+
+        var created = RefreshCoreAsync();
+        Interlocked.Exchange(ref _refreshTask, created);
+        return created;
     }
 
-    public void RefreshPins()
+    private async Task RefreshCoreAsync()
     {
-        QuickAccess.Clear();
-
-        var homePath = _quickAccess.GetPath(KnownFolderKind.Home);
-        if (!string.IsNullOrEmpty(homePath))
-            QuickAccess.Add(new HomeQuickAccessItem("Home", homePath, IsPinned: true));
-
-        var settings = _settingsStore.Load();
-        var defaults = _quickAccess.GetPinnedDefaults()
-            .Select(t => t.Path)
-            .Where(p => !string.IsNullOrEmpty(p))
-            .ToList();
-
-        var merged = PinnedPathHelper.MergeUserPins(
-            settings.PinnedPaths,
-            defaults,
-            settings.UnpinnedPaths);
-
-        var known = _quickAccess.GetPinnedDefaults()
-            .Where(t => !string.IsNullOrEmpty(t.Path))
-            .ToDictionary(t => t.Path.TrimEnd('\\', '/'), t => t.DisplayName, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var (path, displayName) in merged)
+        try
         {
-            if (path.StartsWith("shell:", StringComparison.OrdinalIgnoreCase))
-                continue;
+            var settings = _settings.Load();
+            var pinned = settings.PinnedPaths.ToArray();
+            var unpinned = settings.UnpinnedPaths.ToArray();
+            var snapshot = await Task.Run(() => BuildSnapshot(pinned, unpinned))
+                .ConfigureAwait(true);
 
-            var title = known.TryGetValue(path.TrimEnd('\\', '/'), out var name) ? name : displayName;
-            QuickAccess.Add(new HomeQuickAccessItem(title, path, IsPinned: true));
+            Replace(QuickAccess, snapshot.Pins);
+            Replace(Drives, snapshot.Drives);
+        }
+        catch (Exception)
+        {
+            // Home is supplemental chrome; a transient drive or known-folder failure must not fail navigation.
         }
     }
 
-    public void RefreshDrives()
+    private HomeIoSnapshot BuildSnapshot(
+        IReadOnlyList<string> pinnedPaths,
+        IReadOnlyList<string> unpinnedPaths)
     {
-        Drives.Clear();
+        var pins = new List<HomeQuickAccessItem>();
+        var homePath = _quickAccess.GetPath(KnownFolderKind.Home);
+        if (!string.IsNullOrEmpty(homePath))
+            pins.Add(new HomeQuickAccessItem("Home", homePath, IsPinned: true));
+
+        var defaultsWithNames = _quickAccess.GetPinnedDefaults();
+        var defaults = defaultsWithNames.Select(t => t.Path).Where(p => !string.IsNullOrEmpty(p)).ToList();
+        var merged = PinnedPathHelper.MergeUserPins(pinnedPaths, defaults, unpinnedPaths);
+        var known = defaultsWithNames
+            .Where(t => !string.IsNullOrEmpty(t.Path))
+            .ToDictionary(t => t.Path.TrimEnd('\\', '/'), t => t.DisplayName, StringComparer.OrdinalIgnoreCase);
+        foreach (var (path, displayName) in merged)
+        {
+            if (!path.StartsWith("shell:", StringComparison.OrdinalIgnoreCase))
+            {
+                var title = known.TryGetValue(path.TrimEnd('\\', '/'), out var name) ? name : displayName;
+                pins.Add(new HomeQuickAccessItem(title, path, IsPinned: true));
+            }
+        }
+
+        var drives = new List<HomeDriveItem>();
         foreach (var volume in _volumes.GetVolumes())
         {
             string usage;
@@ -107,8 +119,17 @@ public sealed partial class HomePageViewModel : ObservableObject
                 usage = volume.IsReady ? string.Empty : "Not ready";
             }
 
-            Drives.Add(new HomeDriveItem(volume.DisplayName, volume.RootPath, usage, fraction, volume.IsReady));
+            drives.Add(new HomeDriveItem(volume.DisplayName, volume.RootPath, usage, fraction, volume.IsReady));
         }
+
+        return new HomeIoSnapshot(pins, drives);
+    }
+
+    private static void Replace<T>(ObservableCollection<T> target, IReadOnlyList<T> items)
+    {
+        target.Clear();
+        foreach (var item in items)
+            target.Add(item);
     }
 
     public void SetNetworkLocations(IReadOnlyList<NetworkLocationInfo> locations)
@@ -139,6 +160,10 @@ public sealed partial class HomePageViewModel : ObservableObject
         OnPropertyChanged(nameof(HasRecentFiles));
     }
 }
+
+internal sealed record HomeIoSnapshot(
+    IReadOnlyList<HomeQuickAccessItem> Pins,
+    IReadOnlyList<HomeDriveItem> Drives);
 
 public sealed record HomeQuickAccessItem(string Title, string Path, bool IsPinned);
 

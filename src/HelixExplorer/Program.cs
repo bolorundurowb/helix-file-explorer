@@ -19,8 +19,11 @@ internal static class Program
         => AppBuilder.Configure<App>()
             .UsePlatformDetect()
             .WithInterFont()
+            // The collection root is scanned recursively, so every family subfolder under
+            // Assets/Fonts registers under the single "fonts:Helix" key (UiFontCatalog resolves
+            // each family as "fonts:Helix#<Family Name>").
             .ConfigureFonts(fonts => fonts.AddFontCollection(new EmbeddedFontCollection(
                 new Uri("fonts:Helix", UriKind.Absolute),
-                new Uri("avares://HelixExplorer/Assets/Fonts/DMSans", UriKind.Absolute))))
+                new Uri("avares://HelixExplorer/Assets/Fonts", UriKind.Absolute))))
             .LogToTrace();
 }

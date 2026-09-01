@@ -8,7 +8,8 @@ using static Vanara.PInvoke.User32;
 namespace HelixExplorer.Windows.FileSystem;
 
 /// <summary>
-/// Listens for <c>WM_DEVICECHANGE</c> volume arrival/removal on a message-only HWND.
+/// Listens for <c>WM_DEVICECHANGE</c> volume arrival/removal on a hidden top-level HWND
+/// (broadcasts do not reach message-only windows).
 /// </summary>
 public sealed class WinVolumeChangeWatcher(ILogger<WinVolumeChangeWatcher> logger) : IVolumeChangeWatcher
 {
@@ -16,16 +17,17 @@ public sealed class WinVolumeChangeWatcher(ILogger<WinVolumeChangeWatcher> logge
     private readonly object _gate = new();
     private NativeWindow? _window;
     private CancellationTokenSource? _debounceCts;
-    private bool _disposed;
+    private int _disposed;
 
     public event EventHandler? VolumesChanged;
 
     public void Start()
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
 
         lock (_gate)
         {
+            ObjectDisposedException.ThrowIf(_disposed != 0, this);
             if (_window is not null)
                 return;
 
@@ -42,14 +44,22 @@ public sealed class WinVolumeChangeWatcher(ILogger<WinVolumeChangeWatcher> logge
 
     private IntPtr WndProc(HWND hwnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
-        if (msg == (uint)WindowMessage.WM_DEVICECHANGE)
+        try
         {
-            var eventType = (DeviceBroadcastEvent)wParam.ToInt32();
-            if (eventType is DeviceBroadcastEvent.DBT_DEVICEARRIVAL or DeviceBroadcastEvent.DBT_DEVICEREMOVECOMPLETE
-                && IsVolumeEvent(lParam))
+            if (_disposed == 0 && msg == (uint)WindowMessage.WM_DEVICECHANGE)
             {
-                ScheduleNotify();
+                var eventType = (DeviceBroadcastEvent)wParam.ToInt32();
+                if (eventType is DeviceBroadcastEvent.DBT_DEVICEARRIVAL or DeviceBroadcastEvent.DBT_DEVICEREMOVECOMPLETE
+                    && IsVolumeEvent(lParam))
+                {
+                    ScheduleNotify();
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            // Managed exceptions must never cross the native window-procedure boundary.
+            logger.LogWarning(ex, "Volume watcher failed while processing WM_DEVICECHANGE");
         }
 
         return DefWindowProc(hwnd, msg, wParam, lParam);
@@ -76,6 +86,8 @@ public sealed class WinVolumeChangeWatcher(ILogger<WinVolumeChangeWatcher> logge
         CancellationTokenSource cts;
         lock (_gate)
         {
+            if (_disposed != 0)
+                return;
             try { _debounceCts?.Cancel(); } catch (ObjectDisposedException) { }
             _debounceCts?.Dispose();
             _debounceCts = new CancellationTokenSource();
@@ -90,8 +102,17 @@ public sealed class WinVolumeChangeWatcher(ILogger<WinVolumeChangeWatcher> logge
         try
         {
             await Task.Delay(_debounce, cts.Token).ConfigureAwait(false);
-            if (!cts.IsCancellationRequested && !_disposed)
-                VolumesChanged?.Invoke(this, EventArgs.Empty);
+            if (!cts.IsCancellationRequested && Volatile.Read(ref _disposed) == 0)
+            {
+                try
+                {
+                    VolumesChanged?.Invoke(this, EventArgs.Empty);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Volume change subscriber failed");
+                }
+            }
         }
         catch (OperationCanceledException)
         {
@@ -100,9 +121,8 @@ public sealed class WinVolumeChangeWatcher(ILogger<WinVolumeChangeWatcher> logge
 
     public void Dispose()
     {
-        if (_disposed)
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
             return;
-        _disposed = true;
 
         lock (_gate)
         {
@@ -122,9 +142,12 @@ public sealed class WinVolumeChangeWatcher(ILogger<WinVolumeChangeWatcher> logge
         private readonly HINSTANCE _hInstance;
         private bool _disposed;
 
+        private readonly SynchronizationContext? _createContext;
+
         public NativeWindow(WindowProc handler)
         {
             _wndProc = handler;
+            _createContext = SynchronizationContext.Current;
             _className = "HelixVolumeWatcher_" + Guid.NewGuid().ToString("N");
             _hInstance = GetModuleHandle();
 
@@ -141,12 +164,12 @@ public sealed class WinVolumeChangeWatcher(ILogger<WinVolumeChangeWatcher> logge
                 throw new InvalidOperationException($"RegisterClassEx failed: {Marshal.GetLastWin32Error()}");
 
             _hwnd = CreateWindowEx(
-                0,
+                WindowStylesEx.WS_EX_NOACTIVATE,
                 _className,
                 string.Empty,
-                0,
+                WindowStyles.WS_POPUP,
                 0, 0, 0, 0,
-                HWND.HWND_MESSAGE,
+                HWND.NULL,
                 HMENU.NULL,
                 _hInstance,
                 IntPtr.Zero);
@@ -161,10 +184,18 @@ public sealed class WinVolumeChangeWatcher(ILogger<WinVolumeChangeWatcher> logge
                 return;
             _disposed = true;
 
-            if (!_hwnd.IsNull)
-                DestroyWindow(_hwnd);
+            void TearDown()
+            {
+                if (!_hwnd.IsNull)
+                    DestroyWindow(_hwnd);
 
-            UnregisterClass(_className, _hInstance);
+                UnregisterClass(_className, _hInstance);
+            }
+
+            if (_createContext is not null && SynchronizationContext.Current != _createContext)
+                _createContext.Post(_ => TearDown(), null);
+            else
+                TearDown();
         }
     }
 }

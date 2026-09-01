@@ -4,6 +4,8 @@ using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Persistence;
 using HelixExplorer.Core.Settings;
 using HelixExplorer.Core.Theming;
+using HelixExplorer.Core.Infrastructure;
+using Microsoft.Data.Sqlite;
 
 namespace HelixExplorer.Core.Tests.Persistence;
 
@@ -115,6 +117,87 @@ public class SqliteAppDatabaseTests
             CleanupDb(dbPath);
             try { File.Delete(settingsPath); } catch { }
         }
+    }
+
+    [Fact]
+    public void Initialize_NewerSchemaVersion_Throws()
+    {
+        var dbPath = NewTempDbPath();
+        var settingsPath = NewTempSettingsPath();
+        try
+        {
+            using (var connection = new SqliteConnection($"Data Source={dbPath}"))
+            {
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = "PRAGMA user_version = 999;";
+                command.ExecuteNonQuery();
+            }
+
+            using var db = new SqliteAppDatabase(new JsonSettingsStore(settingsPath), dbPath, settingsPath);
+            Action initialize = db.Initialize;
+
+            Ensure.Throws<InvalidOperationException>(initialize);
+        }
+        finally
+        {
+            CleanupDb(dbPath);
+            try { File.Delete(settingsPath); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Constructor_UsesInjectedAppPaths()
+    {
+        var root = Directory.CreateTempSubdirectory("helix-db-paths-").FullName;
+        var dbPath = Path.Combine(root, "custom.db");
+        var settingsPath = Path.Combine(root, "custom-settings.json");
+        try
+        {
+            using var db = new SqliteAppDatabase(
+                new JsonSettingsStore(settingsPath),
+                paths: new FakeAppPaths(dbPath, settingsPath, root));
+            db.Initialize();
+
+            File.Exists(dbPath).Must().BeTrue();
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Execute_AfterDispose_Throws()
+    {
+        var dbPath = NewTempDbPath();
+        var settingsPath = NewTempSettingsPath();
+        var db = new SqliteAppDatabase(new JsonSettingsStore(settingsPath), dbPath, settingsPath);
+        try
+        {
+            db.Initialize();
+            db.Dispose();
+            Action execute = () => db.Execute(_ => 1);
+
+            Ensure.Throws<ObjectDisposedException>(execute);
+        }
+        finally
+        {
+            db.Dispose();
+            CleanupDb(dbPath);
+            try { File.Delete(settingsPath); } catch { }
+        }
+    }
+
+    private sealed class FakeAppPaths(string databaseFile, string settingsFile, string root) : IAppPathProvider
+    {
+        public string AppData => root;
+        public string SettingsFile => settingsFile;
+        public string SessionFile => Path.Combine(root, "session.json");
+        public string AppDatabaseFile => databaseFile;
+        public string TempRoot => Path.Combine(root, "temp");
+        public string LogsRoot => Path.Combine(root, "logs");
+        public string GetVersionedLogsDirectory(string? version = null) => Path.Combine(LogsRoot, version ?? "test");
     }
 }
 

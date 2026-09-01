@@ -14,6 +14,7 @@ public sealed class WinFileSystemProvider(
     ILogger<WinFileSystemProvider> logger)
     : IFileSystemProvider
 {
+    private static readonly TimeSpan NativeNetworkTimeout = TimeSpan.FromSeconds(10);
     private static readonly EnumerationOptions Options = new()
     {
         IgnoreInaccessible = true,
@@ -57,18 +58,24 @@ public sealed class WinFileSystemProvider(
     {
         try
         {
-            return await Task.Run(
+            var call = Task.Run(
                 () => WinNetworkShareEnumerator.EnumerateShares(serverRoot, logger, cancellationToken),
-                cancellationToken).ConfigureAwait(false);
+                CancellationToken.None);
+            return await NativeCallTimeout
+                .AwaitAsync(call, NativeNetworkTimeout, cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (UnauthorizedAccessException)
         {
             if (!await networkConnections.EnsureConnectedAsync(serverRoot, cancellationToken).ConfigureAwait(false))
                 throw;
 
-            return await Task.Run(
+            var call = Task.Run(
                 () => WinNetworkShareEnumerator.EnumerateShares(serverRoot, logger, cancellationToken),
-                cancellationToken).ConfigureAwait(false);
+                CancellationToken.None);
+            return await NativeCallTimeout
+                .AwaitAsync(call, NativeNetworkTimeout, cancellationToken)
+                .ConfigureAwait(false);
         }
     }
 

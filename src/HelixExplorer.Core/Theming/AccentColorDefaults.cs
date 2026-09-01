@@ -2,8 +2,8 @@ namespace HelixExplorer.Core.Theming;
 
 public static class AccentColorDefaults
 {
-    public const uint Light = 0xFF0078D4;
-    public const uint Dark = 0xFF60CDFF;
+    public const uint Light = 0xFF6B6B6B;
+    public const uint Dark = 0xFFA0A0A0;
 
     public static uint Resolve(uint? customArgb, bool isDarkTheme)
         => customArgb ?? (isDarkTheme ? Dark : Light);

@@ -1,4 +1,3 @@
-using System.Reflection;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.FileSystem.Undo;
 using HelixExplorer.Core.Git;
@@ -24,14 +23,12 @@ public class ScopedDiWiringTests
         Descriptor<HomePageViewModel>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
         Descriptor<FileOperationReporter>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
         Descriptor<IFileOperationReporter>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
-        Descriptor<IPaneCoordinatorFactory>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
         Descriptor<IPaneViewModelFactory>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
         Descriptor<AppSettingsCoordinator>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
+        Descriptor<SettingsPageViewModel>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
         Descriptor<SidebarViewModel>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
         Descriptor<CommandPaletteService>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
         Descriptor<TabSessionCoordinator>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
-        Descriptor<PaneFileOperationCoordinator>(services).Lifetime.Must().Be(ServiceLifetime.Transient);
-        Descriptor<PaneShellActionCoordinator>(services).Lifetime.Must().Be(ServiceLifetime.Transient);
         Descriptor<FileOperationUndoService>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
 
         // Undo must be process-wide: a scoped history would give each window its own stack, so an
@@ -67,22 +64,6 @@ public class ScopedDiWiringTests
     }
 
     [Fact]
-    public void RealScope_ReporterSharedBetweenFactoryCoordinatorAndExplicitResolve()
-    {
-        using var provider = CreateAppServices().BuildServiceProvider(validateScopes: true);
-        using var scope = provider.CreateScope();
-        var sp = scope.ServiceProvider;
-
-        var fromExplicit = sp.GetRequiredService<FileOperationReporter>();
-        var factory = sp.GetRequiredService<IPaneCoordinatorFactory>();
-        var coordinator = factory.CreateFileOperationCoordinator();
-        var fromCoordinator = GetInjectedReporter(coordinator);
-
-        fromExplicit.Must().Be(fromCoordinator);
-        fromExplicit.Must().Be(sp.GetRequiredService<IFileOperationReporter>());
-    }
-
-    [Fact]
     public void RealScopes_ReporterDiffersAcrossWindows()
     {
         using var provider = CreateAppServices().BuildServiceProvider(validateScopes: true);
@@ -97,18 +78,17 @@ public class ScopedDiWiringTests
     }
 
     [Fact]
-    public void FactoryResolvedFromScope_DoesNotCaptureRootReporter()
+    public void PaneFactory_CreatesUntrackedCoordinators_WithWindowReporter()
     {
         using var provider = CreateAppServices().BuildServiceProvider(validateScopes: true);
+        provider.GetRequiredService<IAppDatabase>().Initialize();
         using var scope = provider.CreateScope();
+        var pane = scope.ServiceProvider.GetRequiredService<IPaneViewModelFactory>().Create();
 
-        var windowReporter = scope.ServiceProvider.GetRequiredService<FileOperationReporter>();
-        var factory = scope.ServiceProvider.GetRequiredService<IPaneCoordinatorFactory>();
-        var coordinatorReporter = GetInjectedReporter(factory.CreateFileOperationCoordinator());
-
-        windowReporter.Must().Be(coordinatorReporter);
-
-        ((Action)(() => provider.GetRequiredService<FileOperationReporter>())).Throws<InvalidOperationException>();
+        pane.Must().NotBeNull();
+        scope.ServiceProvider.GetRequiredService<FileOperationReporter>()
+            .Must().Be(scope.ServiceProvider.GetRequiredService<IFileOperationReporter>());
+        pane.Dispose();
     }
 
     [Fact]
@@ -119,6 +99,7 @@ public class ScopedDiWiringTests
         // out from under other still-open windows (which would also make Start() throw
         // ObjectDisposedException the next time a window opens).
         using var provider = CreateAppServices().BuildServiceProvider(validateScopes: true);
+        provider.GetRequiredService<IAppDatabase>().Initialize();
 
         using var scopeA = provider.CreateScope();
         var windowA = scopeA.ServiceProvider.GetRequiredService<MainWindowViewModel>();
@@ -143,13 +124,6 @@ public class ScopedDiWiringTests
     private static ServiceDescriptor Descriptor<T>(IServiceCollection services)
         => services.Last(d => d.ServiceType == typeof(T));
 
-    private static IFileOperationReporter GetInjectedReporter(PaneFileOperationCoordinator coordinator)
-    {
-        var field = typeof(PaneFileOperationCoordinator)
-            .GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
-            .First(f => typeof(IFileOperationReporter).IsAssignableFrom(f.FieldType));
-        return (IFileOperationReporter)field.GetValue(coordinator)!;
-    }
 }
 
 public class PaneRefreshCoordinatorTests
@@ -255,10 +229,49 @@ public class WindowCloseSessionPolicyTests
         remaining.IsDisposed.Must().BeFalse();
     }
 
+    [Fact]
+    public void Shutdown_WithWindowStillTracked_SavesSessionBeforeDisposingScope()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IWindowHostService, WindowHostService>();
+        using var provider = services.BuildServiceProvider();
+        var host = (WindowHostService)provider.GetRequiredService<IWindowHostService>();
+
+        var scope = new ForbiddenResolveScope(typeof(MainWindowViewModel));
+        var savedWhileScopeAlive = false;
+        host.TrackScopeForTests(scope, () => savedWhileScopeAlive = !scope.IsDisposed);
+
+        host.Shutdown();
+
+        savedWhileScopeAlive.Must().BeTrue();
+        scope.DisposeCount.Must().Be(1);
+        host.OpenWindowCount.Must().Be(0);
+    }
+
+    [Fact]
+    public void Shutdown_ThenLateWindowClose_DoesNotDisposeScopeTwice()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IWindowHostService, WindowHostService>();
+        using var provider = services.BuildServiceProvider();
+        var host = (WindowHostService)provider.GetRequiredService<IWindowHostService>();
+
+        var scope = new ForbiddenResolveScope(typeof(MainWindowViewModel));
+        var saveCount = 0;
+        host.TrackScopeForTests(scope, () => saveCount++);
+
+        host.Shutdown();
+        host.OnWindowClosed(scope, () => saveCount++);
+
+        saveCount.Must().Be(1);
+        scope.DisposeCount.Must().Be(1);
+    }
+
     private sealed class ForbiddenResolveScope(Type forbidden) : IServiceScope, IServiceProvider
     {
         public int ResolveAttempts { get; private set; }
-        public bool IsDisposed { get; private set; }
+        public int DisposeCount { get; private set; }
+        public bool IsDisposed => DisposeCount > 0;
         public IServiceProvider ServiceProvider => this;
 
         public object? GetService(Type serviceType)
@@ -273,7 +286,7 @@ public class WindowCloseSessionPolicyTests
             return null;
         }
 
-        public void Dispose() => IsDisposed = true;
+        public void Dispose() => DisposeCount++;
     }
 }
 

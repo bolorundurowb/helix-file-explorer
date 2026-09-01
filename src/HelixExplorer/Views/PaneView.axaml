@@ -307,6 +307,8 @@
                 <MenuItem Header="Green" Command="{Binding SetFolderColorCommand}" CommandParameter="#107C10" />
                 <MenuItem Header="Blue" Command="{Binding SetFolderColorCommand}" CommandParameter="#0078D4" />
                 <MenuItem Header="Purple" Command="{Binding SetFolderColorCommand}" CommandParameter="#8764B8" />
+                <MenuItem Header="Teal" Command="{Binding SetFolderColorCommand}" CommandParameter="#00B294" />
+                <MenuItem Header="Pink" Command="{Binding SetFolderColorCommand}" CommandParameter="#E3008C" />
                 <MenuItem Header="Clear color" Command="{Binding ClearFolderColorCommand}" />
             </MenuItem>
             <Separator />

@@ -156,4 +156,44 @@ public class ArrayPoolListTests
         list[0].Must().Be(42);
         list.Dispose();
     }
+
+    [Fact]
+    public void StructCopy_Dispose_ReturnsSharedBufferOnlyOnce()
+    {
+        var list = new ArrayPoolList<int>(32);
+        list.Add(1);
+        var copy = list;
+
+        list.Dispose();
+        Action secondDispose = () => copy.Dispose();
+
+        secondDispose.NotThrow();
+    }
+
+    [Fact]
+    public void StructCopy_OperationsAfterOtherCopyDisposed_Throw()
+    {
+        var list = new ArrayPoolList<int>();
+        list.Add(1);
+        var copy = list;
+        list.Dispose();
+
+        Action add = () => copy.Add(2);
+        Action read = () => _ = copy.Count;
+
+        Ensure.Throws<ObjectDisposedException>(add);
+        Ensure.Throws<ObjectDisposedException>(read);
+    }
+
+    [Fact]
+    public void StructCopies_ShareCountAndContents()
+    {
+        using var list = new ArrayPoolList<int>();
+        var copy = list;
+
+        copy.Add(42);
+
+        list.Count.Must().Be(1);
+        list[0].Must().Be(42);
+    }
 }

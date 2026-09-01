@@ -100,12 +100,14 @@ public sealed class FileContentSearcherTests
     }
 
     [Fact]
-    public async Task ContainsAsync_FileLargerThanMaxBytes_ReturnsFalse()
+    public async Task ContainsAsync_FileLargerThanMaxBytes_ScansBoundedPrefix()
     {
         var path = CreateTempFile("needle in a haystack that is longer than the allowed byte budget");
         try
         {
-            (await FileContentSearcher.ContainsAsync(path, "needle", maxBytes: 4, CancellationToken.None))
+            (await FileContentSearcher.ContainsAsync(path, "needle", maxBytes: 6, CancellationToken.None))
+                .Must().BeTrue();
+            (await FileContentSearcher.ContainsAsync(path, "haystack", maxBytes: 6, CancellationToken.None))
                 .Must().BeFalse();
         }
         finally
@@ -145,6 +147,58 @@ public sealed class FileContentSearcherTests
 
             await Ensure.ThrowsAsync<OperationCanceledException>(
                 async () => await FileContentSearcher.ContainsAsync(path, "content", long.MaxValue, cts.Token));
+        }
+        finally
+        {
+            TryDeleteFile(path);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ContainsAsync_Utf16Bom_DetectsText(bool bigEndian)
+    {
+        var encoding = bigEndian ? System.Text.Encoding.BigEndianUnicode : System.Text.Encoding.Unicode;
+        var path = Path.Combine(Path.GetTempPath(), "helix-content-search-" + Guid.NewGuid().ToString("N") + ".txt");
+        await File.WriteAllBytesAsync(path, [.. encoding.Preamble, .. encoding.GetBytes("alpha needle omega")]);
+        try
+        {
+            (await FileContentSearcher.ContainsAsync(path, "needle", long.MaxValue, CancellationToken.None))
+                .Must().BeTrue();
+        }
+        finally
+        {
+            TryDeleteFile(path);
+        }
+    }
+
+    [Fact]
+    public async Task ContainsAsync_Utf8Bom_DetectsText()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "helix-content-search-" + Guid.NewGuid().ToString("N") + ".txt");
+        await File.WriteAllBytesAsync(path,
+            [.. System.Text.Encoding.UTF8.Preamble, .. System.Text.Encoding.UTF8.GetBytes("needle")]);
+        try
+        {
+            (await FileContentSearcher.ContainsAsync(path, "needle", long.MaxValue, CancellationToken.None))
+                .Must().BeTrue();
+        }
+        finally
+        {
+            TryDeleteFile(path);
+        }
+    }
+
+    [Fact]
+    public async Task ContainsAsync_ExclusivelyLockedFile_ReturnsFalse()
+    {
+        var path = CreateTempFile("needle");
+        try
+        {
+            await using var locked = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            (await FileContentSearcher.ContainsAsync(path, "needle", long.MaxValue, CancellationToken.None))
+                .Must().BeFalse();
         }
         finally
         {

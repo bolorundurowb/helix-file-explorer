@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Text;
 using HelixExplorer.Core.Infrastructure;
 using Microsoft.Extensions.Logging;
@@ -13,6 +14,8 @@ public sealed class RollingFileLoggerProvider : ILoggerProvider
     private readonly string _directory;
     private StreamWriter? _writer;
     private string? _currentFilePath;
+    private long _currentFileBytes;
+    private int _linesSinceFlush;
     private bool _disposed;
 
     public RollingFileLoggerProvider(RollingFileLoggerOptions options)
@@ -43,7 +46,9 @@ public sealed class RollingFileLoggerProvider : ILoggerProvider
         if (_disposed || !IsEnabled(logLevel))
             return;
 
-        var timestamp = DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss.fff zzz");
+        // Invariant culture: a log read on a machine with a different locale than the one that wrote
+        // it must still parse, and support tooling greps these timestamps.
+        var timestamp = DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss.fff zzz", CultureInfo.InvariantCulture);
         var line = exception is null
             ? $"{timestamp} [{logLevel}] {categoryName}: {message}"
             : $"{timestamp} [{logLevel}] {categoryName}: {message}{Environment.NewLine}{exception}";
@@ -65,7 +70,13 @@ public sealed class RollingFileLoggerProvider : ILoggerProvider
                 // not crash whatever unrelated code happened to log something.
                 EnsureWriter();
                 _writer!.WriteLine(line);
-                _writer.Flush();
+                _currentFileBytes += Encoding.UTF8.GetByteCount(line) + Environment.NewLine.Length;
+                _linesSinceFlush++;
+                if (_linesSinceFlush >= 16 || logLevel >= LogLevel.Warning)
+                {
+                    _writer.Flush();
+                    _linesSinceFlush = 0;
+                }
                 RollIfNeeded();
             }
             catch
@@ -100,12 +111,15 @@ public sealed class RollingFileLoggerProvider : ILoggerProvider
         var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
         _writer = new StreamWriter(stream, Encoding.UTF8) { AutoFlush = false };
         _currentFilePath = path;
+        _currentFileBytes = stream.Length;
+        _linesSinceFlush = 0;
 
         if (isNewFile)
         {
             _writer.WriteLine($"# Helix Explorer log — version {_options.Version}");
             _writer.WriteLine($"# Started {DateTimeOffset.Now:O}");
             _writer.Flush();
+            _currentFileBytes = stream.Length;
         }
 
         PruneOldFiles();
@@ -116,10 +130,10 @@ public sealed class RollingFileLoggerProvider : ILoggerProvider
         if (_currentFilePath is null || _writer is null)
             return;
 
-        _writer.Flush();
-        if (new FileInfo(_currentFilePath).Length < _options.MaxFileSizeBytes)
+        if (_currentFileBytes < _options.MaxFileSizeBytes)
             return;
 
+        _writer.Flush();
         var pathToRoll = _currentFilePath;
         var directory = Path.GetDirectoryName(pathToRoll)!;
         var baseName = Path.GetFileNameWithoutExtension(pathToRoll);
@@ -173,6 +187,8 @@ public sealed class RollingFileLoggerProvider : ILoggerProvider
         _writer?.Dispose();
         _writer = null;
         _currentFilePath = null;
+        _currentFileBytes = 0;
+        _linesSinceFlush = 0;
     }
 
     public void Dispose()

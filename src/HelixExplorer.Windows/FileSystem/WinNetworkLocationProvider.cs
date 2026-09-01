@@ -37,7 +37,12 @@ public sealed class WinNetworkLocationProvider(
             locations.AddRange(await TryEnumerateShellNetworkAsync(ct).ConfigureAwait(false));
 
             if (locations.Count == 0)
-                locations.AddRange(await Task.Run(() => TryEnumerateWNetNetworkLocations(ct), ct).ConfigureAwait(false));
+            {
+                var wnetCall = Task.Run(() => TryEnumerateWNetNetworkLocations(ct), CancellationToken.None);
+                locations.AddRange(await NativeCallTimeout
+                    .AwaitAsync(wnetCall, DiscoveryTimeout, cancellationToken)
+                    .ConfigureAwait(false));
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -46,6 +51,10 @@ public sealed class WinNetworkLocationProvider(
         catch (OperationCanceledException)
         {
             logger.LogDebug("Network discovery timed out after {Seconds}s; returning partial results", DiscoveryTimeout.TotalSeconds);
+        }
+        catch (TimeoutException)
+        {
+            logger.LogDebug("Native network discovery timed out after {Seconds}s; returning partial results", DiscoveryTimeout.TotalSeconds);
         }
         catch (Exception ex)
         {

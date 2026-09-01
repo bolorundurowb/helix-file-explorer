@@ -100,7 +100,7 @@ public sealed class SessionEdgeCaseTests
     }
 
     [Fact]
-    public void Save_CorruptedFile_ReturnsEmptyDocument()
+    public void Load_CorruptedFile_QuarantinesAndReturnsEmptyDocument()
     {
         var path = Path.Combine(Path.GetTempPath(), $"helix-session-corrupt-{Guid.NewGuid():N}.json");
         try
@@ -111,11 +111,16 @@ public sealed class SessionEdgeCaseTests
             loaded.Tabs.Must().BeEmpty();
             loaded.RecentPaths.Must().BeEmpty();
             loaded.ActiveTabIndex.Must().Be(0);
+            File.Exists(path).Must().BeFalse();
+            Directory.GetFiles(Path.GetDirectoryName(path)!, Path.GetFileName(path) + ".corrupt-*")
+                .Must().HaveCount(1);
         }
         finally
         {
             if (File.Exists(path))
                 File.Delete(path);
+            foreach (var quarantine in Directory.GetFiles(Path.GetDirectoryName(path)!, Path.GetFileName(path) + ".corrupt-*"))
+                File.Delete(quarantine);
         }
     }
 }

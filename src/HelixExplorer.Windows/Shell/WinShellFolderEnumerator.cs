@@ -8,7 +8,7 @@ using static Vanara.PInvoke.Shell32;
 
 namespace HelixExplorer.Windows.Shell;
 
-public sealed class WinShellFolderEnumerator : IShellFolderEnumerator, IDisposable
+public sealed class WinShellFolderEnumerator : IShellFolderEnumerator, IRecycleBinService, IDisposable
 {
     private readonly ILogger<WinShellFolderEnumerator> _logger;
     private readonly RecycleBinWatcher _recycleBinWatcher = new();

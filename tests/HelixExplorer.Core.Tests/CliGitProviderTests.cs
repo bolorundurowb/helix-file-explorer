@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using HelixExplorer.Core.Git;
+using HelixExplorer.Core.Infrastructure;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace HelixExplorer.Core.Tests;
@@ -186,6 +187,53 @@ public sealed class CliGitProviderTests
         }
     }
 
+    [Fact]
+    public async Task GetStatusAsync_UsesInjectedProcessRunner()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, ".git"));
+            var runner = new FakeProcessRunner(new ProcessRunResult(
+                0,
+                "# branch.head main\0? deterministic.txt\0",
+                string.Empty));
+            var provider = new CliGitProvider(NullLogger<CliGitProvider>.Instance, runner);
+
+            var status = await provider.GetStatusAsync(root);
+
+            runner.Calls.Must().Be(1);
+            runner.LastStartInfo!.ArgumentList.Must().Contain("--porcelain=v2");
+            runner.LastStartInfo.Environment["GIT_TERMINAL_PROMPT"].Must().Be("0");
+            status.GetStatusForPath(Path.Combine(root, "deterministic.txt")).Must().Be(GitFileStatus.Untracked);
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [Fact]
+    public void RepositoryRootCache_RemainsBounded()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var provider = new CliGitProvider(NullLogger<CliGitProvider>.Instance);
+            for (var i = 0; i < 600; i++)
+            {
+                var directory = Directory.CreateDirectory(Path.Combine(root, i.ToString())).FullName;
+                provider.IsInsideRepository(directory).Must().BeFalse();
+            }
+
+            provider.RootCacheCount.Must().BeLessThanOrEqualTo(512);
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
     private static string CreateTempDirectory()
         => Directory.CreateTempSubdirectory("helix-git-tests-").FullName;
 
@@ -198,6 +246,23 @@ public sealed class CliGitProviderTests
         catch
         {
             // Best-effort cleanup for CI temp files.
+        }
+    }
+
+    private sealed class FakeProcessRunner(ProcessRunResult result) : IProcessRunner
+    {
+        public int Calls { get; private set; }
+        public ProcessStartInfo? LastStartInfo { get; private set; }
+
+        public Task<ProcessRunResult> RunAsync(
+            ProcessStartInfo startInfo,
+            TimeSpan hardTimeout,
+            bool killOnCancellation,
+            CancellationToken cancellationToken)
+        {
+            Calls++;
+            LastStartInfo = startInfo;
+            return Task.FromResult(result);
         }
     }
 }

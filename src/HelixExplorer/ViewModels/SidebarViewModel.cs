@@ -35,6 +35,19 @@ public sealed class SidebarViewModel(
             networkLocations,
             selectedPath);
 
+        // Bumped here as well as in LoadIconsAsync so an in-flight load cannot write an icon into
+        // an item this rebuild is about to drop.
+        _iconLoadGeneration++;
+
+        // The outgoing items hold counted references from GetBitmapAsync; dropping them without
+        // releasing would pin every sidebar icon in the visual cache for the process lifetime.
+        foreach (var outgoing in Items)
+        {
+            var icon = outgoing.Icon;
+            outgoing.Icon = null;
+            visuals.Release(icon);
+        }
+
         Items.Clear();
         foreach (var item in built)
             Items.Add(item);
@@ -67,14 +80,26 @@ public sealed class SidebarViewModel(
                     preferThumbnail: false,
                     CancellationToken.None).ConfigureAwait(true);
 
+                // GetBitmapAsync hands back a counted reference, so every path that drops the
+                // bitmap has to release it or FileVisualService can never evict it.
                 if (generation != _iconLoadGeneration)
+                {
+                    visuals.Release(icon);
                     return;
+                }
+
+                var previous = item.Icon;
                 item.Icon = icon;
+                visuals.Release(previous);
             }
             catch
             {
                 if (generation == _iconLoadGeneration)
+                {
+                    var previous = item.Icon;
                     item.Icon = null;
+                    visuals.Release(previous);
+                }
             }
         }
     }

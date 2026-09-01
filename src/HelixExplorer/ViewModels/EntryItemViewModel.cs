@@ -127,8 +127,13 @@ public sealed partial class EntryItemViewModel : ObservableObject
             cancellationToken).ConfigureAwait(true);
 
         if (generation != _visualGeneration || cancellationToken.IsCancellationRequested)
+        {
+            visuals.Release(image);
             return;
+        }
 
+        var previous = EntryImage;
         EntryImage = image;
+        visuals.Release(previous);
     }
 }

@@ -52,10 +52,19 @@ public static class GitPorcelainParser
                     CountXy(line, ref staged, ref unstaged);
                     break;
                 case '1':
-                case '2':
-                    var fileStatus = ClassifyOrdinary(line);
-                    Upsert(files, ExtractOrdinaryPath(line), fileStatus);
+                    Upsert(files, ExtractOrdinaryPath(line), ClassifyOrdinary(line));
                     CountXy(line, ref staged, ref unstaged);
+                    break;
+                case '2':
+                    Upsert(files, ExtractOrdinaryPath(line), ClassifyOrdinary(line));
+                    CountXy(line, ref staged, ref unstaged);
+                    // porcelain v2 -z: a rename/copy is followed by a separate orig-path record.
+                    // Consume it so a filename starting with 1/2/u/? is not re-dispatched as status.
+                    if (!span.IsEmpty)
+                    {
+                        var origNul = span.IndexOf('\0');
+                        span = origNul < 0 ? ReadOnlySpan<char>.Empty : span[(origNul + 1)..];
+                    }
                     break;
             }
         }

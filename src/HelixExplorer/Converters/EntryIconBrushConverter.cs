@@ -1,6 +1,8 @@
+using System.Collections.Frozen;
 using System.Globalization;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Settings;
 using HelixExplorer.ViewModels;
@@ -10,6 +12,76 @@ namespace HelixExplorer.Converters;
 /// <summary>Distinctive icon tint colors, separate from git text coloring.</summary>
 public sealed class EntryIconBrushConverter : IValueConverter
 {
+    private static readonly IImmutableSolidColorBrush DefaultFile = new ImmutableSolidColorBrush(0xFF0078D4);
+    private static readonly IImmutableSolidColorBrush DefaultFolder = new ImmutableSolidColorBrush(0xFFFFB900);
+    private static readonly IImmutableSolidColorBrush Fallback = new ImmutableSolidColorBrush(0xFF5C5C5C);
+
+    private static readonly FrozenDictionary<string, IImmutableSolidColorBrush> ExtensionBrushes =
+        new Dictionary<string, IImmutableSolidColorBrush>(StringComparer.OrdinalIgnoreCase)
+        {
+            [".jpg"] = new ImmutableSolidColorBrush(0xFFE74856),
+            [".jpeg"] = new ImmutableSolidColorBrush(0xFFE74856),
+            [".png"] = new ImmutableSolidColorBrush(0xFFE74856),
+            [".gif"] = new ImmutableSolidColorBrush(0xFFE74856),
+            [".bmp"] = new ImmutableSolidColorBrush(0xFFE74856),
+            [".webp"] = new ImmutableSolidColorBrush(0xFFE74856),
+            [".ico"] = new ImmutableSolidColorBrush(0xFFE74856),
+            [".tif"] = new ImmutableSolidColorBrush(0xFFE74856),
+            [".tiff"] = new ImmutableSolidColorBrush(0xFFE74856),
+            [".heic"] = new ImmutableSolidColorBrush(0xFFE74856),
+            [".heif"] = new ImmutableSolidColorBrush(0xFFE74856),
+            [".avif"] = new ImmutableSolidColorBrush(0xFFE74856),
+            [".mp4"] = new ImmutableSolidColorBrush(0xFF8764B8),
+            [".mkv"] = new ImmutableSolidColorBrush(0xFF8764B8),
+            [".avi"] = new ImmutableSolidColorBrush(0xFF8764B8),
+            [".mov"] = new ImmutableSolidColorBrush(0xFF8764B8),
+            [".wmv"] = new ImmutableSolidColorBrush(0xFF8764B8),
+            [".webm"] = new ImmutableSolidColorBrush(0xFF8764B8),
+            [".mp3"] = new ImmutableSolidColorBrush(0xFFFF8C00),
+            [".wav"] = new ImmutableSolidColorBrush(0xFFFF8C00),
+            [".flac"] = new ImmutableSolidColorBrush(0xFFFF8C00),
+            [".aac"] = new ImmutableSolidColorBrush(0xFFFF8C00),
+            [".ogg"] = new ImmutableSolidColorBrush(0xFFFF8C00),
+            [".m4a"] = new ImmutableSolidColorBrush(0xFFFF8C00),
+            [".pdf"] = new ImmutableSolidColorBrush(0xFFD13438),
+            [".doc"] = new ImmutableSolidColorBrush(0xFF2B579A),
+            [".docx"] = new ImmutableSolidColorBrush(0xFF2B579A),
+            [".rtf"] = new ImmutableSolidColorBrush(0xFF2B579A),
+            [".xls"] = new ImmutableSolidColorBrush(0xFF107C41),
+            [".xlsx"] = new ImmutableSolidColorBrush(0xFF107C41),
+            [".csv"] = new ImmutableSolidColorBrush(0xFF107C41),
+            [".ppt"] = new ImmutableSolidColorBrush(0xFFC43E1C),
+            [".pptx"] = new ImmutableSolidColorBrush(0xFFC43E1C),
+            [".zip"] = new ImmutableSolidColorBrush(0xFFCA5010),
+            [".rar"] = new ImmutableSolidColorBrush(0xFFCA5010),
+            [".7z"] = new ImmutableSolidColorBrush(0xFFCA5010),
+            [".tar"] = new ImmutableSolidColorBrush(0xFFCA5010),
+            [".gz"] = new ImmutableSolidColorBrush(0xFFCA5010),
+            [".cs"] = new ImmutableSolidColorBrush(0xFF68217A),
+            [".csproj"] = new ImmutableSolidColorBrush(0xFF68217A),
+            [".sln"] = new ImmutableSolidColorBrush(0xFF68217A),
+            [".js"] = new ImmutableSolidColorBrush(0xFFF7DF1E),
+            [".ts"] = new ImmutableSolidColorBrush(0xFFF7DF1E),
+            [".jsx"] = new ImmutableSolidColorBrush(0xFFF7DF1E),
+            [".tsx"] = new ImmutableSolidColorBrush(0xFFF7DF1E),
+            [".mjs"] = new ImmutableSolidColorBrush(0xFFF7DF1E),
+            [".json"] = new ImmutableSolidColorBrush(0xFF0078D4),
+            [".yaml"] = new ImmutableSolidColorBrush(0xFF0078D4),
+            [".yml"] = new ImmutableSolidColorBrush(0xFF0078D4),
+            [".xml"] = new ImmutableSolidColorBrush(0xFF0078D4),
+            [".html"] = new ImmutableSolidColorBrush(0xFFE81123),
+            [".htm"] = new ImmutableSolidColorBrush(0xFFE81123),
+            [".css"] = new ImmutableSolidColorBrush(0xFFE81123),
+            [".scss"] = new ImmutableSolidColorBrush(0xFFE81123),
+            [".exe"] = new ImmutableSolidColorBrush(0xFF0078D4),
+            [".msi"] = new ImmutableSolidColorBrush(0xFF0078D4),
+            [".bat"] = new ImmutableSolidColorBrush(0xFF0078D4),
+            [".cmd"] = new ImmutableSolidColorBrush(0xFF0078D4),
+            [".txt"] = new ImmutableSolidColorBrush(0xFF605E5C),
+            [".md"] = new ImmutableSolidColorBrush(0xFF605E5C),
+            [".log"] = new ImmutableSolidColorBrush(0xFF605E5C),
+        }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
     public IFolderColorService? FolderColors { get; set; }
 
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
@@ -20,7 +92,7 @@ public sealed class EntryIconBrushConverter : IValueConverter
         if (value is FileSystemEntry entry)
             return BrushFor(entry.IsDirectory, entry.Extension, entry.FullPath);
 
-        return new SolidColorBrush(Color.Parse("#5C5C5C"));
+        return Fallback;
     }
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
@@ -33,43 +105,10 @@ public sealed class EntryIconBrushConverter : IValueConverter
             if (FolderColors?.TryGetColor(fullPath, out var argb) == true)
                 return BrushFromArgb(argb, fallbackAlpha: 255);
 
-            return new SolidColorBrush(Color.Parse("#FFB900"));
+            return DefaultFolder;
         }
 
-        var hex = extension.ToLowerInvariant() switch
-        {
-            ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp" or ".ico" or ".tif" or ".tiff" or ".heic" or ".heif" or ".avif"
-                => "#E74856",
-            ".mp4" or ".mkv" or ".avi" or ".mov" or ".wmv" or ".webm"
-                => "#8764B8",
-            ".mp3" or ".wav" or ".flac" or ".aac" or ".ogg" or ".m4a"
-                => "#FF8C00",
-            ".pdf"
-                => "#D13438",
-            ".doc" or ".docx" or ".rtf"
-                => "#2B579A",
-            ".xls" or ".xlsx" or ".csv"
-                => "#107C41",
-            ".ppt" or ".pptx"
-                => "#C43E1C",
-            ".zip" or ".rar" or ".7z" or ".tar" or ".gz"
-                => "#CA5010",
-            ".cs" or ".csproj" or ".sln"
-                => "#68217A",
-            ".js" or ".ts" or ".jsx" or ".tsx" or ".mjs"
-                => "#F7DF1E",
-            ".json" or ".yaml" or ".yml" or ".xml"
-                => "#0078D4",
-            ".html" or ".htm" or ".css" or ".scss"
-                => "#E81123",
-            ".exe" or ".msi" or ".bat" or ".cmd"
-                => "#0078D4",
-            ".txt" or ".md" or ".log"
-                => "#605E5C",
-            _ => "#0078D4"
-        };
-
-        return new SolidColorBrush(Color.Parse(hex));
+        return ExtensionBrushes.GetValueOrDefault(extension, DefaultFile);
     }
 
     private static IBrush BrushFromArgb(uint argb, byte fallbackAlpha)
@@ -78,7 +117,7 @@ public sealed class EntryIconBrushConverter : IValueConverter
         if (alpha == 0)
             alpha = fallbackAlpha;
 
-        return new SolidColorBrush(Color.FromArgb(
+        return new ImmutableSolidColorBrush(Color.FromArgb(
             alpha,
             (byte)((argb >> 16) & 0xFF),
             (byte)((argb >> 8) & 0xFF),

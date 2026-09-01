@@ -9,7 +9,9 @@ public static class WindowsServiceExtensions
 {
     public static IServiceCollection AddHelixWindowsServices(this IServiceCollection services)
     {
-        services.AddSingleton<IShellFolderEnumerator, Shell.WinShellFolderEnumerator>();
+        services.AddSingleton<Shell.WinShellFolderEnumerator>();
+        services.AddSingleton<IShellFolderEnumerator>(sp => sp.GetRequiredService<Shell.WinShellFolderEnumerator>());
+        services.AddSingleton<IRecycleBinService>(sp => sp.GetRequiredService<Shell.WinShellFolderEnumerator>());
         services.AddSingleton<IFileSystemProvider, FileSystem.WinFileSystemProvider>();
         services.AddSingleton<IQuickAccessProvider, FileSystem.WinQuickAccessProvider>();
         services.AddSingleton<IVolumeProvider, FileSystem.WinVolumeProvider>();

@@ -313,12 +313,12 @@ public class FileOperationUndoServiceTests
     private static FileOperationUndoService CreateService(
         IFileOperationHistory history,
         IFileOperationService fileOps,
-        IShellFolderEnumerator? shell = null,
+        IRecycleBinService? recycleBin = null,
         IFileOperationReporter? reporter = null)
         => new(
             history,
             fileOps,
-            shell ?? new RecordingShellEnumerator(),
+            recycleBin ?? new RecordingShellEnumerator(),
             new UnusedArchiveProvider(),
             reporter ?? new StubReporter(),
             new SilentDialogs(),
@@ -395,7 +395,7 @@ public class FileOperationUndoServiceTests
             };
     }
 
-    private sealed class RecordingShellEnumerator : IShellFolderEnumerator
+    private sealed class RecordingShellEnumerator : IRecycleBinService
     {
         public List<(string ItemPath, string? Destination)> Restores { get; } = [];
 
@@ -405,9 +405,6 @@ public class FileOperationUndoServiceTests
             return ValueTask.FromResult(true);
         }
 
-        public ValueTask<IReadOnlyList<FileSystemEntry>> EnumerateAsync(string shellPath, CancellationToken ct = default)
-            => throw new NotSupportedException();
-
         public ValueTask EmptyRecycleBinAsync(CancellationToken ct = default) => throw new NotSupportedException();
 
         public ValueTask<(long ItemCount, long TotalSize)> QueryRecycleBinAsync(CancellationToken ct = default)
@@ -415,7 +412,7 @@ public class FileOperationUndoServiceTests
 
         public bool HasRecycleBinItems() => false;
 
-#pragma warning disable CS0067 // Required by the interface; nothing in these tests raises it.
+#pragma warning disable CS0067
         public event EventHandler? RecycleBinChanged;
 #pragma warning restore CS0067
 

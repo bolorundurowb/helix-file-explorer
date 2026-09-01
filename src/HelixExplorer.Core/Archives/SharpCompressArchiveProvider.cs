@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Security.Cryptography;
 using System.Text;
 using HelixExplorer.Core.Collections;
@@ -12,9 +13,25 @@ using SharpCompress.Writers.Zip;
 
 namespace HelixExplorer.Core.Archives;
 
-public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchiveProvider> logger) : IArchiveProvider
+public sealed class SharpCompressArchiveProvider : IArchiveProvider
 {
-    private static string ExtractionRoot => AppPaths.TempRoot;
+    private const int CopyBufferSize = 64 * 1024;
+    private readonly ILogger<SharpCompressArchiveProvider> _logger;
+    private readonly ArchiveExtractionLimits _limits;
+    private readonly IAppPathProvider _paths;
+
+    public SharpCompressArchiveProvider(
+        ILogger<SharpCompressArchiveProvider> logger,
+        ArchiveExtractionLimits? limits = null,
+        IAppPathProvider? paths = null)
+    {
+        _logger = logger;
+        _limits = limits ?? ArchiveExtractionLimits.Default;
+        _limits.Validate();
+        _paths = paths ?? DefaultAppPathProvider.Instance;
+    }
+
+    private string ExtractionRoot => _paths.TempRoot;
 
     public bool IsArchiveFile(string path) => ArchivePath.IsArchiveFile(path);
 
@@ -22,7 +39,7 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
     /// Derives a per-archive temp directory keyed on the FULL archive path (not just its file name)
     /// so that two archives sharing a name in different folders do not extract over each other.
     /// </summary>
-    private static string GetArchiveTempDir(string archivePath)
+    private string GetArchiveTempDir(string archivePath)
     {
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(archivePath)));
         var archiveId = Convert.ToHexString(hash)[..12];
@@ -44,7 +61,7 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // Best-effort: files may still be open (e.g. a preview handler). Leave them for next run.
-            logger.LogWarning(ex, "Failed to clean up archive extraction directory '{Root}'", ExtractionRoot);
+            _logger.LogWarning(ex, "Failed to clean up archive extraction directory '{Root}'", ExtractionRoot);
         }
 #pragma warning restore CA1031
     }
@@ -80,6 +97,7 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
                     return null;
 
                 using var archive = ArchiveFactory.OpenArchive(new FileInfo(archivePath));
+                var entryCount = 0;
                 foreach (var entry in archive.Entries)
                 {
                     token.ThrowIfCancellationRequested();
@@ -91,6 +109,7 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
                     // browser to recreate archive-embedded symlinks.
                     if (entry.IsDirectory || entry.LinkTarget is not null)
                         continue;
+                    EnforceEntryMetadataLimits(entry, ref entryCount, totalBytes: 0);
 
                     var key = (entry.Key ?? string.Empty).Replace('\\', '/').Trim('/');
                     if (!key.Equals(wanted, StringComparison.OrdinalIgnoreCase))
@@ -111,10 +130,20 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
                     if (!fullDest.StartsWith(fullBase, StringComparison.OrdinalIgnoreCase))
                         return null;
 
-                    await using var src = await entry.OpenEntryStreamAsync(token).ConfigureAwait(false);
-                    await using var fs = File.Create(dest);
-                    await src.CopyToAsync(fs, token).ConfigureAwait(false);
-                    return dest;
+                    try
+                    {
+                        await using var src = await entry.OpenEntryStreamAsync(token).ConfigureAwait(false);
+                        await using var fs = new FileStream(
+                            dest, FileMode.CreateNew, FileAccess.Write, FileShare.None, CopyBufferSize,
+                            FileOptions.Asynchronous | FileOptions.SequentialScan);
+                        await CopyEntryAsync(src, fs, totalBeforeEntry: 0, token).ConfigureAwait(false);
+                        return dest;
+                    }
+                    catch
+                    {
+                        TryDeleteFile(dest);
+                        throw;
+                    }
                 }
             }
             catch (OperationCanceledException)
@@ -129,7 +158,7 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
 #pragma warning disable CA1031
             catch (Exception ex)
             {
-                logger.LogError(ex, "Archive extract failed for '{VirtualPath}'", virtualPath);
+                _logger.LogError(ex, "Archive extract failed for '{VirtualPath}'", virtualPath);
             }
 #pragma warning restore CA1031
 
@@ -171,22 +200,51 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
         token.ThrowIfCancellationRequested();
         await Task.Run(() =>
         {
+            return ExtractArchiveCoreAsync(archivePath, destinationDirectory, token);
+        }, token).ConfigureAwait(false);
+    }
+
+    private async Task ExtractArchiveCoreAsync(
+        string archivePath,
+        string destinationDirectory,
+        CancellationToken token)
+    {
+        try
+        {
             Directory.CreateDirectory(destinationDirectory);
             using var archive = ArchiveFactory.OpenArchive(new FileInfo(archivePath));
+            var entryCount = 0;
+            long totalBytes = 0;
             foreach (var entry in archive.Entries)
             {
                 token.ThrowIfCancellationRequested();
                 // See ExtractEntryAsync: never materialize archive-embedded symlinks.
                 if (entry.IsDirectory || entry.LinkTarget is not null)
                     continue;
+                EnforceEntryMetadataLimits(entry, ref entryCount, totalBytes);
 
                 var key = (entry.Key ?? string.Empty).Replace('\\', '/').TrimStart('/').TrimEnd('/');
                 if (string.IsNullOrEmpty(key))
                     continue;
 
-                ExtractEntryToDestination(entry, key, destinationDirectory);
+                totalBytes += await ExtractEntryToDestinationAsync(entry, key, destinationDirectory, totalBytes, token)
+                    .ConfigureAwait(false);
             }
-        }, token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (ArchiveExtractionLimitException)
+        {
+            throw;
+        }
+#pragma warning disable CA1031
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Archive extraction failed for '{ArchivePath}'", archivePath);
+        }
+#pragma warning restore CA1031
     }
 
     public async ValueTask ExtractVirtualEntriesAsync(
@@ -200,23 +258,30 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
         token.ThrowIfCancellationRequested();
         await Task.Run(() =>
         {
-            Directory.CreateDirectory(destinationDirectory);
+            return ExtractVirtualEntriesCoreAsync(virtualPaths, destinationDirectory, token);
+        }, token).ConfigureAwait(false);
+    }
 
+    private async Task ExtractVirtualEntriesCoreAsync(
+        IReadOnlyList<string> virtualPaths,
+        string destinationDirectory,
+        CancellationToken token)
+    {
+        try
+        {
+            Directory.CreateDirectory(destinationDirectory);
             var grouped = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
             foreach (var virtualPath in virtualPaths)
             {
                 if (!ArchivePath.TryParse(virtualPath, out var archiveFile, out var inner))
                     continue;
-
                 if (!grouped.TryGetValue(archiveFile, out var prefixes))
-                {
-                    prefixes = new List<string>();
-                    grouped[archiveFile] = prefixes;
-                }
-
+                    grouped[archiveFile] = prefixes = [];
                 prefixes.Add(inner.Replace('\\', '/').Trim('/'));
             }
 
+            long totalBytes = 0;
+            var entryCount = 0;
             foreach (var (archiveFile, prefixes) in grouped)
             {
                 token.ThrowIfCancellationRequested();
@@ -227,24 +292,41 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
                 foreach (var entry in archive.Entries)
                 {
                     token.ThrowIfCancellationRequested();
-                    // See ExtractEntryAsync: never materialize archive-embedded symlinks.
                     if (entry.IsDirectory || entry.LinkTarget is not null)
                         continue;
+                    EnforceEntryMetadataLimits(entry, ref entryCount, totalBytes);
 
                     var key = (entry.Key ?? string.Empty).Replace('\\', '/').TrimStart('/').TrimEnd('/');
-                    if (string.IsNullOrEmpty(key))
+                    if (string.IsNullOrEmpty(key) || !prefixes.Any(prefix => EntryMatches(key, prefix)))
                         continue;
 
-                    if (!prefixes.Any(prefix => EntryMatches(key, prefix)))
-                        continue;
-
-                    ExtractEntryToDestination(entry, key, destinationDirectory);
+                    totalBytes += await ExtractEntryToDestinationAsync(entry, key, destinationDirectory, totalBytes, token)
+                        .ConfigureAwait(false);
                 }
             }
-        }, token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (ArchiveExtractionLimitException)
+        {
+            throw;
+        }
+#pragma warning disable CA1031
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Virtual archive extraction failed");
+        }
+#pragma warning restore CA1031
     }
 
-    private static void ExtractEntryToDestination(IArchiveEntry entry, string key, string destinationDirectory)
+    private async Task<long> ExtractEntryToDestinationAsync(
+        IArchiveEntry entry,
+        string key,
+        string destinationDirectory,
+        long totalBeforeEntry,
+        CancellationToken token)
     {
         var destPath = Path.Combine(
             destinationDirectory,
@@ -253,7 +335,7 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
         var fullDest = Path.GetFullPath(destPath);
         var fullBase = Path.GetFullPath(destinationDirectory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
         if (!fullDest.StartsWith(fullBase, StringComparison.OrdinalIgnoreCase))
-            return;
+            return 0;
 
         if (File.Exists(destPath))
             destPath = FileOperationPathHelper.EnsureUniqueFilePath(destPath);
@@ -262,7 +344,81 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
         if (!string.IsNullOrEmpty(destDir))
             Directory.CreateDirectory(destDir);
 
-        entry.WriteToFile(destPath, new ExtractionOptions { Overwrite = false });
+        try
+        {
+            await using var source = await entry.OpenEntryStreamAsync(token).ConfigureAwait(false);
+            await using var destination = new FileStream(
+                destPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, CopyBufferSize,
+                FileOptions.Asynchronous | FileOptions.SequentialScan);
+            return await CopyEntryAsync(source, destination, totalBeforeEntry, token).ConfigureAwait(false);
+        }
+        catch
+        {
+            TryDeleteFile(destPath);
+            throw;
+        }
+    }
+
+    private void EnforceEntryMetadataLimits(IArchiveEntry entry, ref int entryCount, long totalBytes)
+    {
+        if (++entryCount > _limits.MaxEntryCount)
+            throw new ArchiveExtractionLimitException(
+                $"Archive contains more than {_limits.MaxEntryCount} file entries.");
+
+        if (entry.Size > _limits.MaxEntryUncompressedBytes)
+            throw new ArchiveExtractionLimitException(
+                $"Archive entry '{entry.Key}' exceeds the per-entry extraction limit.");
+
+        if (entry.Size > 0 && entry.Size > _limits.MaxTotalUncompressedBytes - totalBytes)
+            throw new ArchiveExtractionLimitException("Archive exceeds the total uncompressed extraction limit.");
+    }
+
+    internal async Task<long> CopyEntryAsync(
+        Stream source,
+        Stream destination,
+        long totalBeforeEntry,
+        CancellationToken token)
+    {
+        var buffer = ArrayPool<byte>.Shared.Rent(CopyBufferSize);
+        long entryBytes = 0;
+        try
+        {
+            while (true)
+            {
+                token.ThrowIfCancellationRequested();
+                var read = await source.ReadAsync(buffer.AsMemory(0, buffer.Length), token).ConfigureAwait(false);
+                if (read == 0)
+                    return entryBytes;
+
+                if (read > _limits.MaxEntryUncompressedBytes - entryBytes)
+                    throw new ArchiveExtractionLimitException("Archive entry exceeds the per-entry extraction limit.");
+                if (read > _limits.MaxTotalUncompressedBytes - totalBeforeEntry - entryBytes)
+                    throw new ArchiveExtractionLimitException("Archive exceeds the total uncompressed extraction limit.");
+
+                await destination.WriteAsync(buffer.AsMemory(0, read), token).ConfigureAwait(false);
+                entryBytes += read;
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (IOException)
+        {
+            // Best-effort cleanup after cancellation or a malformed entry.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Best-effort cleanup after cancellation or a malformed entry.
+        }
     }
 
     private static string MakeUniqueTempFileName(string innerKey)
@@ -302,13 +458,13 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
                || entryKey.StartsWith(wantedPrefix + "/", StringComparison.OrdinalIgnoreCase);
     }
 
-    private IReadOnlyList<FileSystemEntry> Enumerate(
+    private FileSystemEntry[] Enumerate(
         string archivePath,
         string innerFilter,
         CancellationToken token)
     {
         if (!File.Exists(archivePath))
-            return Array.Empty<FileSystemEntry>();
+            return [];
 
         using var poolList = new ArrayPoolList<FileSystemEntry>(128);
         var normalizedFilter = innerFilter.Replace('\\', '/').Trim('/');
@@ -375,15 +531,16 @@ public sealed class SharpCompressArchiveProvider(ILogger<SharpCompressArchivePro
                 }
             }
         }
-        // CA1031 flags the catch clause's declared type (Exception), not the `when` filter, so this
-        // multi-type catch - the only way to catch several unrelated exception types in C# without a
-        // shared base - reads as "general" to the analyzer despite already being narrowed to exactly
-        // these four types.
-#pragma warning disable CA1031
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
-                                       or NotSupportedException or InvalidOperationException)
+        catch (OperationCanceledException)
         {
-            logger.LogError(ex, "Archive enumerate failed for '{ArchivePath}'", archivePath);
+            throw;
+        }
+#pragma warning disable CA1031
+        catch (Exception ex)
+        {
+            // Archive readers surface corrupt/encrypted inputs through several exception families.
+            // Enumeration is best-effort UI data, so malformed input is an empty listing.
+            _logger.LogError(ex, "Archive enumerate failed for '{ArchivePath}'", archivePath);
         }
 #pragma warning restore CA1031
 

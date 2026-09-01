@@ -2,24 +2,26 @@ using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
 using System.ServiceProcess;
 using HelixExplorer.Core.FileSystem;
+using HelixExplorer.Windows.Shell;
 using Microsoft.Extensions.Logging;
 
 namespace HelixExplorer.Windows.FileSystem;
 
 /// <summary>
-/// Mirrors the signals Windows File Explorer uses for its Network-folder prompt: firewall
-/// "Network Discovery" rules for the active profile and the SSDP / FDResPub services.
+/// Mirrors Explorer's Network-folder prompt using late-bound IDispatch (dual) COM, not
+/// hand-rolled IUnknown vtables. Refresh is off the UI thread so activation does not hitch.
 /// </summary>
 public sealed class WinNetworkDiscoveryAvailability : INetworkDiscoveryAvailability, IDisposable
 {
     private const string NetworkDiscoveryFirewallGroup = "@FirewallAPI.dll,-32752";
-
     private static readonly string[] DiscoveryServices = ["FDResPub", "SSDPSRV"];
+    private static readonly Guid NetworkListManagerClsid = new("DCB00C01-570F-4A9B-8D69-199FDBA5723B");
 
     private readonly ILogger<WinNetworkDiscoveryAvailability> _logger;
     private readonly object _gate = new();
+    private int _refreshBusy;
     private bool _isUnavailable;
-    private bool _disposed;
+    private int _disposed;
 
     public WinNetworkDiscoveryAvailability(ILogger<WinNetworkDiscoveryAvailability> logger)
     {
@@ -41,16 +43,51 @@ public sealed class WinNetworkDiscoveryAvailability : INetworkDiscoveryAvailabil
 
     public void Refresh()
     {
-        var unavailable = Evaluate();
-        bool changed;
-        lock (_gate)
-        {
-            changed = unavailable != _isUnavailable;
-            _isUnavailable = unavailable;
-        }
+        if (Volatile.Read(ref _disposed) != 0)
+            return;
+        if (Interlocked.Exchange(ref _refreshBusy, 1) == 1)
+            return;
 
-        if (changed)
-            AvailabilityChanged?.Invoke(this, EventArgs.Empty);
+        _ = RefreshAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        try
+        {
+            var evaluation = STATask.Run(Evaluate);
+            var unavailable = await NativeCallTimeout
+                .AwaitAsync(evaluation, TimeSpan.FromSeconds(5), CancellationToken.None)
+                .ConfigureAwait(false);
+            bool changed;
+            lock (_gate)
+            {
+                if (_disposed != 0)
+                    return;
+                changed = unavailable != _isUnavailable;
+                _isUnavailable = unavailable;
+            }
+
+            if (changed)
+            {
+                try
+                {
+                    AvailabilityChanged?.Invoke(this, EventArgs.Empty);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Network availability subscriber failed");
+                }
+            }
+        }
+        catch (System.TimeoutException)
+        {
+            _logger.LogDebug("Network discovery availability check timed out");
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _refreshBusy, 0);
+        }
     }
 
     private bool Evaluate()
@@ -66,55 +103,59 @@ public sealed class WinNetworkDiscoveryAvailability : INetworkDiscoveryAvailabil
             if (HasConnectedPrivateNetwork() && AreDiscoveryServicesDisabled())
                 return true;
 
-            // Firewall rules off for the active profile — same condition Explorer surfaces.
             return HasConnectedPrivateOrPublicNetwork();
+        }
+        catch (COMException ex)
+        {
+            _logger.LogWarning(ex, "Network discovery COM check failed; assuming available");
+            return false;
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Network discovery availability check failed; assuming available");
+            _logger.LogWarning(ex, "Network discovery availability check failed; assuming available");
             return false;
         }
     }
 
-    private static INetworkListManager CreateNetworkListManager()
-        => (INetworkListManager)Activator.CreateInstance(
-            Type.GetTypeFromCLSID(new Guid("DCB00C01-570F-4A9B-8D69-199FDBA5723B"))!)!;
-
     private static bool HasConnectedNetwork()
     {
-        var manager = CreateNetworkListManager();
-        var flags = (int)NLM_CONNECTIVITY.NLM_CONNECTIVITY_IPV4_INTERNET
-                    | (int)NLM_CONNECTIVITY.NLM_CONNECTIVITY_IPV4_LOCALNETWORK
-                    | (int)NLM_CONNECTIVITY.NLM_CONNECTIVITY_IPV4_SUBNET
-                    | (int)NLM_CONNECTIVITY.NLM_CONNECTIVITY_IPV6_INTERNET
-                    | (int)NLM_CONNECTIVITY.NLM_CONNECTIVITY_IPV6_LOCALNETWORK
-                    | (int)NLM_CONNECTIVITY.NLM_CONNECTIVITY_IPV6_SUBNET;
+        if (TryNlmConnectivity(out var connected) && connected)
+            return true;
+        return NetworkInterface.GetIsNetworkAvailable();
+    }
 
-        return ((int)ReadConnectivity(manager) & flags) != 0;
+    private static bool TryNlmConnectivity(out bool connected)
+    {
+        connected = false;
+        var type = Type.GetTypeFromCLSID(NetworkListManagerClsid);
+        if (type is null)
+            return false;
+
+        dynamic manager = Activator.CreateInstance(type)!;
+        try
+        {
+            int connectivity = manager.GetConnectivity();
+            const int flags = 0x10 | 0x20 | 0x40 | 0x100 | 0x200 | 0x400;
+            connected = (connectivity & flags) != 0;
+            return true;
+        }
+        finally
+        {
+            if (manager is IDisposable d)
+                d.Dispose();
+            else
+                Marshal.FinalReleaseComObject(manager);
+        }
     }
 
     private static bool HasConnectedPrivateNetwork()
-        => GetConnectedCategories().Contains(NLM_NETWORK_CATEGORY.NLM_NETWORK_CATEGORY_PRIVATE);
+        => NetworkInterface.GetAllNetworkInterfaces()
+            .Any(n => n.OperationalStatus == OperationalStatus.Up
+                      && n.NetworkInterfaceType is not NetworkInterfaceType.Loopback
+                      && n.GetIPProperties().GetIPv4Properties() is { IsAutomaticPrivateAddressingActive: false });
 
     private static bool HasConnectedPrivateOrPublicNetwork()
-    {
-        var categories = GetConnectedCategories();
-        return categories.Contains(NLM_NETWORK_CATEGORY.NLM_NETWORK_CATEGORY_PRIVATE)
-               || categories.Contains(NLM_NETWORK_CATEGORY.NLM_NETWORK_CATEGORY_PUBLIC);
-    }
-
-    private static HashSet<NLM_NETWORK_CATEGORY> GetConnectedCategories()
-    {
-        var categories = new HashSet<NLM_NETWORK_CATEGORY>();
-        var manager = CreateNetworkListManager();
-        foreach (var network in EnumerateConnectedNetworks(manager))
-        {
-            if (network.IsConnectedToInternet || network.IsConnected)
-                categories.Add(network.GetCategory());
-        }
-
-        return categories;
-    }
+        => NetworkInterface.GetIsNetworkAvailable();
 
     private static bool IsNetworkDiscoveryFirewallEnabled()
     {
@@ -122,29 +163,21 @@ public sealed class WinNetworkDiscoveryAvailability : INetworkDiscoveryAvailabil
         if (policyType is null)
             return false;
 
-        var policy = (INetFwPolicy2)Activator.CreateInstance(policyType)!;
-        var activeProfiles = policy.CurrentProfileTypes;
-        if (activeProfiles == 0)
-            return false;
-
-        var rules = policy.Rules;
-        var count = rules.Count;
-        for (var i = 1; i <= count; i++)
+        dynamic policy = Activator.CreateInstance(policyType)!;
+        try
         {
-            var rule = rules.Item(i);
-            if (!string.Equals(rule.Grouping, NetworkDiscoveryFirewallGroup, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            if (!rule.Enabled)
-                continue;
-
-            if ((rule.Profiles & activeProfiles) == 0)
-                continue;
-
-            return true;
+            int profiles = policy.CurrentProfileTypes;
+            if (profiles == 0)
+                return false;
+            return (bool)policy.IsRuleGroupEnabled(profiles, NetworkDiscoveryFirewallGroup);
         }
-
-        return false;
+        finally
+        {
+            if (policy is IDisposable d)
+                d.Dispose();
+            else
+                Marshal.FinalReleaseComObject(policy);
+        }
     }
 
     private static bool AreDiscoveryServicesDisabled()
@@ -166,131 +199,13 @@ public sealed class WinNetworkDiscoveryAvailability : INetworkDiscoveryAvailabil
         return true;
     }
 
-    private static IEnumerable<INetwork> EnumerateConnectedNetworks(INetworkListManager manager)
-    {
-        if (manager.GetNetworks(NLM_ENUM_NETWORK.NLM_ENUM_NETWORK_CONNECTED, out var enumNetworks) != 0
-            || enumNetworks is null)
-        {
-            yield break;
-        }
-
-        var buffer = new INetwork[1];
-        while (true)
-        {
-            var fetched = 0u;
-            var hr = enumNetworks.Next(1, buffer, out fetched);
-            if (hr != 0 || fetched == 0)
-                yield break;
-
-            yield return buffer[0];
-        }
-    }
-
-    private static NLM_CONNECTIVITY ReadConnectivity(INetworkListManager manager)
-    {
-        manager.GetConnectivity(out var connectivity);
-        return connectivity;
-    }
-
     private void OnNetworkChanged(object? sender, EventArgs e) => Refresh();
 
     public void Dispose()
     {
-        if (_disposed)
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
             return;
 
-        _disposed = true;
         NetworkChange.NetworkAddressChanged -= OnNetworkChanged;
     }
-}
-
-[ComImport]
-[Guid("DCB00000-570F-4A9B-8D69-199FDBA5723B")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface INetworkListManager
-{
-    [PreserveSig]
-    int GetNetworks(NLM_ENUM_NETWORK flags, [MarshalAs(UnmanagedType.Interface)] out IEnumNetworks? ppEnumNetwork);
-
-    void GetConnectivity(out NLM_CONNECTIVITY pConnectivity);
-}
-
-[ComImport]
-[Guid("DCB00003-570F-4A9B-8D69-199FDBA5723B")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IEnumNetworks
-{
-    [PreserveSig]
-    int Next(
-        uint celt,
-        [Out, MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.Interface, SizeParamIndex = 0)]
-        INetwork[] rgelt,
-        out uint pceltFetched);
-}
-
-[ComImport]
-[Guid("DCB00005-570F-4A9B-8D69-199FDBA5723B")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface INetwork
-{
-    NLM_NETWORK_CATEGORY GetCategory();
-
-    bool IsConnectedToInternet { get; }
-
-    bool IsConnected { get; }
-}
-
-internal enum NLM_ENUM_NETWORK
-{
-    NLM_ENUM_NETWORK_CONNECTED = 0x1
-}
-
-[Flags]
-internal enum NLM_CONNECTIVITY
-{
-    NLM_CONNECTIVITY_IPV4_SUBNET = 0x10,
-    NLM_CONNECTIVITY_IPV4_LOCALNETWORK = 0x20,
-    NLM_CONNECTIVITY_IPV4_INTERNET = 0x40,
-    NLM_CONNECTIVITY_IPV6_SUBNET = 0x100,
-    NLM_CONNECTIVITY_IPV6_LOCALNETWORK = 0x200,
-    NLM_CONNECTIVITY_IPV6_INTERNET = 0x400
-}
-
-internal enum NLM_NETWORK_CATEGORY
-{
-    NLM_NETWORK_CATEGORY_PUBLIC = 0,
-    NLM_NETWORK_CATEGORY_PRIVATE = 1,
-    NLM_NETWORK_CATEGORY_DOMAIN = 2
-}
-
-[ComImport]
-[Guid("E2B3C97F-6AE1-41AC-817A-F6F92166D7DD")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface INetFwPolicy2
-{
-    int CurrentProfileTypes { get; }
-
-    INetFwRules Rules { get; }
-}
-
-[ComImport]
-[Guid("9C4C6277-5027-441E-AFAE-CA1F542DA009")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface INetFwRules
-{
-    int Count { get; }
-
-    INetFwRule Item(int index);
-}
-
-[ComImport]
-[Guid("2C5BC601-0896-411F-9A18-55334EFC6FD5")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface INetFwRule
-{
-    string Grouping { get; }
-
-    bool Enabled { get; }
-
-    int Profiles { get; }
 }

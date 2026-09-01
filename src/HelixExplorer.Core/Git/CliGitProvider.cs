@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
+using HelixExplorer.Core.Infrastructure;
 using Microsoft.Extensions.Logging;
 
 namespace HelixExplorer.Core.Git;
@@ -9,7 +10,7 @@ namespace HelixExplorer.Core.Git;
 /// Repository-root lookups and status snapshots are cached so rapid refreshes coalesce
 /// instead of spawning a git process each time.
 /// </summary>
-public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvider
+public sealed class CliGitProvider : IGitProvider
 {
     private const string GitExe = "git";
 
@@ -27,9 +28,20 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
         ["--no-optional-locks", "branch", "--format=%(refname:short)"];
 
     private readonly GitStatusCache _statusCache = new(StatusCacheTtl);
+    private readonly ILogger<CliGitProvider> _logger;
+    private readonly IProcessRunner _processRunner;
 
     /// <summary>Null roots are stored as empty string so negative lookups stay cached.</summary>
     private readonly ConcurrentDictionary<string, string?> _rootCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentQueue<string> _rootInsertionOrder = new();
+
+    internal int RootCacheCount => _rootCache.Count;
+
+    public CliGitProvider(ILogger<CliGitProvider> logger, IProcessRunner? processRunner = null)
+    {
+        _logger = logger;
+        _processRunner = processRunner ?? new ProcessRunner();
+    }
 
     public bool IsInsideRepository(string path) => ResolveRepoRoot(path) is not null;
 
@@ -47,7 +59,7 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
             var result = await RunGitWithArgsAsync(root, StatusArgs, cancellationToken)
                 .ConfigureAwait(false);
             if (result.ExitCode != 0)
-                logger.LogWarning("git status exited {ExitCode} for '{Path}': {Stderr}", result.ExitCode, path, result.StandardError);
+                _logger.LogWarning("git status exited {ExitCode} for '{Path}': {Stderr}", result.ExitCode, path, result.StandardError);
 
             var snapshot = GitPorcelainParser.Parse(result.StandardOutput, root);
             _statusCache.Store(root, snapshot);
@@ -64,7 +76,7 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
 #pragma warning disable CA1031
         catch (Exception ex)
         {
-            logger.LogError(ex, "Git status query failed for '{Path}'", path);
+            _logger.LogError(ex, "Git status query failed for '{Path}'", path);
             return GitStatusSnapshot.Empty;
         }
 #pragma warning restore CA1031
@@ -82,8 +94,12 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
             return string.IsNullOrEmpty(cachedRoot) ? null : cachedRoot;
 
         var root = FindRepoRoot(path);
-        // Store empty string as the "not a repo" sentinel so negative lookups are cached too.
-        _rootCache[key] = root ?? string.Empty;
+        if (_rootCache.TryAdd(key, root ?? string.Empty))
+            _rootInsertionOrder.Enqueue(key);
+        else
+            _rootCache[key] = root ?? string.Empty;
+        while (_rootCache.Count > 512 && _rootInsertionOrder.TryDequeue(out var oldest))
+            _rootCache.TryRemove(oldest, out _);
         return root;
     }
 
@@ -98,7 +114,7 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
             var result = await RunGitWithArgsAsync(root, ListBranchesArgs, cancellationToken)
                 .ConfigureAwait(false);
             if (result.ExitCode != 0)
-                logger.LogWarning("git branch exited {ExitCode} for '{Path}': {Stderr}", result.ExitCode, path, result.StandardError);
+                _logger.LogWarning("git branch exited {ExitCode} for '{Path}': {Stderr}", result.ExitCode, path, result.StandardError);
 
             var list = new List<string>();
             foreach (var line in result.StandardOutput.Split('\n'))
@@ -119,7 +135,7 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
 #pragma warning disable CA1031
         catch (Exception ex)
         {
-            logger.LogError(ex, "Git branch list failed for '{Path}'", path);
+            _logger.LogError(ex, "Git branch list failed for '{Path}'", path);
             return Array.Empty<string>();
         }
 #pragma warning restore CA1031
@@ -143,7 +159,7 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
                 // branch, ...) - it exits non-zero and writes to stderr. Treating any non-throwing
                 // completion as success meant a failed checkout was silently reported as if the
                 // branch had actually switched.
-                logger.LogError(
+                _logger.LogError(
                     "Git checkout failed for branch '{Branch}' in '{Path}' (exit {ExitCode}): {Stderr}",
                     branch, path, result.ExitCode, result.StandardError);
                 return false;
@@ -151,6 +167,7 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
 
             // Working tree changed: drop any cached status so the next refresh reflects the new branch.
             _statusCache.Invalidate(root);
+            _rootCache.TryRemove(root, out _);
             return true;
         }
         catch (OperationCanceledException)
@@ -163,7 +180,7 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
 #pragma warning disable CA1031
         catch (Exception ex)
         {
-            logger.LogError(ex, "Git checkout failed for branch '{Branch}' in '{Path}'", branch, path);
+            _logger.LogError(ex, "Git checkout failed for branch '{Branch}' in '{Path}'", branch, path);
             return false;
         }
 #pragma warning restore CA1031
@@ -195,7 +212,7 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
     /// </summary>
     private static readonly TimeSpan HardTimeout = TimeSpan.FromSeconds(60);
 
-    private static async Task<GitCommandResult> RunGitWithArgsAsync(
+    private Task<ProcessRunResult> RunGitWithArgsAsync(
         string workingDir,
         string[] args,
         CancellationToken token,
@@ -222,57 +239,6 @@ public sealed class CliGitProvider(ILogger<CliGitProvider> logger) : IGitProvide
         foreach (var arg in args)
             psi.ArgumentList.Add(arg);
 
-        using var process = new Process { StartInfo = psi, EnableRaisingEvents = false };
-
-        if (!process.Start())
-            return new GitCommandResult(-1, string.Empty, string.Empty);
-
-        // Closed rather than left open: an inherited/open stdin is another way a prompt (or a
-        // program git shells out to) can block waiting for input that will never arrive.
-        try { process.StandardInput.Close(); } catch (InvalidOperationException) { }
-
-        using var hardTimeoutCts = new CancellationTokenSource(HardTimeout);
-        var killReg = hardTimeoutCts.Token.Register(static state => TryKill((Process)state!), process);
-
-        CancellationTokenRegistration cancelReg = default;
-        if (killOnCancel)
-        {
-            // Safe for read-only probes that use --no-optional-locks. Do not enable for index writers.
-            cancelReg = token.Register(static state => TryKill((Process)state!), process);
-        }
-
-        await using (killReg)
-        await using (cancelReg)
-        {
-            // Do not cancel stream reads: a cancelled ReadToEnd can leave the child blocked on a full pipe.
-            var stdoutTask = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
-            var stderrTask = process.StandardError.ReadToEndAsync(CancellationToken.None);
-            await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
-            // Index writers must run to completion (or hit HardTimeout above); only status/list
-            // may abandon early via Kill + a cancelled wait tied to the caller's token.
-            var waitToken = killOnCancel ? token : CancellationToken.None;
-            await process.WaitForExitAsync(waitToken).ConfigureAwait(false);
-            return new GitCommandResult(process.ExitCode, stdoutTask.Result, stderrTask.Result);
-        }
+        return _processRunner.RunAsync(psi, HardTimeout, killOnCancel, token);
     }
-
-    private static void TryKill(Process process)
-    {
-        try
-        {
-            process.Kill(entireProcessTree: true);
-        }
-        // Deliberately broad: this runs from a timeout/cancellation callback with no caller able to
-        // observe an exception. Process.Kill can throw several different types depending on exactly
-        // when the process exited underneath it (already-exited vs. exiting-right-now races); any of
-        // them means the same thing here - nothing left to kill - so this is intentionally swallowed.
-#pragma warning disable CA1031
-        catch
-        {
-            // Ignore races where the process finished between cancel/timeout and Kill.
-        }
-#pragma warning restore CA1031
-    }
-
-    private readonly record struct GitCommandResult(int ExitCode, string StandardOutput, string StandardError);
 }

@@ -33,9 +33,14 @@ public sealed class SqliteAppDatabase : IAppDatabase
     private bool _disposed;
     private bool _initialized;
 
-    public SqliteAppDatabase(ISettingsStore? settingsStore = null, string? databasePath = null, string? settingsFile = null)
+    public SqliteAppDatabase(
+        ISettingsStore? settingsStore = null,
+        string? databasePath = null,
+        string? settingsFile = null,
+        IAppPathProvider? paths = null)
     {
-        var path = databasePath ?? AppPaths.AppDatabaseFile;
+        var appPaths = paths ?? DefaultAppPathProvider.Instance;
+        var path = databasePath ?? appPaths.AppDatabaseFile;
         var directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
@@ -47,7 +52,7 @@ public sealed class SqliteAppDatabase : IAppDatabase
         };
         _connection = new SqliteConnection(csb.ToString());
         _settingsStore = settingsStore ?? new JsonSettingsStore();
-        _settingsFile = settingsFile ?? AppPaths.SettingsFile;
+        _settingsFile = settingsFile ?? appPaths.SettingsFile;
     }
 
     public SqliteConnection Connection
@@ -63,14 +68,33 @@ public sealed class SqliteAppDatabase : IAppDatabase
 
     public object ConnectionGate => _gate;
 
-    public void Initialize()
+    public T Execute<T>(Func<SqliteConnection, T> operation)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        if (_initialized)
-            return;
-
+        ArgumentNullException.ThrowIfNull(operation);
         lock (_gate)
         {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (!_initialized)
+                throw new InvalidOperationException("Call Initialize() before database access.");
+            return operation(_connection);
+        }
+    }
+
+    public void Execute(Action<SqliteConnection> operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        Execute(connection =>
+        {
+            operation(connection);
+            return true;
+        });
+    }
+
+    public void Initialize()
+    {
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
             if (_initialized)
                 return;
 
@@ -114,11 +138,24 @@ public sealed class SqliteAppDatabase : IAppDatabase
         versionCmd.CommandText = "PRAGMA user_version;";
         var currentVersion = Convert.ToInt32(versionCmd.ExecuteScalar() ?? 0, System.Globalization.CultureInfo.InvariantCulture);
 
-        if (currentVersion >= SchemaVersion)
+        if (currentVersion > SchemaVersion)
+            throw new InvalidOperationException(
+                $"Database schema version {currentVersion} is newer than supported version {SchemaVersion}.");
+        if (currentVersion == SchemaVersion)
             return;
 
+        for (var nextVersion = currentVersion + 1; nextVersion <= SchemaVersion; nextVersion++)
+            ApplyMigration(nextVersion);
+    }
+
+    private void ApplyMigration(int version)
+    {
+        using var transaction = _connection.BeginTransaction();
         using var batch = _connection.CreateCommand();
-        batch.CommandText = """
+        batch.Transaction = transaction;
+        batch.CommandText = version switch
+        {
+            1 => """
             CREATE TABLE IF NOT EXISTS folder_view_preferences (
                 path TEXT PRIMARY KEY COLLATE NOCASE,
                 view_mode INTEGER NOT NULL,
@@ -134,10 +171,16 @@ public sealed class SqliteAppDatabase : IAppDatabase
                 path TEXT PRIMARY KEY COLLATE NOCASE,
                 color_argb INTEGER NOT NULL
             );
-
-            PRAGMA user_version = 1;
-            """;
+            """,
+            _ => throw new InvalidOperationException($"No database migration exists for schema version {version}.")
+        };
         batch.ExecuteNonQuery();
+
+        using var versionCommand = _connection.CreateCommand();
+        versionCommand.Transaction = transaction;
+        versionCommand.CommandText = $"PRAGMA user_version = {version};";
+        versionCommand.ExecuteNonQuery();
+        transaction.Commit();
     }
 
     private void MigrateLegacyJson()
@@ -174,6 +217,7 @@ public sealed class SqliteAppDatabase : IAppDatabase
             return;
 
         var migrated = false;
+        using var tx = _connection.BeginTransaction();
 
         if (hasPrefs && TableIsEmpty("folder_view_preferences") && prefs is not null)
         {
@@ -184,6 +228,7 @@ public sealed class SqliteAppDatabase : IAppDatabase
                     continue;
 
                 using var cmd = _connection.CreateCommand();
+                cmd.Transaction = tx;
                 cmd.CommandText = """
                     INSERT INTO folder_view_preferences
                         (path, view_mode, sort_column, sort_descending, directory_sort,
@@ -223,6 +268,7 @@ public sealed class SqliteAppDatabase : IAppDatabase
                     continue;
 
                 using var cmd = _connection.CreateCommand();
+                cmd.Transaction = tx;
                 cmd.CommandText = """
                     INSERT INTO folder_colors (path, color_argb)
                     VALUES (@path, @color)
@@ -235,7 +281,10 @@ public sealed class SqliteAppDatabase : IAppDatabase
             migrated = true;
         }
 
-        if (migrated)
+        if (!migrated)
+            return;
+
+        tx.Commit();
         {
             // Rewrite settings.json via the store so the legacy map keys are dropped from
             // the file immediately. AppSettings no longer declares these properties, so
@@ -261,12 +310,12 @@ public sealed class SqliteAppDatabase : IAppDatabase
 
     public void Dispose()
     {
-        if (_disposed)
-            return;
-        _disposed = true;
-
         lock (_gate)
         {
+            if (_disposed)
+                return;
+            _disposed = true;
+
             if (_initialized)
             {
                 // Deliberately broad: this is a best-effort WAL checkpoint on Dispose. A failure here

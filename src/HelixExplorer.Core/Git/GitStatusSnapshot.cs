@@ -13,7 +13,7 @@ public sealed class GitStatusSnapshot(
         repoRoot: null,
         new Dictionary<string, GitFileStatus>(0, StringComparer.OrdinalIgnoreCase));
 
-    private readonly IReadOnlyDictionary<string, GitFileStatus> _folderStatuses = BuildFolderIndex(files);
+    private readonly Dictionary<string, GitFileStatus> _folderStatuses = BuildFolderIndex(files);
 
     public GitStatus Status { get; } = status;
 
@@ -47,14 +47,19 @@ public sealed class GitStatusSnapshot(
         var index = new Dictionary<string, GitFileStatus>(StringComparer.OrdinalIgnoreCase);
         foreach (var (path, status) in files)
         {
-            var parts = path.Split('/');
-            for (var i = 1; i < parts.Length; i++)
+            var searchFrom = 0;
+            while (searchFrom < path.Length)
             {
-                var prefix = string.Join("/", parts, 0, i) + "/";
+                var slash = path.IndexOf('/', searchFrom);
+                if (slash < 0)
+                    break;
+
+                var prefix = path[..(slash + 1)];
                 if (index.TryGetValue(prefix, out var existing))
                     index[prefix] = Max(existing, status);
                 else
                     index[prefix] = status;
+                searchFrom = slash + 1;
             }
         }
 

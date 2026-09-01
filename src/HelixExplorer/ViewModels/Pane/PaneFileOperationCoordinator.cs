@@ -41,8 +41,7 @@ public sealed class PaneFileOperationCoordinator(
 
     public async Task PasteAsync(
         string currentPath,
-        Func<Task> refreshAsync,
-        Action<string> setStatusText)
+        IPaneOperationHost host)
     {
         if (string.IsNullOrEmpty(currentPath))
             return;
@@ -52,7 +51,7 @@ public sealed class PaneFileOperationCoordinator(
             var payload = await ResolvePastePayloadAsync(currentPath).ConfigureAwait(true);
             if (payload is null || payload.Paths.Count == 0)
             {
-                setStatusText(UiStrings.ClipboardHasNoFiles);
+                host.SetOperationStatus(UiStrings.ClipboardHasNoFiles);
                 return;
             }
 
@@ -95,7 +94,7 @@ public sealed class PaneFileOperationCoordinator(
                     ? UiStrings.UndoMoveDescription(result.Changes.Count)
                     : UiStrings.UndoCopyDescription(result.Changes.Count));
 
-            await refreshAsync().ConfigureAwait(true);
+            await host.RefreshAfterOperationAsync().ConfigureAwait(true);
             operationReporter.Complete(
                 kind,
                 result.Succeeded,
@@ -109,20 +108,20 @@ public sealed class PaneFileOperationCoordinator(
                 dialogs,
                 result,
                 kind == FileOperationKind.Move ? "Move" : "Copy",
-                setStatusText).ConfigureAwait(true);
+                host.SetOperationStatus).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
             if (ex is OperationCanceledException)
             {
-                setStatusText(UiStrings.OperationCancelled);
+                host.SetOperationStatus(UiStrings.OperationCancelled);
                 operationReporter.Cancelled(UiStrings.OperationCancelled);
                 return;
             }
 
             logger.LogError(ex, "Paste failed");
             await dialogs.ShowErrorAsync(UiStrings.PasteFailed, ex.Message).ConfigureAwait(true);
-            setStatusText(UiStrings.PasteFailed);
+            host.SetOperationStatus(UiStrings.PasteFailed);
             operationReporter.Fail(UiStrings.PasteFailed);
         }
     }
@@ -131,8 +130,7 @@ public sealed class PaneFileOperationCoordinator(
         string destinationPath,
         IReadOnlyList<string> paths,
         bool isCopy,
-        Func<Task> refreshAsync,
-        Action<string> setStatusText)
+        IPaneOperationHost host)
     {
         if (string.IsNullOrEmpty(destinationPath) || paths.Count == 0)
             return;
@@ -176,7 +174,7 @@ public sealed class PaneFileOperationCoordinator(
                     ? UiStrings.UndoCopyDescription(result.Changes.Count)
                     : UiStrings.UndoMoveDescription(result.Changes.Count));
 
-            await refreshAsync().ConfigureAwait(true);
+            await host.RefreshAfterOperationAsync().ConfigureAwait(true);
             operationReporter.Complete(
                 kind,
                 result.Succeeded,
@@ -186,20 +184,20 @@ public sealed class PaneFileOperationCoordinator(
                 dialogs,
                 result,
                 isCopy ? "Copy" : "Move",
-                setStatusText).ConfigureAwait(true);
+                host.SetOperationStatus).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
             if (ex is OperationCanceledException)
             {
-                setStatusText(UiStrings.OperationCancelled);
+                host.SetOperationStatus(UiStrings.OperationCancelled);
                 operationReporter.Cancelled(UiStrings.OperationCancelled);
                 return;
             }
 
             logger.LogError(ex, "Drop failed");
             await dialogs.ShowErrorAsync(UiStrings.DropFailed, ex.Message).ConfigureAwait(true);
-            setStatusText(UiStrings.DropFailed);
+            host.SetOperationStatus(UiStrings.DropFailed);
             operationReporter.Fail(UiStrings.DropFailed);
         }
     }
@@ -207,8 +205,7 @@ public sealed class PaneFileOperationCoordinator(
     public async Task DeleteAsync(
         IReadOnlyList<string> paths,
         bool permanently,
-        Func<Task> refreshAsync,
-        Action<string> setStatusText)
+        IPaneOperationHost host)
     {
         if (paths.Count == 0)
             return;
@@ -238,7 +235,7 @@ public sealed class PaneFileOperationCoordinator(
                     UiStrings.UndoDeleteDescription(restorable.Count));
             }
 
-            await refreshAsync().ConfigureAwait(true);
+            await host.RefreshAfterOperationAsync().ConfigureAwait(true);
             operationReporter.Complete(
                 kind,
                 result.Succeeded,
@@ -250,20 +247,20 @@ public sealed class PaneFileOperationCoordinator(
                 dialogs,
                 result,
                 "Delete",
-                setStatusText).ConfigureAwait(true);
+                host.SetOperationStatus).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
             if (ex is OperationCanceledException)
             {
-                setStatusText(UiStrings.OperationCancelled);
+                host.SetOperationStatus(UiStrings.OperationCancelled);
                 operationReporter.Cancelled(UiStrings.OperationCancelled);
                 return;
             }
 
             logger.LogError(ex, "Delete failed");
             await dialogs.ShowErrorAsync(UiStrings.DeleteFailed, ex.Message).ConfigureAwait(true);
-            setStatusText(UiStrings.DeleteFailed);
+            host.SetOperationStatus(UiStrings.DeleteFailed);
             operationReporter.Fail(UiStrings.DeleteFailed);
         }
     }
@@ -378,7 +375,7 @@ public sealed class PaneFileOperationCoordinator(
         string newName,
         Func<Task> refreshAsync,
         Action onClearRename,
-        Action<string> setStatusText)
+        IPaneOperationHost host)
     {
         try
         {
@@ -386,7 +383,7 @@ public sealed class PaneFileOperationCoordinator(
             if (result.Failed > 0)
             {
                 await dialogs.ShowErrorAsync(UiStrings.RenameFailed, result.Failures[0].Message).ConfigureAwait(true);
-                setStatusText(UiStrings.RenameFailed);
+                host.SetOperationStatus(UiStrings.RenameFailed);
                 onClearRename();
                 return;
             }
@@ -399,15 +396,14 @@ public sealed class PaneFileOperationCoordinator(
         catch (Exception ex)
         {
             logger.LogDebug(ex, "Rename failed for '{Path}'", oldPath);
-            setStatusText(UiStrings.RenameFailed);
+            host.SetOperationStatus(UiStrings.RenameFailed);
             onClearRename();
         }
     }
 
     public async Task CreateFolderAsync(
         string currentPath,
-        Func<Task> refreshAsync,
-        Action<string> setStatusText)
+        IPaneOperationHost host)
     {
         try
         {
@@ -422,12 +418,12 @@ public sealed class PaneFileOperationCoordinator(
                 UiStrings.UndoNewFolderDescription,
                 [new FileOperationChange(currentPath, createdPath)]));
 
-            await refreshAsync().ConfigureAwait(true);
+            await host.RefreshAfterOperationAsync().ConfigureAwait(true);
         }
         catch (Exception ex)
         {
             logger.LogDebug(ex, "NewFolder failed in '{Path}'", currentPath);
-            setStatusText(UiStrings.NewFolderFailed);
+            host.SetOperationStatus(UiStrings.NewFolderFailed);
         }
     }
 
@@ -435,25 +431,37 @@ public sealed class PaneFileOperationCoordinator(
         string? destinationPath,
         CancellationToken cancellationToken = default)
     {
-        if (clipboard.Current is { } internalPayload && HasValidLocalPaths(internalPayload.Paths))
+        if (clipboard.Current is { } internalPayload
+            && await HasValidLocalPathsAsync(internalPayload.Paths, cancellationToken).ConfigureAwait(true))
+        {
             return destinationPath is null
                 ? internalPayload
                 : new ClipboardPayload(internalPayload.Operation, internalPayload.Paths, destinationPath);
+        }
 
         var os = await osClipboard.TryGetFilesAsync(cancellationToken).ConfigureAwait(true);
-        if (os is null || !HasValidLocalPaths(os.Value.Paths))
+        if (os is null
+            || !await HasValidLocalPathsAsync(os.Value.Paths, cancellationToken).ConfigureAwait(true))
             return null;
 
         return new ClipboardPayload(os.Value.Operation, os.Value.Paths, destinationPath ?? string.Empty);
     }
 
-    private static bool HasValidLocalPaths(IReadOnlyList<string> paths)
+    private static Task<bool> HasValidLocalPathsAsync(
+        IReadOnlyList<string> paths,
+        CancellationToken cancellationToken)
+        => Task.Run(() => HasValidLocalPaths(paths, cancellationToken), cancellationToken);
+
+    private static bool HasValidLocalPaths(
+        IReadOnlyList<string> paths,
+        CancellationToken cancellationToken)
     {
         if (paths.Count == 0)
             return false;
 
         foreach (var path in paths)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(path) || (!File.Exists(path) && !Directory.Exists(path)))
                 return false;
         }

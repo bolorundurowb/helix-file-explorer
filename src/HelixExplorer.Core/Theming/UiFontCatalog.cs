@@ -4,12 +4,16 @@ public static class UiFontCatalog
 {
     public const string BundledCollectionScheme = "fonts:Helix#DM Sans";
     public const string InterCollectionScheme = "fonts:Inter#Inter";
+    public const string IbmPlexSansCollectionScheme = "fonts:Helix#IBM Plex Sans";
+    public const string PlusJakartaSansCollectionScheme = "fonts:Helix#Plus Jakarta Sans";
 
     public static IReadOnlyList<UiFontOption> Options { get; } =
     [
         new(UiFontFamily.System, "System default"),
         new(UiFontFamily.DmSans, "DM Sans"),
-        new(UiFontFamily.Inter, "Inter")
+        new(UiFontFamily.Inter, "Inter"),
+        new(UiFontFamily.IbmPlexSans, "IBM Plex Sans"),
+        new(UiFontFamily.PlusJakartaSans, "Plus Jakarta Sans")
     ];
 
     public static string GetDisplayName(UiFontFamily font) =>
@@ -31,6 +35,8 @@ public static class UiFontCatalog
         {
             UiFontFamily.DmSans => BundledCollectionScheme,
             UiFontFamily.Inter => InterCollectionScheme,
+            UiFontFamily.IbmPlexSans => IbmPlexSansCollectionScheme,
+            UiFontFamily.PlusJakartaSans => PlusJakartaSansCollectionScheme,
             _ => GetSystemFontFamilySource()
         };
 }

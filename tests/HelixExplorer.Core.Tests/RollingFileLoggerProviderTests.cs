@@ -46,6 +46,7 @@ public class RollingFileLoggerProviderTests
 
             var logger = provider.CreateLogger("Test.Category");
             logger.LogInformation("hello from test");
+            provider.Dispose();
 
             var files = Directory.GetFiles(directory, "helix-explorer-*.log");
             files.Must().HaveCount(1);
@@ -105,6 +106,7 @@ public class RollingFileLoggerProviderTests
             var logger = provider.CreateLogger("Level");
             logger.LogInformation("should not appear");
             logger.LogWarning("should appear");
+            provider.Dispose();
 
             var content = File.ReadAllText(Directory.GetFiles(directory, "helix-explorer-*.log").Single());
             content.Must().NotContain("should not appear");

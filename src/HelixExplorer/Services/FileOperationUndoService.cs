@@ -24,7 +24,7 @@ namespace HelixExplorer.Services;
 public sealed class FileOperationUndoService(
     IFileOperationHistory history,
     IFileOperationService fileOps,
-    IShellFolderEnumerator shellEnumerator,
+    IRecycleBinService recycleBin,
     IArchiveProvider archive,
     IFileOperationReporter reporter,
     IUserDialogService dialogs,
@@ -286,7 +286,7 @@ public sealed class FileOperationUndoService(
             if (Exists(change.DestinationPath))
                 return null;
 
-            if (!await shellEnumerator.RestoreAsync(change.RecycleItemPath!, change.DestinationPath, ct)
+            if (!await recycleBin.RestoreAsync(change.RecycleItemPath!, change.DestinationPath, ct)
                     .ConfigureAwait(true))
             {
                 return null;

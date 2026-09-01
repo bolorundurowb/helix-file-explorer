@@ -133,6 +133,99 @@ public class SharpCompressArchiveProviderTests
         }
     }
 
+    [Fact]
+    public async Task ExtractArchiveToDirectoryAsync_EntryCountLimit_Throws()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var archivePath = Path.Combine(root, "many.zip");
+            CreateZip(archivePath, ("1.txt", "1"), ("2.txt", "2"));
+            var provider = CreateProvider(new ArchiveExtractionLimits(1, 100, 100));
+
+            await Ensure.ThrowsAsync<ArchiveExtractionLimitException>(
+                async () => await provider.ExtractArchiveToDirectoryAsync(archivePath, Path.Combine(root, "out")));
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [Fact]
+    public async Task ExtractArchiveToDirectoryAsync_PerEntryLimit_RemovesPartialFile()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var archivePath = Path.Combine(root, "large.zip");
+            var outDir = Path.Combine(root, "out");
+            CreateZip(archivePath, ("large.txt", "1234567890"));
+            var provider = CreateProvider(new ArchiveExtractionLimits(10, 5, 100));
+
+            await Ensure.ThrowsAsync<ArchiveExtractionLimitException>(
+                async () => await provider.ExtractArchiveToDirectoryAsync(archivePath, outDir));
+
+            File.Exists(Path.Combine(outDir, "large.txt")).Must().BeFalse();
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [Fact]
+    public async Task ExtractArchiveToDirectoryAsync_TotalLimit_Throws()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var archivePath = Path.Combine(root, "total.zip");
+            CreateZip(archivePath, ("1.txt", "1234"), ("2.txt", "5678"));
+            var provider = CreateProvider(new ArchiveExtractionLimits(10, 10, 6));
+
+            await Ensure.ThrowsAsync<ArchiveExtractionLimitException>(
+                async () => await provider.ExtractArchiveToDirectoryAsync(archivePath, Path.Combine(root, "out")));
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [Fact]
+    public async Task ExtractArchiveToDirectoryAsync_CorruptArchive_DoesNotThrow()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var archivePath = Path.Combine(root, "corrupt.zip");
+            await File.WriteAllBytesAsync(archivePath, [1, 2, 3, 4, 5]);
+            var provider = CreateProvider();
+
+            await provider.ExtractArchiveToDirectoryAsync(archivePath, Path.Combine(root, "out"));
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [Fact]
+    public async Task CopyEntryAsync_CancellationMidEntry_StopsCopy()
+    {
+        var provider = CreateProvider();
+        await using var source = new SlowReadStream(totalBytes: 1024 * 1024);
+        await using var destination = new MemoryStream();
+        using var cts = new CancellationTokenSource();
+        cts.CancelAfter(TimeSpan.FromMilliseconds(20));
+
+        await Ensure.ThrowsAsync<OperationCanceledException>(
+            async () => await provider.CopyEntryAsync(source, destination, 0, cts.Token));
+
+        destination.Length.Must().BeLessThan(1024 * 1024);
+    }
+
     /// <summary>
     /// Hand-builds a minimal two-entry POSIX ustar stream (a symlink entry followed by a regular
     /// file entry) using the exact header layout SharpCompress's tar reader expects. There is no
@@ -200,8 +293,8 @@ public class SharpCompressArchiveProviderTests
         // Final byte of the field is left as NUL (buffer is zero-initialized).
     }
 
-    private static SharpCompressArchiveProvider CreateProvider()
-        => new(NullLogger<SharpCompressArchiveProvider>.Instance);
+    private static SharpCompressArchiveProvider CreateProvider(ArchiveExtractionLimits? limits = null)
+        => new(NullLogger<SharpCompressArchiveProvider>.Instance, limits);
 
     private static void CreateZip(string archivePath, params (string Key, string Content)[] entries)
     {
@@ -227,6 +320,43 @@ public class SharpCompressArchiveProviderTests
         catch
         {
             // Best-effort cleanup for CI temp files.
+        }
+    }
+
+    private sealed class SlowReadStream : Stream
+    {
+        private readonly long _totalBytes;
+        private long _remaining;
+
+        public SlowReadStream(long totalBytes)
+        {
+            _totalBytes = totalBytes;
+            _remaining = totalBytes;
+        }
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => _totalBytes;
+        public override long Position { get; set; }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override async ValueTask<int> ReadAsync(
+            Memory<byte> buffer,
+            CancellationToken cancellationToken = default)
+        {
+            await Task.Delay(5, cancellationToken);
+            var read = (int)Math.Min(Math.Min(buffer.Length, 4096), _remaining);
+            if (read == 0)
+                return 0;
+            buffer.Span[..read].Fill(1);
+            _remaining -= read;
+            Position += read;
+            return read;
         }
     }
 }

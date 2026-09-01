@@ -1,11 +1,14 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 
 namespace HelixExplorer.Controls;
 
 public sealed class SelectionMarquee : Control
 {
+    private static readonly IImmutableSolidColorBrush Fill = new ImmutableSolidColorBrush(Color.FromArgb(40, 0, 120, 212));
+    private static readonly Pen BorderPen = new(new ImmutableSolidColorBrush(Color.FromArgb(200, 0, 120, 212)), 1, dashStyle: DashStyle.Dash);
     public static readonly StyledProperty<bool> IsActiveProperty =
         AvaloniaProperty.Register<SelectionMarquee, bool>(nameof(IsActive));
 
@@ -34,9 +37,6 @@ public sealed class SelectionMarquee : Control
         if (!IsActive || SelectionRect.Width < 1 || SelectionRect.Height < 1)
             return;
 
-        var fill = new SolidColorBrush(Color.FromArgb(40, 0, 120, 212));
-        var border = new SolidColorBrush(Color.FromArgb(200, 0, 120, 212));
-        var pen = new Pen(border, 1, dashStyle: DashStyle.Dash);
-        context.DrawRectangle(fill, pen, SelectionRect);
+        context.DrawRectangle(Fill, BorderPen, SelectionRect);
     }
 }

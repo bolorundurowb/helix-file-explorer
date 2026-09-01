@@ -2,7 +2,6 @@
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
-
   <!-- DEP-2: every Avalonia package must move in lockstep - a single version property here is the
        one place that has to change, instead of five PackageReference edits scattered across
        projects that can silently drift apart (see DEP-1: Avalonia.Controls.DataGrid had already
@@ -10,16 +9,13 @@
   <PropertyGroup>
     <AvaloniaVersion>12.1.1</AvaloniaVersion>
   </PropertyGroup>
-
   <ItemGroup>
     <PackageVersion Include="Avalonia" Version="$(AvaloniaVersion)" />
     <PackageVersion Include="Avalonia.Desktop" Version="$(AvaloniaVersion)" />
     <PackageVersion Include="Avalonia.Themes.Fluent" Version="$(AvaloniaVersion)" />
     <PackageVersion Include="Avalonia.Fonts.Inter" Version="$(AvaloniaVersion)" />
     <PackageVersion Include="Avalonia.Controls.DataGrid" Version="$(AvaloniaVersion)" />
-
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
@@ -28,17 +24,14 @@
     <PackageVersion Include="Microsoft.Extensions.Logging.Debug" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.11" />
     <PackageVersion Include="System.ServiceProcess.ServiceController" Version="10.0.11" />
-
     <PackageVersion Include="Vanara.PInvoke.User32" Version="5.0.7" />
     <PackageVersion Include="Vanara.PInvoke.CredUI" Version="5.0.7" />
     <PackageVersion Include="Vanara.PInvoke.Mpr" Version="5.0.7" />
     <PackageVersion Include="Vanara.Windows.Shell" Version="5.0.7" />
-
     <PackageVersion Include="moment.net" Version="2.1.0" />
     <PackageVersion Include="SharpCompress" Version="0.50.4" />
     <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.400" />
-
-    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+    <PackageVersion Include="coverlet.collector" Version="10.0.1" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
     <PackageVersion Include="OmniAssert" Version="2.3.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />

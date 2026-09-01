@@ -208,6 +208,12 @@ public sealed class VirtualizingFileGrid : TemplatedControl
                         var content = itemTemplate.Build(items[i]);
                         if (content is not null)
                         {
+                            // Set the DataContext before adding to the visual tree. Adding first left a
+                            // window where the child had no local DataContext and inherited the host
+                            // Panel's GridRow instead - compiled bindings (e.g. EntryVisualView's
+                            // EntryImage) evaluate as soon as the child attaches, so a GridRow could reach
+                            // an x:DataType="EntryItemViewModel" getter and throw InvalidCastException.
+                            content.DataContext = items[i];
                             s.Children.Add(content);
                         }
                     }

@@ -69,18 +69,24 @@ dotnet_naming_symbols.private_fields.applicable_accessibilities = private, inter
 dotnet_naming_style.underscore_camel_case.capitalization = camel_case
 dotnet_naming_style.underscore_camel_case.required_prefix = _
 
-# --- DEP-3 safety valve -----------------------------------------------------------------------
-# AnalysisMode=Recommended is being enabled for HelixExplorer.Core only (see its .csproj), and
-# TreatWarningsAsErrors=true is global, so any rule that fires anywhere in Core turns into a hard
-# build error. This repo has no .NET SDK available in the environment this change was authored in,
-# so the actual hit count for any given rule could not be verified by compiling. CA1062 (validate
-# arguments of public methods), CA1304, and CA1305 (culture-specific overloads) are exactly the
-# rules most likely to fire dozens of times across a 100+ file project that was not written with
-# those specific rules in mind, with no realistic way to have audited every call site by reading
-# alone. Dialed to `suggestion` (not `none`) as a deliberate, temporary risk valve: still visible in
-# the IDE and to anyone who runs analysis, just not build-breaking, until a real compiler pass can
-# confirm the actual hit count and each site can be fixed or suppressed on its own merits.
-[src/HelixExplorer.Core/**.cs]
-dotnet_diagnostic.CA1062.severity = suggestion
-dotnet_diagnostic.CA1304.severity = suggestion
-dotnet_diagnostic.CA1305.severity = suggestion
+# HelixExplorer.Core analyzer baseline (AnalysisMode=Recommended is enabled there first).
+# These four rules are demoted to IDE suggestions rather than silenced: every other Recommended
+# rule stays build-breaking via TreatWarningsAsErrors. Each demotion has a specific reason, so a
+# new violation is still worth looking at in the editor.
+[src/HelixExplorer.Core/**/*.cs]
+# CA1848 wants source-generated LoggerMessage delegates. Every logging call in Core is on a
+# diagnostic path (git command failure, corrupt settings/session, archive read failure,
+# fire-and-forget fault) - never a listing/filter/sort hot path - so the allocation saving does not
+# pay for the indirection here.
+dotnet_diagnostic.CA1848.severity = suggestion
+# CA1068 wants CancellationToken last on IFileOperationService. The trailing optional
+# IFileOperationControl? is deliberate (pause/resume is opt-in per call); reordering is a breaking
+# signature change through Core, Windows, and the ViewModels for no behavioural gain.
+dotnet_diagnostic.CA1068.severity = suggestion
+# CA1716 flags IFileChangeWatcher.Stop() and IFolderViewPreferencesService.Set() as reserved words
+# in other CLR languages. This is a single-language app shipping no public API, and both names are
+# the clearest ones available.
+dotnet_diagnostic.CA1716.severity = suggestion
+# CA1720 flags SizeDisplayMode.Decimal. Binary vs Decimal is the domain vocabulary for KiB vs KB
+# and is user-facing; renaming it to dodge the System.Decimal type name would be less clear.
+dotnet_diagnostic.CA1720.severity = suggestion

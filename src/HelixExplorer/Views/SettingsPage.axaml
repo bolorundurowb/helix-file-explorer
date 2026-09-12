@@ -102,6 +102,17 @@
                     <Border Classes="settingsRow">
                         <Grid ColumnDefinitions="*,Auto">
                             <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Text="Restore tabs from last session" FontSize="14" />
+                                <TextBlock Text="Reopen your previous tabs and window layout when Helix Explorer starts."
+                                           FontSize="12" Opacity="0.6" />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1"
+                                          IsChecked="{Binding Main.RestoreSessionOnStartup, Mode=TwoWay}" />
+                        </Grid>
+                    </Border>
+                    <Border Classes="settingsRow">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
                                 <TextBlock Text="Open in Terminal shortcut" FontSize="14" />
                                 <TextBlock Text="Avalonia key gesture syntax, e.g. Ctrl+OemTilde. Empty resets to default."
                                            FontSize="12" Opacity="0.6" />

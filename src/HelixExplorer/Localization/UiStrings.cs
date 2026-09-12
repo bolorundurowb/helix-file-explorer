@@ -79,8 +79,6 @@ public static class UiStrings
 
     public static string NetworkDiscoveryBanner => "Discovering network shares…";
 
-    public static string NetworkNoSharesFound => "No network shares discovered";
-
     public static string NetworkDiscoveryFailed => "Network discovery unavailable";
 
     public static string NewFolderDefaultName => "New Folder";

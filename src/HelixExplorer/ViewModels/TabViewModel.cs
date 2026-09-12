@@ -56,6 +56,9 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     public bool IsSettingsTab => Kind == TabKind.Settings;
 
     public event EventHandler? CloseRequested;
+    public event EventHandler? CloseTabsToRightRequested;
+    public event EventHandler? CloseTabsToLeftRequested;
+    public event EventHandler? CloseOtherTabsRequested;
     public event EventHandler? SelectionChanged;
 
     private void OnPaneSelectionChanged(object? sender, EventArgs e)
@@ -288,6 +291,33 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
 
     [RelayCommand]
     private void Close() => CloseRequested?.Invoke(this, EventArgs.Empty);
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CloseTabsToRightCommand))]
+    private bool _hasTabsToRight;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CloseTabsToLeftCommand))]
+    private bool _hasTabsToLeft;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CloseOtherTabsCommand))]
+    private bool _hasOtherTabs;
+
+    [RelayCommand(CanExecute = nameof(CanCloseTabsToRight))]
+    private void CloseTabsToRight() => CloseTabsToRightRequested?.Invoke(this, EventArgs.Empty);
+
+    private bool CanCloseTabsToRight() => HasTabsToRight;
+
+    [RelayCommand(CanExecute = nameof(CanCloseTabsToLeft))]
+    private void CloseTabsToLeft() => CloseTabsToLeftRequested?.Invoke(this, EventArgs.Empty);
+
+    private bool CanCloseTabsToLeft() => HasTabsToLeft;
+
+    [RelayCommand(CanExecute = nameof(CanCloseOtherTabs))]
+    private void CloseOtherTabs() => CloseOtherTabsRequested?.Invoke(this, EventArgs.Empty);
+
+    private bool CanCloseOtherTabs() => HasOtherTabs;
 
     private void UpdateTitle()
     {

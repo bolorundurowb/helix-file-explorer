@@ -349,6 +349,12 @@ public partial class MainWindow : Window
 
     private SidebarItemViewModel? _sidebarDropTarget;
 
+    private int _dragSourceIndex = -1;
+    private Point _dragStartPosition;
+    private bool _isDragging;
+
+    private const double TabDragThreshold = 6;
+
     private void OnTabStripWheel(object? sender, PointerWheelEventArgs e)
     {
         if (DataContext is not MainWindowViewModel vm)
@@ -360,14 +366,91 @@ public partial class MainWindow : Window
 
     private void OnTabPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        if (e.InitialPressMouseButton != MouseButton.Middle)
+        if (e.InitialPressMouseButton == MouseButton.Middle)
+        {
+            if (sender is Control { DataContext: TabViewModel tab })
+            {
+                tab.CloseCommand.Execute(null);
+                e.Handled = true;
+            }
+            return;
+        }
+
+        if (e.InitialPressMouseButton == MouseButton.Left)
+        {
+            if (_isDragging)
+                e.Handled = true;
+            EndTabDrag();
+        }
+    }
+
+    private void OnTabPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(TabStrip).Properties.IsLeftButtonPressed)
             return;
 
-        if (sender is Control { DataContext: TabViewModel tab })
+        if (sender is not Control { DataContext: TabViewModel tab } || DataContext is not MainWindowViewModel vm)
+            return;
+
+        _dragSourceIndex = vm.Tabs.IndexOf(tab);
+        _dragStartPosition = e.GetPosition(TabStrip);
+        _isDragging = false;
+    }
+
+    private void OnTabPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_dragSourceIndex < 0 || DataContext is not MainWindowViewModel vm)
+            return;
+
+        if (!e.GetCurrentPoint(TabStrip).Properties.IsLeftButtonPressed)
         {
-            tab.CloseCommand.Execute(null);
-            e.Handled = true;
+            EndTabDrag();
+            return;
         }
+
+        var position = e.GetPosition(TabStrip);
+
+        if (!_isDragging)
+        {
+            if (Math.Abs(position.X - _dragStartPosition.X) < TabDragThreshold
+                && Math.Abs(position.Y - _dragStartPosition.Y) < TabDragThreshold)
+                return;
+
+            _isDragging = true;
+            if (sender is Control chip)
+                e.Pointer.Capture(chip);
+        }
+
+        var targetIndex = HitTestTabIndex(position);
+        if (targetIndex >= 0 && targetIndex != _dragSourceIndex)
+        {
+            vm.MoveTab(_dragSourceIndex, targetIndex);
+            _dragSourceIndex = targetIndex;
+        }
+    }
+
+    private void OnTabPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
+        => EndTabDrag();
+
+    private int HitTestTabIndex(Point position)
+    {
+        for (var i = 0; i < TabStrip.ItemCount; i++)
+        {
+            if (TabStrip.ContainerFromIndex(i) is not Control container)
+                continue;
+
+            var bounds = container.Bounds;
+            if (position.X >= bounds.X && position.X < bounds.Right)
+                return i;
+        }
+
+        return -1;
+    }
+
+    private void EndTabDrag()
+    {
+        _dragSourceIndex = -1;
+        _isDragging = false;
     }
 
     private async void OnBranchButtonClick(object? sender, RoutedEventArgs e)

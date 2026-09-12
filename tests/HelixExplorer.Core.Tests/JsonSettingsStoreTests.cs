@@ -126,4 +126,48 @@ public class JsonSettingsStoreTests
             }
         }
     }
+
+    [Fact]
+    public void Update_OnlyMutatesTouchedFields_PreservingOthers()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "helix-settings-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var store = new JsonSettingsStore(path);
+            store.Save(new AppSettings { Theme = ThemeMode.Dark, SidebarWidth = 320 });
+
+            store.Update(settings => settings.SidebarWidth = 400);
+
+            var loaded = store.Load();
+            loaded.SidebarWidth.Must().Be(400);
+            loaded.Theme.Must().Be(ThemeMode.Dark);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Update_TwoStoresInterleaveEdits_WithoutClobberingEachOther()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "helix-settings-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var first = new JsonSettingsStore(path);
+            var second = new JsonSettingsStore(path);
+            first.Save(new AppSettings { Theme = ThemeMode.Light });
+
+            first.Update(settings => settings.Theme = ThemeMode.Dark);
+            second.Update(settings => settings.SidebarWidth = 280);
+
+            var loaded = new JsonSettingsStore(path).Load();
+            loaded.Theme.Must().Be(ThemeMode.Dark);
+            loaded.SidebarWidth.Must().Be(280);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+        }
+    }
 }

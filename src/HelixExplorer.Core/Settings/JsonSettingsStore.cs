@@ -22,14 +22,36 @@ public sealed class JsonSettingsStore(string path) : ISettingsStore
 
     public AppSettings Load()
     {
+        lock (_gate)
+            return LoadCore();
+    }
+
+    public void Save(AppSettings settings)
+    {
+        lock (_gate)
+            SaveCore(settings);
+    }
+
+    public void Update(Action<AppSettings> mutate)
+    {
+        ArgumentNullException.ThrowIfNull(mutate);
+
+        lock (_gate)
+        {
+            var settings = LoadCore();
+            mutate(settings);
+            SaveCore(settings);
+        }
+    }
+
+    private AppSettings LoadCore()
+    {
         if (!File.Exists(path))
             return new AppSettings();
 
         try
         {
-            string json;
-            lock (_gate)
-                json = File.ReadAllText(path);
+            var json = File.ReadAllText(path);
             return JsonSerializer.Deserialize<AppSettings>(json, Options) ?? new AppSettings();
         }
         catch
@@ -38,7 +60,7 @@ public sealed class JsonSettingsStore(string path) : ISettingsStore
         }
     }
 
-    public void Save(AppSettings settings)
+    private void SaveCore(AppSettings settings)
     {
         var directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(directory))
@@ -48,18 +70,15 @@ public sealed class JsonSettingsStore(string path) : ISettingsStore
         // Unique temp name avoids cross-call clobber of a shared *.tmp; lock serializes replace.
         var tempPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
 
-        lock (_gate)
+        try
         {
-            try
-            {
-                File.WriteAllText(tempPath, json);
-                File.Move(tempPath, path, overwrite: true);
-            }
-            catch (Exception ex)
-            {
-                try { File.Delete(tempPath); } catch { /* best-effort */ }
-                throw new IOException($"Failed to save settings to {path}", ex);
-            }
+            File.WriteAllText(tempPath, json);
+            File.Move(tempPath, path, overwrite: true);
+        }
+        catch (Exception ex)
+        {
+            try { File.Delete(tempPath); } catch { /* best-effort */ }
+            throw new IOException($"Failed to save settings to {path}", ex);
         }
     }
 }

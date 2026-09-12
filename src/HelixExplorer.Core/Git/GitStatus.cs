@@ -13,8 +13,6 @@ public sealed record GitStatus(
 
     public bool IsRepository => !string.IsNullOrEmpty(Branch);
 
-    public bool IsDirty => Staged > 0 || Unstaged > 0 || Untracked > 0;
-
     public int ModifiedCount => Staged + Unstaged + Untracked;
 
     public string Display

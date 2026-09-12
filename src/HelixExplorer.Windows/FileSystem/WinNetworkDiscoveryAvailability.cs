@@ -177,8 +177,7 @@ public sealed class WinNetworkDiscoveryAvailability : INetworkDiscoveryAvailabil
         var buffer = new INetwork[1];
         while (true)
         {
-            var fetched = 0u;
-            var hr = enumNetworks.Next(1, buffer, out fetched);
+            var hr = enumNetworks.Next(1, buffer, out var fetched);
             if (hr != 0 || fetched == 0)
                 yield break;
 

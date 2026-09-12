@@ -73,8 +73,6 @@ public sealed class PaneRefreshCoordinator(
     private bool _refreshInFlight;
     private bool _disposed;
 
-    public bool IsRefreshInFlight => _refreshInFlight;
-
     public async Task RefreshAsync(IPaneRefreshHost host, bool showLoading)
     {
         if (host.IsDisposed)

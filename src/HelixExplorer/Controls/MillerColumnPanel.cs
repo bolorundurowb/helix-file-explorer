@@ -14,8 +14,6 @@ public sealed class MillerColumnPanel : Panel
     public static readonly AttachedProperty<int> ColumnIndexProperty =
         AvaloniaProperty.RegisterAttached<MillerColumnPanel, Control, int>("ColumnIndex");
 
-    public static int GetColumnIndex(Control element) => element.GetValue(ColumnIndexProperty);
-
     public static void SetColumnIndex(Control element, int value) => element.SetValue(ColumnIndexProperty, value);
 
     static MillerColumnPanel()

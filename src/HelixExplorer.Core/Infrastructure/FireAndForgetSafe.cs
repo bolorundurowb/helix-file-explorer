@@ -62,24 +62,3 @@ public static class FireAndForgetSafe
         }
     }
 }
-
-public static class FireAndForgetSafeExtensions
-{
-    public static void FireAndForget(
-        this Task task,
-        ILogger logger,
-        [CallerMemberName] string caller = "",
-        [CallerFilePath] string file = "")
-    {
-        FireAndForgetSafe.Run(task, logger, caller, file);
-    }
-
-    public static void FireAndForget(
-        this Func<Task> work,
-        ILogger logger,
-        [CallerMemberName] string caller = "",
-        [CallerFilePath] string file = "")
-    {
-        FireAndForgetSafe.Run(work, logger, caller, file);
-    }
-}

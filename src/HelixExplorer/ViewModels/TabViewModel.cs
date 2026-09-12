@@ -104,8 +104,6 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     public bool HasTint => Tint.HasValue;
     public IBrush? TintBrush => Tint is { } c ? new SolidColorBrush(c) : null;
 
-    public bool LeftShowsHome => LeftPane.IsHome;
-
     public bool ShowsHomeIcon => IsBrowserTab && ActivePane.IsHome;
 
     public bool ShowsFolderIcon => !IsSettingsTab && !ShowsHomeIcon;

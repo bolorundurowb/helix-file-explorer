@@ -30,7 +30,6 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     private readonly IArchiveProvider _archive;
     private readonly IFolderColorService _folderColors;
     private readonly IFolderViewPreferencesService _folderViewPrefs;
-    private readonly IFileOperationService _fileOps;
     private readonly IClipboardService _clipboard;
     private readonly IUiHost _uiHost;
     private readonly IGitProvider _git;
@@ -87,7 +86,6 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         IArchiveProvider archive,
         IFolderColorService folderColors,
         IFolderViewPreferencesService folderViewPrefs,
-        IFileOperationService fileOps,
         IClipboardService clipboard,
         IUiHost uiHost,
         IGitProvider git,
@@ -105,7 +103,6 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         _archive = archive;
         _folderColors = folderColors;
         _folderViewPrefs = folderViewPrefs;
-        _fileOps = fileOps;
         _clipboard = clipboard;
         _uiHost = uiHost;
         _git = git;
@@ -1271,8 +1268,6 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
 
     [RelayCommand]
     public void ExitSearchMode() => ClearFilter();
-
-    public void ShowFilter() => EnterFilterMode();
 
     public void ClearFilter()
     {

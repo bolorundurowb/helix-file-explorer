@@ -25,7 +25,6 @@ public sealed class PaneViewModelFactory(IServiceProvider serviceProvider) : IPa
             serviceProvider.GetRequiredService<IArchiveProvider>(),
             serviceProvider.GetRequiredService<IFolderColorService>(),
             serviceProvider.GetRequiredService<IFolderViewPreferencesService>(),
-            serviceProvider.GetRequiredService<IFileOperationService>(),
             serviceProvider.GetRequiredService<IClipboardService>(),
             serviceProvider.GetRequiredService<IUiHost>(),
             serviceProvider.GetRequiredService<IGitProvider>(),

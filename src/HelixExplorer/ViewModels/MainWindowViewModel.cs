@@ -656,6 +656,9 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             kind,
             kind == TabKind.Settings ? _settingsPage : null);
         tab.CloseRequested += OnTabCloseRequested;
+        tab.CloseTabsToRightRequested += OnCloseTabsToRightRequested;
+        tab.CloseTabsToLeftRequested += OnCloseTabsToLeftRequested;
+        tab.CloseOtherTabsRequested += OnCloseOtherTabsRequested;
         tab.SortChanged += OnTabSortChanged;
         tab.LayoutChanged += OnTabLayoutChanged;
         tab.Navigated += OnTabNavigated;
@@ -739,6 +742,9 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private void DetachTab(TabViewModel tab)
     {
         tab.CloseRequested -= OnTabCloseRequested;
+        tab.CloseTabsToRightRequested -= OnCloseTabsToRightRequested;
+        tab.CloseTabsToLeftRequested -= OnCloseTabsToLeftRequested;
+        tab.CloseOtherTabsRequested -= OnCloseOtherTabsRequested;
         tab.SortChanged -= OnTabSortChanged;
         tab.LayoutChanged -= OnTabLayoutChanged;
         tab.Navigated -= OnTabNavigated;
@@ -763,6 +769,72 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         if (sender is TabViewModel tab)
             CloseTab(tab);
+    }
+
+    private void OnCloseTabsToRightRequested(object? sender, EventArgs e)
+    {
+        if (sender is TabViewModel tab)
+            CloseTabsToRight(tab);
+    }
+
+    private void OnCloseTabsToLeftRequested(object? sender, EventArgs e)
+    {
+        if (sender is TabViewModel tab)
+            CloseTabsToLeft(tab);
+    }
+
+    private void OnCloseOtherTabsRequested(object? sender, EventArgs e)
+    {
+        if (sender is TabViewModel tab)
+            CloseOtherTabs(tab);
+    }
+
+    private void CloseTabsToRight(TabViewModel anchor)
+        => CloseTabs(Range(anchor, after: true), anchor);
+
+    private void CloseTabsToLeft(TabViewModel anchor)
+        => CloseTabs(Range(anchor, after: false), anchor);
+
+    private void CloseOtherTabs(TabViewModel anchor)
+        => CloseTabs(Tabs.Where(t => !ReferenceEquals(t, anchor)).ToList(), anchor);
+
+    private IReadOnlyList<TabViewModel> Range(TabViewModel anchor, bool after)
+    {
+        var index = Tabs.IndexOf(anchor);
+        return index < 0
+            ? []
+            : after
+                ? Tabs.Skip(index + 1).ToList()
+                : Tabs.Take(index).ToList();
+    }
+
+    private void CloseTabs(IReadOnlyList<TabViewModel> closing, TabViewModel anchor)
+    {
+        if (closing.Count == 0 || !Tabs.Contains(anchor))
+            return;
+
+        foreach (var tab in closing)
+        {
+            Tabs.Remove(tab);
+            DetachTab(tab);
+            tab.Dispose();
+        }
+
+        if (SelectedTab is null || !Tabs.Contains(SelectedTab))
+            SelectedTab = anchor;
+
+        OnPropertyChanged(nameof(HasMultipleTabs));
+    }
+
+    /// <summary>Reorders a tab within the strip without changing the active tab.</summary>
+    public void MoveTab(int fromIndex, int toIndex)
+    {
+        if (fromIndex < 0 || fromIndex >= Tabs.Count
+            || toIndex < 0 || toIndex >= Tabs.Count
+            || fromIndex == toIndex)
+            return;
+
+        Tabs.Move(fromIndex, toIndex);
     }
 
     private void OnTabSortChanged(object? sender, EventArgs e) => NotifySortChrome();

@@ -56,6 +56,9 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     public bool IsSettingsTab => Kind == TabKind.Settings;
 
     public event EventHandler? CloseRequested;
+    public event EventHandler? CloseTabsToRightRequested;
+    public event EventHandler? CloseTabsToLeftRequested;
+    public event EventHandler? CloseOtherTabsRequested;
     public event EventHandler? SelectionChanged;
 
     private void OnPaneSelectionChanged(object? sender, EventArgs e)
@@ -290,6 +293,15 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
 
     [RelayCommand]
     private void Close() => CloseRequested?.Invoke(this, EventArgs.Empty);
+
+    [RelayCommand]
+    private void CloseTabsToRight() => CloseTabsToRightRequested?.Invoke(this, EventArgs.Empty);
+
+    [RelayCommand]
+    private void CloseTabsToLeft() => CloseTabsToLeftRequested?.Invoke(this, EventArgs.Empty);
+
+    [RelayCommand]
+    private void CloseOtherTabs() => CloseOtherTabsRequested?.Invoke(this, EventArgs.Empty);
 
     private void UpdateTitle()
     {

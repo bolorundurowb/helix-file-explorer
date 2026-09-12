@@ -268,7 +268,19 @@
                             <Setter Property="Background" Value="Transparent" />
                             <Setter Property="VerticalAlignment" Value="Bottom" />
                         </Style>
+                        <Style Selector="ListBoxItem:selected">
+                            <Setter Property="Background" Value="Transparent" />
+                        </Style>
+                        <Style Selector="ListBoxItem:pointerover">
+                            <Setter Property="Background" Value="Transparent" />
+                        </Style>
                         <Style Selector="ListBoxItem /template/ ContentPresenter">
+                            <Setter Property="Background" Value="Transparent" />
+                        </Style>
+                        <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+                            <Setter Property="Background" Value="Transparent" />
+                        </Style>
+                        <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
                             <Setter Property="Background" Value="Transparent" />
                         </Style>
                         <Style Selector="ListBoxItem:not(:selected) Border#TabChip">
@@ -278,7 +290,7 @@
                         </Style>
                         <Style Selector="ListBoxItem:selected Border#TabChip">
                             <Setter Property="Opacity" Value="1" />
-                            <Setter Property="Background" Value="{DynamicResource HelixContentCardBrush}" />
+                            <Setter Property="Background" Value="{DynamicResource HelixTabSelectedBrush}" />
                             <Setter Property="BorderBrush" Value="{DynamicResource HelixBorderColor}" />
                             <Setter Property="BorderThickness" Value="1,1,1,0" />
                             <Setter Property="Margin" Value="0,2,0,-1" />
@@ -302,11 +314,13 @@
                         <DataTemplate x:DataType="vm:TabViewModel">
                             <Border x:Name="TabChip"
                                     CornerRadius="8,8,0,0"
-                                    Background="Transparent"
                                     BorderThickness="0"
                                     Padding="0"
                                     MinWidth="150" MaxWidth="220"
+                                    PointerPressed="OnTabPointerPressed"
+                                    PointerMoved="OnTabPointerMoved"
                                     PointerReleased="OnTabPointerReleased"
+                                    PointerCaptureLost="OnTabPointerCaptureLost"
                                     WindowDecorationProperties.ElementRole="User">
                                 <!-- Fixed-height top bar so titles stay aligned whether tinted or not. -->
                                 <Grid RowDefinitions="4,*,Auto">
@@ -414,6 +428,10 @@
                                             </MenuItem>
                                         </MenuItem>
                                         <MenuItem Header="Clear tint" Command="{Binding ClearTintCommand}" />
+                                        <Separator />
+                                        <MenuItem Header="Close tabs to the right" Command="{Binding CloseTabsToRightCommand}" />
+                                        <MenuItem Header="Close tabs to the left" Command="{Binding CloseTabsToLeftCommand}" />
+                                        <MenuItem Header="Close other tabs" Command="{Binding CloseOtherTabsCommand}" />
                                         <Separator />
                                         <MenuItem Header="Close tab" Command="{Binding CloseCommand}" />
                                     </ContextMenu>

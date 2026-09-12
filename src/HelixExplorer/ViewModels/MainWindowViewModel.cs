@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using Avalonia.Input;
 using Avalonia.Threading;
@@ -124,6 +125,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _folderColors.ColorsChanged += OnFolderColorsChanged;
         _volumeWatcher.VolumesChanged += OnVolumesChanged;
         _volumeWatcher.Start();
+        Tabs.CollectionChanged += OnTabsCollectionChanged;
     }
 
     public const string AppDefaultTerminalGesture = "Ctrl+OemTilde";
@@ -837,6 +839,20 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         Tabs.Move(fromIndex, toIndex);
     }
 
+    private void OnTabsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        => RefreshTabCloseAvailability();
+
+    private void RefreshTabCloseAvailability()
+    {
+        for (var i = 0; i < Tabs.Count; i++)
+        {
+            var tab = Tabs[i];
+            tab.HasTabsToLeft = i > 0;
+            tab.HasTabsToRight = i < Tabs.Count - 1;
+            tab.HasOtherTabs = Tabs.Count > 1;
+        }
+    }
+
     private void OnTabSortChanged(object? sender, EventArgs e) => NotifySortChrome();
 
     private void OnTabLayoutChanged(object? sender, EventArgs e) => NotifyLayoutChrome();
@@ -1470,6 +1486,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             tab.Dispose();
         }
 
+        Tabs.CollectionChanged -= OnTabsCollectionChanged;
         Tabs.Clear();
     }
 }

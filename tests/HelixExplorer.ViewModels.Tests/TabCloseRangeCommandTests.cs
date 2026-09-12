@@ -3,6 +3,7 @@ using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Persistence;
 using HelixExplorer.Core.Settings;
 using HelixExplorer.Services;
+using HelixExplorer.ViewModels;
 using HelixExplorer.ViewModels.Pane;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -55,10 +56,41 @@ public class TabCloseRangeCommandTests : IDisposable
     }
 
     [Fact]
+    public void CloseTabsToRightCommand_CanExecute_ReflectsAvailability()
+    {
+        _tab.HasTabsToRight = false;
+        _tab.CloseTabsToRightCommand.CanExecute(null).Must().BeFalse();
+
+        _tab.HasTabsToRight = true;
+        _tab.CloseTabsToRightCommand.CanExecute(null).Must().BeTrue();
+    }
+
+    [Fact]
+    public void CloseTabsToLeftCommand_CanExecute_ReflectsAvailability()
+    {
+        _tab.HasTabsToLeft = false;
+        _tab.CloseTabsToLeftCommand.CanExecute(null).Must().BeFalse();
+
+        _tab.HasTabsToLeft = true;
+        _tab.CloseTabsToLeftCommand.CanExecute(null).Must().BeTrue();
+    }
+
+    [Fact]
+    public void CloseOtherTabsCommand_CanExecute_ReflectsAvailability()
+    {
+        _tab.HasOtherTabs = false;
+        _tab.CloseOtherTabsCommand.CanExecute(null).Must().BeFalse();
+
+        _tab.HasOtherTabs = true;
+        _tab.CloseOtherTabsCommand.CanExecute(null).Must().BeTrue();
+    }
+
+    [Fact]
     public void CloseTabsToRightCommand_RaisesRequest()
     {
         var raised = false;
         _tab.CloseTabsToRightRequested += (_, _) => raised = true;
+        _tab.HasTabsToRight = true;
         _tab.CloseTabsToRightCommand.Execute(null);
         raised.Must().BeTrue();
     }
@@ -68,6 +100,7 @@ public class TabCloseRangeCommandTests : IDisposable
     {
         var raised = false;
         _tab.CloseTabsToLeftRequested += (_, _) => raised = true;
+        _tab.HasTabsToLeft = true;
         _tab.CloseTabsToLeftCommand.Execute(null);
         raised.Must().BeTrue();
     }
@@ -77,6 +110,7 @@ public class TabCloseRangeCommandTests : IDisposable
     {
         var raised = false;
         _tab.CloseOtherTabsRequested += (_, _) => raised = true;
+        _tab.HasOtherTabs = true;
         _tab.CloseOtherTabsCommand.Execute(null);
         raised.Must().BeTrue();
     }

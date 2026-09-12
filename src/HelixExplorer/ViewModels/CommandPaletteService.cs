@@ -14,8 +14,6 @@ public sealed class CommandPaletteService
     private readonly List<CommandItem> _allCommands = new();
     private bool _built;
 
-    public IReadOnlyList<CommandItem> AllCommands => _allCommands;
-
     public void EnsureBuilt()
     {
         if (_built)

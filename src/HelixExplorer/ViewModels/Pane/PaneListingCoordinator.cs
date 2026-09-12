@@ -11,8 +11,6 @@ public sealed class PaneListingCoordinator
     private readonly List<FileSystemEntry> _viewBuffer = new();
     private readonly List<FileSystemEntry> _visibleBuffer = new();
 
-    public IReadOnlyDictionary<string, EntryItemViewModel> EntryPool => _entryPool;
-
     public void ClearEntryPool() => _entryPool.Clear();
 
     public void RemoveFromPool(string path) => _entryPool.Remove(path);

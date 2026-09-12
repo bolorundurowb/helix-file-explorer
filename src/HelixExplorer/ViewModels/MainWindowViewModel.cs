@@ -110,6 +110,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         DefaultThumbnailSize = Math.Clamp(settings.DefaultThumbnailSize, PaneViewModel.MinThumbnailSize, PaneViewModel.MaxThumbnailSize);
         DefaultDualPane = settings.DefaultDualPane;
         SwitchToNewTabOnOpen = settings.SwitchToNewTabOnOpen;
+        RestoreSessionOnStartup = settings.RestoreSessionOnStartup;
         DefaultSplitOrientation = settings.DefaultSplitOrientation;
         AccentColorArgb = settings.AccentColorArgb;
         ApplyOpenInTerminalGesture(settings.OpenInTerminalGesture);
@@ -140,9 +141,12 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     partial void OnOpenInTerminalGestureChanged(string value)
     {
         if (string.IsNullOrWhiteSpace(value) || !IsValidKeyGesture(value))
+        {
             OpenInTerminalGesture = AppDefaultTerminalGesture;
+            return;
+        }
 
-        PersistChromeSettings();
+        _settingsCoordinator.ScheduleSave(settings => settings.OpenInTerminalGesture = value);
     }
 
     private static bool IsValidKeyGesture(string gesture)
@@ -173,7 +177,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _autoCheckForUpdates = true;
 
-    partial void OnAutoCheckForUpdatesChanged(bool value) => PersistChromeSettings();
+    partial void OnAutoCheckForUpdatesChanged(bool value)
+        => _settingsCoordinator.ScheduleSave(settings => settings.AutoCheckForUpdates = value);
 
     /// <summary>
     /// Proxies the active pane so one window-level <see cref="KeyBinding"/> works regardless of focus.
@@ -272,19 +277,21 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         if (!_restoreWindowLayout)
             return;
 
-        var settings = GetSettings();
-        settings.WindowMaximized = window.WindowState == Avalonia.Controls.WindowState.Maximized;
+        var maximized = window.WindowState == Avalonia.Controls.WindowState.Maximized;
 
-        if (window.WindowState == Avalonia.Controls.WindowState.Normal)
+        _settingsCoordinator.SaveNow(settings =>
         {
-            settings.WindowWidth = Math.Max(MinWindowWidth, window.Width);
-            settings.WindowHeight = Math.Max(MinWindowHeight, window.Height);
-            settings.WindowX = window.Position.X;
-            settings.WindowY = window.Position.Y;
-        }
+            settings.WindowMaximized = maximized;
+            if (!maximized)
+            {
+                settings.WindowWidth = Math.Max(MinWindowWidth, window.Width);
+                settings.WindowHeight = Math.Max(MinWindowHeight, window.Height);
+                settings.WindowX = window.Position.X;
+                settings.WindowY = window.Position.Y;
+            }
 
-        settings.SidebarWidth = SidebarWidth;
-        SaveSettings(settings);
+            settings.SidebarWidth = SidebarWidth;
+        });
     }
 
     public void SyncSidebarWidth(double width)
@@ -454,6 +461,12 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _switchToNewTabOnOpen = true;
 
+    /// <summary>
+    /// Whether the next app launch reopens the previous session's tabs and window layout.
+    /// </summary>
+    [ObservableProperty]
+    private bool _restoreSessionOnStartup = true;
+
     [ObservableProperty]
     private PaneSplitOrientation _defaultSplitOrientation = PaneSplitOrientation.Vertical;
 
@@ -498,20 +511,20 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     partial void OnShowHiddenFilesChanged(bool value)
     {
-        PersistViewSettings();
+        _settingsCoordinator.ScheduleSave(settings => settings.ShowHiddenFiles = value);
         ApplyViewSettingsToTabs();
     }
 
     partial void OnShowFileExtensionsChanged(bool value)
     {
-        PersistViewSettings();
+        _settingsCoordinator.ScheduleSave(settings => settings.ShowFileExtensions = value);
         ApplyViewSettingsToTabs();
     }
 
     partial void OnDirectorySortChanged(DirectorySortMode value)
     {
         OnPropertyChanged(nameof(FoldersFirst));
-        PersistViewSettings();
+        _settingsCoordinator.ScheduleSave(settings => settings.DirectorySort = value);
         ApplyViewSettingsToTabs();
     }
 
@@ -521,17 +534,18 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         set => DirectorySort = value ? DirectorySortMode.FoldersFirst : DirectorySortMode.MixedWithFiles;
     }
 
-    partial void OnThemeChanged(ThemeMode value) => PersistChromeSettings();
+    partial void OnThemeChanged(ThemeMode value)
+        => _settingsCoordinator.ScheduleSave(settings => settings.Theme = value);
 
     partial void OnUiFontChanged(UiFontFamily value)
     {
-        PersistChromeSettings();
+        _settingsCoordinator.ScheduleSave(settings => settings.UiFont = value);
         OnPropertyChanged(nameof(SelectedUiFontOption));
     }
 
     partial void OnSizeDisplayChanged(SizeDisplayMode value)
     {
-        PersistChromeSettings();
+        _settingsCoordinator.ScheduleSave(settings => settings.SizeDisplay = value);
         SizeDisplayChanged?.Invoke(value);
         RefreshSizeDisplayOnAllPanes();
     }
@@ -545,10 +559,11 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
-        PersistChromeSettings();
+        _settingsCoordinator.ScheduleSave(settings => settings.SidebarWidth = value);
     }
 
-    partial void OnDefaultViewModeChanged(LayoutMode value) => PersistChromeSettings();
+    partial void OnDefaultViewModeChanged(LayoutMode value)
+        => _settingsCoordinator.ScheduleSave(settings => settings.DefaultViewMode = value);
 
     partial void OnDefaultThumbnailSizeChanged(double value)
     {
@@ -559,59 +574,28 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
-        PersistChromeSettings();
+        _settingsCoordinator.ScheduleSave(settings => settings.DefaultThumbnailSize = value);
     }
 
-    partial void OnDefaultDualPaneChanged(bool value) => PersistChromeSettings();
+    partial void OnDefaultDualPaneChanged(bool value)
+        => _settingsCoordinator.ScheduleSave(settings => settings.DefaultDualPane = value);
 
-    partial void OnSwitchToNewTabOnOpenChanged(bool value) => PersistChromeSettings();
+    partial void OnSwitchToNewTabOnOpenChanged(bool value)
+        => _settingsCoordinator.ScheduleSave(settings => settings.SwitchToNewTabOnOpen = value);
 
-    partial void OnDefaultSplitOrientationChanged(PaneSplitOrientation value) => PersistChromeSettings();
+    partial void OnRestoreSessionOnStartupChanged(bool value)
+        => _settingsCoordinator.ScheduleSave(settings => settings.RestoreSessionOnStartup = value);
 
-    partial void OnAccentColorArgbChanged(uint? value) => PersistChromeSettings();
+    partial void OnDefaultSplitOrientationChanged(PaneSplitOrientation value)
+        => _settingsCoordinator.ScheduleSave(settings => settings.DefaultSplitOrientation = value);
+
+    partial void OnAccentColorArgbChanged(uint? value)
+        => _settingsCoordinator.ScheduleSave(settings => settings.AccentColorArgb = value);
 
     private void OnThemeServiceChanged(ThemeMode _)
         => _accentBrushes.ApplyCustomAccent(AccentColorArgb);
 
-    private void PersistViewSettings()
-    {
-        _settingsCoordinator.ScheduleSave(settings =>
-        {
-            settings.ShowHiddenFiles = ShowHiddenFiles;
-            settings.ShowFileExtensions = ShowFileExtensions;
-            settings.DirectorySort = DirectorySort;
-        });
-    }
-
-    private void PersistChromeSettings()
-    {
-        _settingsCoordinator.ScheduleSave(settings =>
-        {
-            settings.SidebarWidth = SidebarWidth;
-            settings.Theme = Theme;
-            settings.UiFont = UiFont;
-            settings.SizeDisplay = SizeDisplay;
-            settings.DefaultViewMode = DefaultViewMode;
-            settings.DefaultThumbnailSize = DefaultThumbnailSize;
-            settings.DefaultDualPane = DefaultDualPane;
-            settings.SwitchToNewTabOnOpen = SwitchToNewTabOnOpen;
-            settings.DefaultSplitOrientation = DefaultSplitOrientation;
-            settings.AccentColorArgb = AccentColorArgb;
-            settings.OpenInTerminalGesture = string.IsNullOrWhiteSpace(OpenInTerminalGesture)
-                ? AppDefaultTerminalGesture
-                : OpenInTerminalGesture;
-            settings.AutoCheckForUpdates = AutoCheckForUpdates;
-        });
-    }
-
     private AppSettings GetSettings() => _settingsCoordinator.Load();
-
-    private void SaveSettings(AppSettings settings)
-    {
-        // Callers mutate the cached instance from GetSettings(); flush writes it immediately.
-        _ = settings;
-        _settingsCoordinator.Flush();
-    }
 
     private void FlushSettings() => _settingsCoordinator.Flush();
 
@@ -1384,22 +1368,20 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public void PinPath(string path)
     {
-        var settings = GetSettings();
-        if (!_sidebar.TryPin(path, settings))
+        if (!_sidebar.TryPin(path, GetSettings()))
             return;
 
-        SaveSettings(settings);
+        _settingsCoordinator.ScheduleSave(settings => _sidebar.TryPin(path, settings));
         RebuildSidebar();
         SelectedTab?.ActivePane?.NotifyPinStateChanged();
     }
 
     public void UnpinPath(string path)
     {
-        var settings = GetSettings();
-        if (!_sidebar.TryUnpin(path, settings))
+        if (!_sidebar.TryUnpin(path, GetSettings()))
             return;
 
-        SaveSettings(settings);
+        _settingsCoordinator.ScheduleSave(settings => _sidebar.TryUnpin(path, settings));
         RebuildSidebar();
         SelectedTab?.ActivePane?.NotifyPinStateChanged();
     }
@@ -1477,7 +1459,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
         // WindowHostService owns the session-save policy so secondary scoped windows do not
         // overwrite the persisted session when their scopes are disposed.
-        PersistChromeSettings();
         FlushSettings();
 
         foreach (var tab in Tabs)

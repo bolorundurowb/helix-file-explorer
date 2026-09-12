@@ -170,4 +170,30 @@ public class JsonSettingsStoreTests
             try { File.Delete(path); } catch { }
         }
     }
+
+    [Fact]
+    public async Task Update_ConcurrentAcrossStores_SharingFile_DoesNotLoseDistinctFields()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "helix-settings-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var first = new JsonSettingsStore(path);
+            var second = new JsonSettingsStore(path);
+            first.Save(new AppSettings());
+
+            var tasks = Enumerable.Range(0, 50).Select(i => i % 2 == 0
+                ? Task.Run(() => first.Update(settings => settings.ShowHiddenFiles = true))
+                : Task.Run(() => second.Update(settings => settings.ShowFileExtensions = false)));
+
+            await Task.WhenAll(tasks);
+
+            var loaded = new JsonSettingsStore(path).Load();
+            loaded.ShowHiddenFiles.Must().BeTrue();
+            loaded.ShowFileExtensions.Must().BeFalse();
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+        }
+    }
 }

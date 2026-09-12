@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using HelixExplorer.Core.Infrastructure;
@@ -16,6 +18,10 @@ public sealed class JsonSettingsStore(string path) : ISettingsStore
 
     private readonly object _gate = new();
 
+    // Serializes read-modify-write across processes sharing the same settings file, so a stale
+    // process cannot drop another process's edit. _gate already serializes in-process callers.
+    private readonly Mutex _mutex = CreateSettingsMutex(path);
+
     public JsonSettingsStore() : this(AppPaths.SettingsFile)
     {
     }
@@ -29,7 +35,7 @@ public sealed class JsonSettingsStore(string path) : ISettingsStore
     public void Save(AppSettings settings)
     {
         lock (_gate)
-            SaveCore(settings);
+            WithMutex(() => SaveCore(settings));
     }
 
     public void Update(Action<AppSettings> mutate)
@@ -37,11 +43,12 @@ public sealed class JsonSettingsStore(string path) : ISettingsStore
         ArgumentNullException.ThrowIfNull(mutate);
 
         lock (_gate)
-        {
-            var settings = LoadCore();
-            mutate(settings);
-            SaveCore(settings);
-        }
+            WithMutex(() =>
+            {
+                var settings = LoadCore();
+                mutate(settings);
+                SaveCore(settings);
+            });
     }
 
     private AppSettings LoadCore()
@@ -80,5 +87,36 @@ public sealed class JsonSettingsStore(string path) : ISettingsStore
             try { File.Delete(tempPath); } catch { /* best-effort */ }
             throw new IOException($"Failed to save settings to {path}", ex);
         }
+    }
+
+    private void WithMutex(Action action)
+    {
+        var acquired = false;
+        try
+        {
+            try
+            {
+                acquired = _mutex.WaitOne();
+            }
+            catch (AbandonedMutexException)
+            {
+                // A previous owner crashed without releasing; we now own the mutex.
+                acquired = true;
+            }
+
+            action();
+        }
+        finally
+        {
+            if (acquired)
+                _mutex.ReleaseMutex();
+        }
+    }
+
+    private static Mutex CreateSettingsMutex(string path)
+    {
+        var normalized = path.Replace('/', '\\').TrimEnd('\\').ToUpperInvariant();
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalized)));
+        return new Mutex(initiallyOwned: false, $"Local\\HelixExplorer.Settings.{hash}");
     }
 }

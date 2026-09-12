@@ -19,9 +19,7 @@ public struct ArrayPoolList<T> : IDisposable
     }
 
     public readonly int Count => _count;
-    public readonly int Capacity => _buffer?.Length ?? 0;
     public readonly Span<T> AsSpan() => _buffer is null ? Span<T>.Empty : _buffer.AsSpan(0, _count);
-    public readonly ReadOnlySpan<T> AsReadOnlySpan() => _buffer is null ? ReadOnlySpan<T>.Empty : _buffer.AsSpan(0, _count);
 
     public readonly ref T this[int index]
     {

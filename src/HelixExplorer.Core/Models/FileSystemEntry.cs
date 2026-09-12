@@ -19,14 +19,4 @@ public readonly record struct FileSystemEntry(
         : string.IsNullOrEmpty(Extension)
             ? "File"
             : Extension.TrimStart('.').ToUpperInvariant() + " File";
-
-    public static ReadOnlyMemory<string> SplitPath(string path)
-    {
-        if (string.IsNullOrEmpty(path))
-            return Array.Empty<string>().AsMemory();
-
-        return path
-            .Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar, '/'], StringSplitOptions.RemoveEmptyEntries)
-            .AsMemory();
-    }
 }

@@ -754,7 +754,6 @@
                         <Border Classes="fileTile"
                                 Width="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=controls:VirtualizingFileGrid}}"
                                 Margin="6"
-                                Padding="4"
                                 CornerRadius="6"
                                 ClipToBounds="{Binding IsNotRenaming}"
                                 ZIndex="{Binding TileZIndex}"
@@ -798,7 +797,7 @@
                                           Foreground="{DynamicResource HelixAccentBrush}"
                                           IsVisible="{Binding IsSelected}"
                                           IsHitTestVisible="False" />
-                                <StackPanel Spacing="4" ToolTip.Tip="{Binding Name}"
+                                <StackPanel Margin="4" Spacing="4" ToolTip.Tip="{Binding Name}"
                                             Opacity="{Binding IsCut, Converter={StaticResource CutOpacityConverter}}">
                                 <controls:EntryVisualView Width="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=controls:VirtualizingFileGrid}}"
                                                           Height="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=controls:VirtualizingFileGrid}}"

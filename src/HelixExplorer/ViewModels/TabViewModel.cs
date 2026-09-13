@@ -114,12 +114,15 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     private PaneViewModel CreatePane()
     {
         var pane = _paneFactory.Create();
+        pane.IsDualPane = IsDualPane;
         pane.SortChanged += OnPaneSortChanged;
         pane.LayoutChanged += OnPaneLayoutChanged;
         pane.Navigated += OnPaneNavigated;
         pane.EntryActivated += OnEntryActivated;
         pane.OpenInNewTabRequested += OnOpenInNewTabRequested;
         pane.OpenInOtherPaneRequested += OnOpenInOtherPaneRequested;
+        pane.CopyToOtherPaneRequested += OnPaneCopyToOtherPaneRequested;
+        pane.MoveToOtherPaneRequested += OnPaneMoveToOtherPaneRequested;
         pane.PinPathRequested += OnPanePinPathRequested;
         pane.SelectionChanged += OnPaneSelectionChanged;
         pane.ApplyViewSettings(_showHiddenFiles, _showFileExtensions, _directorySort);
@@ -221,7 +224,86 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     {
     }
 
-    partial void OnIsDualPaneChanged(bool value) => UpdateTitle();
+    partial void OnIsDualPaneChanged(bool value)
+    {
+        LeftPane.IsDualPane = value;
+        if (RightPane is not null)
+            RightPane.IsDualPane = value;
+        UpdateTitle();
+    }
+
+    public bool CanCopyToOtherPane
+    {
+        get
+        {
+            if (!IsDualPane || RightPane is null)
+                return false;
+
+            var target = ReferenceEquals(ActivePane, LeftPane) ? RightPane : LeftPane;
+            return ActivePane.CanModifySelection() && target.CanAcceptFileDrop && !string.IsNullOrEmpty(target.CurrentPath);
+        }
+    }
+
+    public bool CanMoveToOtherPane => CanCopyToOtherPane;
+
+    public async Task CopyToOtherPaneAsync(PaneViewModel? sourcePane = null, IReadOnlyList<string>? paths = null)
+    {
+        if (!IsDualPane || RightPane is null)
+            return;
+
+        var source = sourcePane ?? ActivePane;
+        var target = ReferenceEquals(source, LeftPane) ? RightPane : LeftPane;
+        if (target is null || !target.CanAcceptFileDrop || string.IsNullOrEmpty(target.CurrentPath))
+            return;
+
+        var itemsToCopy = paths ?? source.SelectedEntries.Select(e => e.FullPath).ToList();
+        if (itemsToCopy.Count == 0)
+            return;
+
+        await target.HandleDropAsync(itemsToCopy, target.CurrentPath, isCopy: true).ConfigureAwait(true);
+    }
+
+    public async Task MoveToOtherPaneAsync(PaneViewModel? sourcePane = null, IReadOnlyList<string>? paths = null)
+    {
+        if (!IsDualPane || RightPane is null)
+            return;
+
+        var source = sourcePane ?? ActivePane;
+        var target = ReferenceEquals(source, LeftPane) ? RightPane : LeftPane;
+        if (target is null || !target.CanAcceptFileDrop || string.IsNullOrEmpty(target.CurrentPath))
+            return;
+
+        var itemsToMove = paths ?? source.SelectedEntries.Select(e => e.FullPath).ToList();
+        if (itemsToMove.Count == 0)
+            return;
+
+        await target.HandleDropAsync(itemsToMove, target.CurrentPath, isCopy: false).ConfigureAwait(true);
+        await source.RefreshAsync(showLoading: false).ConfigureAwait(true);
+    }
+
+    private async void OnPaneCopyToOtherPaneRequested(object? sender, IReadOnlyList<string> paths)
+    {
+        try
+        {
+            await CopyToOtherPaneAsync(sender as PaneViewModel, paths).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to copy to other pane: {ex.Message}");
+        }
+    }
+
+    private async void OnPaneMoveToOtherPaneRequested(object? sender, IReadOnlyList<string> paths)
+    {
+        try
+        {
+            await MoveToOtherPaneAsync(sender as PaneViewModel, paths).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to move to other pane: {ex.Message}");
+        }
+    }
 
     partial void OnTintChanged(Color? value) { }
 
@@ -425,6 +507,8 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         pane.EntryActivated -= OnEntryActivated;
         pane.OpenInNewTabRequested -= OnOpenInNewTabRequested;
         pane.OpenInOtherPaneRequested -= OnOpenInOtherPaneRequested;
+        pane.CopyToOtherPaneRequested -= OnPaneCopyToOtherPaneRequested;
+        pane.MoveToOtherPaneRequested -= OnPaneMoveToOtherPaneRequested;
         pane.PinPathRequested -= OnPanePinPathRequested;
         pane.SelectionChanged -= OnPaneSelectionChanged;
     }

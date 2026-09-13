@@ -204,6 +204,22 @@ public class GroupedListingPublishTests
             GroupingUtcNow = Now
         };
 
+    private static ListingPublishRequest FilteredRequest(string filterText, params FileSystemEntry[] entries)
+        => new()
+        {
+            AllEntries = entries,
+            GitSnapshot = GitStatusSnapshot.Empty,
+            ShowHiddenFiles = false,
+            ShowFileExtensions = true,
+            IsFilterVisible = true,
+            FilterText = filterText,
+            SortColumn = SortColumn.Name,
+            SortDescending = false,
+            DirectorySort = DirectorySortMode.MixedWithFiles,
+            GroupBy = GroupByMode.None,
+            GroupingUtcNow = Now
+        };
+
     [Fact]
     public void ApplySortAndPublish_None_KeepsPlainNameOrder()
     {
@@ -221,5 +237,22 @@ public class GroupedListingPublishTests
             Request(GroupByMode.Name, File("alpha.txt"), File("zulu.txt"), File("1st.txt")));
 
         result.Entries.Select(e => e.Name).Must().BeSequenceEqual(new[] { "1st.txt", "alpha.txt", "zulu.txt" });
+    }
+
+    [Fact]
+    public void ApplySortAndPublish_FilterWidening_ReusesPooledViewModels()
+    {
+        var coordinator = new PaneListingCoordinator();
+        var entries = new[] { File("alpha.txt"), File("zulu.txt") };
+
+        var narrow = coordinator.ApplySortAndPublish(FilteredRequest("alpha", entries));
+        narrow.Entries.Select(e => e.Name).Must().BeSequenceEqual(new[] { "alpha.txt" });
+        var alpha = narrow.Entries[0];
+
+        // Widening the filter (e.g. backspace) must reuse the surviving view model rather than
+        // recreate it and re-fetch its icon.
+        var wide = coordinator.ApplySortAndPublish(FilteredRequest(string.Empty, entries));
+        wide.Entries.Select(e => e.Name).Must().BeSequenceEqual(new[] { "alpha.txt", "zulu.txt" });
+        ReferenceEquals(wide.Entries[0], alpha).Must().BeTrue();
     }
 }

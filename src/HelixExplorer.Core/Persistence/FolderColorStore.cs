@@ -4,18 +4,14 @@ namespace HelixExplorer.Core.Persistence;
 /// SQLite implementation of <see cref="IFolderColorStore"/>.
 /// All access is serialized on <see cref="IAppDatabase.ConnectionGate"/>.
 /// </summary>
-public sealed class FolderColorStore : IFolderColorStore
+public sealed class FolderColorStore(IAppDatabase db) : IFolderColorStore
 {
-    private readonly IAppDatabase _db;
-
-    public FolderColorStore(IAppDatabase db) => _db = db;
-
     public IReadOnlyDictionary<string, uint> LoadAll()
     {
         var result = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
-        lock (_db.ConnectionGate)
+        lock (db.ConnectionGate)
         {
-            using var cmd = _db.Connection.CreateCommand();
+            using var cmd = db.Connection.CreateCommand();
             cmd.CommandText = "SELECT path, color_argb FROM folder_colors;";
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
@@ -30,9 +26,9 @@ public sealed class FolderColorStore : IFolderColorStore
 
     public void Upsert(string normalizedPath, uint argb)
     {
-        lock (_db.ConnectionGate)
+        lock (db.ConnectionGate)
         {
-            using var cmd = _db.Connection.CreateCommand();
+            using var cmd = db.Connection.CreateCommand();
             cmd.CommandText = """
                 INSERT INTO folder_colors (path, color_argb)
                 VALUES (@path, @color)
@@ -46,9 +42,9 @@ public sealed class FolderColorStore : IFolderColorStore
 
     public void Delete(string normalizedPath)
     {
-        lock (_db.ConnectionGate)
+        lock (db.ConnectionGate)
         {
-            using var cmd = _db.Connection.CreateCommand();
+            using var cmd = db.Connection.CreateCommand();
             cmd.CommandText = "DELETE FROM folder_colors WHERE path = @path;";
             cmd.Parameters.AddWithValue("@path", normalizedPath);
             cmd.ExecuteNonQuery();

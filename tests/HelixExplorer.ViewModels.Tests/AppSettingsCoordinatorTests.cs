@@ -1,4 +1,3 @@
-using System.Threading;
 using HelixExplorer.Core.Settings;
 using HelixExplorer.Core.Theming;
 

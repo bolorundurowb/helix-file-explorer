@@ -12,7 +12,12 @@ public sealed partial class SettingsPageViewModel : ObservableObject
     private static readonly Assembly AppAssembly = typeof(SettingsPageViewModel).Assembly;
     private static readonly HttpClient _httpClient = new()
     {
-        DefaultRequestHeaders = { { "User-Agent", "HelixExplorer" } }
+        Timeout = TimeSpan.FromSeconds(15),
+        DefaultRequestHeaders =
+        {
+            { "User-Agent", "HelixExplorer" },
+            { "Accept", "application/vnd.github+json" }
+        }
     };
     private const string ReleasesUrl =
         "https://api.github.com/repos/bolorundurowb/helix-file-explorer/releases/latest";
@@ -109,6 +114,13 @@ public sealed partial class SettingsPageViewModel : ObservableObject
         try
         {
             var response = await _httpClient.GetAsync(ReleasesUrl).ConfigureAwait(true);
+            if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                // Unauthenticated GitHub API calls are rate limited; this is the usual "at times" failure.
+                UpdateStatus = "Could not check for updates (rate limited). Try again later.";
+                return;
+            }
+
             if (!response.IsSuccessStatusCode)
             {
                 UpdateStatus = "Could not check for updates. Try again later.";
@@ -136,6 +148,10 @@ public sealed partial class SettingsPageViewModel : ObservableObject
             {
                 UpdateStatus = $"You are up to date (v{_currentVersion})";
             }
+        }
+        catch (TaskCanceledException)
+        {
+            UpdateStatus = "Could not check for updates (timed out). Try again later.";
         }
         catch (Exception)
         {

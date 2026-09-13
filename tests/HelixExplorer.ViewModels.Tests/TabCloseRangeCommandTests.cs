@@ -3,7 +3,6 @@ using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Persistence;
 using HelixExplorer.Core.Settings;
 using HelixExplorer.Services;
-using HelixExplorer.ViewModels;
 using HelixExplorer.ViewModels.Pane;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;

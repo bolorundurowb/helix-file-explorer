@@ -28,6 +28,12 @@ public sealed class AppSettings
     /// </summary>
     public bool SwitchToNewTabOnOpen { get; set; } = true;
 
+    /// <summary>
+    /// Whether a new window (app startup without an explicit <c>--path</c>) reopens the tabs and
+    /// window layout from the previous session. Disabling it starts fresh every time.
+    /// </summary>
+    public bool RestoreSessionOnStartup { get; set; } = true;
+
     public uint? AccentColorArgb { get; set; }
     public List<string> PinnedPaths { get; set; } = [];
     public List<string> UnpinnedPaths { get; set; } = [];

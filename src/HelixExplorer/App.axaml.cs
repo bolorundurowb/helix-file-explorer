@@ -5,6 +5,7 @@ using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Core.Logging;
 using HelixExplorer.Core.Persistence;
+using HelixExplorer.Core.Settings;
 using HelixExplorer.Services;
 using HelixExplorer.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
@@ -75,9 +76,11 @@ public partial class App : Application
 
             var windowHost = _host.Services.GetRequiredService<IWindowHostService>();
             var initialPath = ParseInitialPath(Program.StartupArgs);
+            var restoreSession = initialPath is null
+                && _host.Services.GetRequiredService<ISettingsStore>().Load().RestoreSessionOnStartup;
             var mainWindow = windowHost.OpenWindowAsync(
                 initialPath: initialPath,
-                restoreSession: initialPath is null).GetAwaiter().GetResult();
+                restoreSession: restoreSession).GetAwaiter().GetResult();
             desktop.MainWindow = mainWindow;
 
             var mainWindowViewModel = (MainWindowViewModel)mainWindow.DataContext!;

@@ -126,4 +126,74 @@ public class JsonSettingsStoreTests
             }
         }
     }
+
+    [Fact]
+    public void Update_OnlyMutatesTouchedFields_PreservingOthers()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "helix-settings-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var store = new JsonSettingsStore(path);
+            store.Save(new AppSettings { Theme = ThemeMode.Dark, SidebarWidth = 320 });
+
+            store.Update(settings => settings.SidebarWidth = 400);
+
+            var loaded = store.Load();
+            loaded.SidebarWidth.Must().Be(400);
+            loaded.Theme.Must().Be(ThemeMode.Dark);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Update_TwoStoresInterleaveEdits_WithoutClobberingEachOther()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "helix-settings-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var first = new JsonSettingsStore(path);
+            var second = new JsonSettingsStore(path);
+            first.Save(new AppSettings { Theme = ThemeMode.Light });
+
+            first.Update(settings => settings.Theme = ThemeMode.Dark);
+            second.Update(settings => settings.SidebarWidth = 280);
+
+            var loaded = new JsonSettingsStore(path).Load();
+            loaded.Theme.Must().Be(ThemeMode.Dark);
+            loaded.SidebarWidth.Must().Be(280);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task Update_ConcurrentAcrossStores_SharingFile_DoesNotLoseDistinctFields()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "helix-settings-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var first = new JsonSettingsStore(path);
+            var second = new JsonSettingsStore(path);
+            first.Save(new AppSettings());
+
+            var tasks = Enumerable.Range(0, 50).Select(i => i % 2 == 0
+                ? Task.Run(() => first.Update(settings => settings.ShowHiddenFiles = true))
+                : Task.Run(() => second.Update(settings => settings.ShowFileExtensions = false)));
+
+            await Task.WhenAll(tasks);
+
+            var loaded = new JsonSettingsStore(path).Load();
+            loaded.ShowHiddenFiles.Must().BeTrue();
+            loaded.ShowFileExtensions.Must().BeFalse();
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+        }
+    }
 }

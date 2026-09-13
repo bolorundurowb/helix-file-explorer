@@ -14,6 +14,7 @@ public sealed class GitStatusSnapshot(
         new Dictionary<string, GitFileStatus>(0, StringComparer.OrdinalIgnoreCase));
 
     private readonly IReadOnlyDictionary<string, GitFileStatus> _folderStatuses = BuildFolderIndex(files);
+    private readonly string? _normalizedRepoRoot = repoRoot is null ? null : NormalizeDirectory(repoRoot);
 
     public GitStatus Status { get; } = status;
 
@@ -25,21 +26,18 @@ public sealed class GitStatusSnapshot(
 
     public GitFileStatus GetStatusForPath(string fullPath)
     {
-        if (!IsRepository || string.IsNullOrEmpty(fullPath) || string.IsNullOrEmpty(RepoRoot))
+        var root = _normalizedRepoRoot;
+        if (!IsRepository || string.IsNullOrEmpty(fullPath) || root is null)
             return GitFileStatus.None;
 
-        var relative = TryMakeRelative(RepoRoot, fullPath);
+        var relative = TryMakeRelative(root.AsSpan(), fullPath.AsSpan());
         if (relative is null)
             return GitFileStatus.None;
 
         if (Files.TryGetValue(relative, out var exact))
             return exact;
 
-        var prefix = relative.EndsWith('/') ? relative : relative + "/";
-        if (_folderStatuses.TryGetValue(prefix, out var folderStatus))
-            return folderStatus;
-
-        return GitFileStatus.None;
+        return _folderStatuses.GetValueOrDefault(relative + "/", GitFileStatus.None);
     }
 
     private static Dictionary<string, GitFileStatus> BuildFolderIndex(IReadOnlyDictionary<string, GitFileStatus> files)
@@ -47,29 +45,71 @@ public sealed class GitStatusSnapshot(
         var index = new Dictionary<string, GitFileStatus>(StringComparer.OrdinalIgnoreCase);
         foreach (var (path, status) in files)
         {
-            var parts = path.Split('/');
-            for (var i = 1; i < parts.Length; i++)
+            var start = 0;
+            while (start < path.Length)
             {
-                var prefix = string.Join("/", parts, 0, i) + "/";
+                var slash = path.IndexOf('/', start);
+                if (slash < 0)
+                    break;
+
+                var prefix = string.Concat(path.AsSpan(0, slash), "/");
                 if (index.TryGetValue(prefix, out var existing))
                     index[prefix] = Max(existing, status);
                 else
                     index[prefix] = status;
+
+                start = slash + 1;
             }
         }
 
         return index;
     }
 
-    private static string? TryMakeRelative(string repoRoot, string fullPath)
+    private static string? TryMakeRelative(ReadOnlySpan<char> root, ReadOnlySpan<char> full)
     {
-        var root = NormalizeDirectory(repoRoot);
-        var full = fullPath.Replace('\\', '/').TrimEnd('/');
-        if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+        if (full.Length < root.Length)
             return null;
 
-        var relative = full[root.Length..].TrimStart('/');
-        return relative.Length == 0 ? null : relative;
+        for (var i = 0; i < root.Length; i++)
+        {
+            if (!PathCharEqualsIgnoreCase(root[i], full[i]))
+                return null;
+        }
+
+        var rest = full[root.Length..];
+
+        while (!rest.IsEmpty && IsSeparator(rest[0]))
+            rest = rest[1..];
+
+        while (!rest.IsEmpty && IsSeparator(rest[^1]))
+            rest = rest[..^1];
+
+        return rest.IsEmpty ? null : NormalizeRelative(rest);
+    }
+
+    private static bool PathCharEqualsIgnoreCase(char a, char b)
+    {
+        if (a == b)
+            return true;
+
+        if ((a is '/' or '\\') && (b is '/' or '\\'))
+            return true;
+
+        return char.ToUpperInvariant(a) == char.ToUpperInvariant(b);
+    }
+
+    private static bool IsSeparator(char c) => c is '/' or '\\';
+
+    private static string NormalizeRelative(ReadOnlySpan<char> span)
+    {
+        if (span.IndexOf('\\') < 0)
+            return span.ToString();
+
+        return string.Create(span.Length, span, static (chars, src) =>
+        {
+            for (var i = 0; i < src.Length; i++)
+                chars[i] = src[i] == '\\' ? '/' : src[i];
+        });
     }
 
     private static string NormalizeDirectory(string path)

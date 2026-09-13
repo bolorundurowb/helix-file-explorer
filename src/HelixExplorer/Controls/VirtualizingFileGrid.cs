@@ -34,7 +34,6 @@ public sealed class VirtualizingFileGrid : TemplatedControl
     private bool _rebuildScheduled;
     private int _lastColumnCount = -1;
     private int _lastItemCount;
-    private string _lastItemsPathsKey = string.Empty;
     private List<object> _lastItems = [];
     private List<GridRow> _lastRows = [];
 
@@ -294,7 +293,6 @@ public sealed class VirtualizingFileGrid : TemplatedControl
             _rows.SelectedItem = null;
             _lastColumnCount = -1;
             _lastItemCount = 0;
-            _lastItemsPathsKey = string.Empty;
             _lastItems = [];
             _lastRows = [];
             return;
@@ -305,10 +303,9 @@ public sealed class VirtualizingFileGrid : TemplatedControl
             viewportWidth = 800;
 
         var columns = GetColumnCount(viewportWidth);
-        var pathsKey = BuildItemsPathsKey(items);
         if (columns == _lastColumnCount
             && items.Count == _lastItemCount
-            && pathsKey == _lastItemsPathsKey
+            && SameReferences(items, _lastItems)
             && _rows.ItemsSource is IList<GridRow>)
             return;
 
@@ -319,7 +316,6 @@ public sealed class VirtualizingFileGrid : TemplatedControl
         _rows.SelectedItem = null;
         _lastColumnCount = columns;
         _lastItemCount = items.Count;
-        _lastItemsPathsKey = pathsKey;
         _lastItems = items;
         _lastRows = rows;
     }
@@ -358,20 +354,24 @@ public sealed class VirtualizingFileGrid : TemplatedControl
         return rows;
     }
 
-    private static string BuildItemsPathsKey(IReadOnlyList<object> items)
+    /// <summary>
+    /// View models are pooled by path (entries) and key (group headers), so the same logical item
+    /// keeps the same reference across refreshes. Comparing references is therefore a faithful,
+    /// allocation-free stand-in for the previous whole-directory path string.
+    /// </summary>
+    internal static bool SameReferences(List<object> a, List<object> b)
     {
-        if (items.Count == 0)
-            return string.Empty;
+        if (a.Count != b.Count)
+            return false;
 
-        return string.Join('\n', items.Select(GetItemPathKey));
+        for (var i = 0; i < a.Count; i++)
+        {
+            if (!ReferenceEquals(a[i], b[i]))
+                return false;
+        }
+
+        return true;
     }
-
-    private static string GetItemPathKey(object item) => item switch
-    {
-        EntryItemViewModel entry => entry.FullPath,
-        GroupHeaderViewModel header => " group:" + header.Key,
-        _ => item.GetHashCode().ToString()
-    };
 
     public int GetColumnCount(double viewportWidth)
     {

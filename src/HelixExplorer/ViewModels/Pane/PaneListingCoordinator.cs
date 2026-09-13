@@ -43,14 +43,12 @@ public sealed class PaneListingCoordinator
                 listingSizeBytes += entry.SizeBytes;
         }
 
-        var usedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var visualTargets = new List<EntryItemViewModel>();
         var nextEntries = new List<EntryItemViewModel>(_viewBuffer.Count);
 
         foreach (var entry in _viewBuffer)
         {
             var path = entry.FullPath;
-            usedPaths.Add(path);
             var gitStatus = request.GitSnapshot.GetStatusForPath(path);
 
             if (!_entryPool.TryGetValue(path, out var item))
@@ -67,9 +65,9 @@ public sealed class PaneListingCoordinator
             nextEntries.Add(item);
         }
 
-        foreach (var stale in _entryPool.Keys.Where(k => !usedPaths.Contains(k)).ToList())
-            _entryPool.Remove(stale);
-
+        // Stale pool entries are retained until the pane navigates (ClearEntryPool) so filter
+        // widening (e.g. backspace) reuses their view models and cached icons instead of
+        // re-creating them and re-querying the shell.
         return new ListingPublishResult(
             nextEntries,
             visualTargets,

@@ -180,12 +180,14 @@ public static class GitPorcelainParser
             return UnescapeGitPath(inner);
         }
 
-        return s.ToString().Replace('\\', '/').TrimEnd('/');
+        return NormalizePath(s);
     }
 
     private static string? UnescapeGitPath(ReadOnlySpan<char> s)
     {
-        var bytes = new List<byte>(s.Length);
+        // Octal/escape decoding shrinks the input, so a byte-per-char buffer is always large enough.
+        var bytes = new byte[s.Length];
+        var count = 0;
         for (var i = 0; i < s.Length; i++)
         {
             if (s[i] == '\\' && i + 1 < s.Length)
@@ -201,24 +203,24 @@ public static class GitPorcelainParser
                         if (i + 1 < s.Length && s[i + 1] >= '0' && s[i + 1] <= '7')
                             octal = octal * 8 + (s[++i] - '0');
                     }
-                    bytes.Add((byte)octal);
+                    bytes[count++] = (byte)octal;
                 }
                 else
                 {
                     switch (next)
                     {
-                        case 'n': bytes.Add((byte)'\n'); i++; break;
-                        case 't': bytes.Add((byte)'\t'); i++; break;
-                        case '\\': bytes.Add((byte)'\\'); i++; break;
-                        case '"': bytes.Add((byte)'"'); i++; break;
-                        case 'a': bytes.Add((byte)'\a'); i++; break;
-                        case 'b': bytes.Add((byte)'\b'); i++; break;
-                        case 'f': bytes.Add((byte)'\f'); i++; break;
-                        case 'r': bytes.Add((byte)'\r'); i++; break;
-                        case 'v': bytes.Add((byte)'\v'); i++; break;
+                        case 'n': bytes[count++] = (byte)'\n'; i++; break;
+                        case 't': bytes[count++] = (byte)'\t'; i++; break;
+                        case '\\': bytes[count++] = (byte)'\\'; i++; break;
+                        case '"': bytes[count++] = (byte)'"'; i++; break;
+                        case 'a': bytes[count++] = (byte)'\a'; i++; break;
+                        case 'b': bytes[count++] = (byte)'\b'; i++; break;
+                        case 'f': bytes[count++] = (byte)'\f'; i++; break;
+                        case 'r': bytes[count++] = (byte)'\r'; i++; break;
+                        case 'v': bytes[count++] = (byte)'\v'; i++; break;
                         default:
-                            bytes.Add((byte)'\\');
-                            bytes.Add((byte)next);
+                            bytes[count++] = (byte)'\\';
+                            bytes[count++] = (byte)next;
                             i++;
                             break;
                     }
@@ -226,11 +228,29 @@ public static class GitPorcelainParser
             }
             else
             {
-                bytes.Add((byte)s[i]);
+                bytes[count++] = (byte)s[i];
             }
         }
 
-        return System.Text.Encoding.UTF8.GetString(bytes.ToArray()).Replace('\\', '/').TrimEnd('/');
+        return NormalizePath(System.Text.Encoding.UTF8.GetString(bytes, 0, count));
+    }
+
+    private static string NormalizePath(ReadOnlySpan<char> path)
+    {
+        var end = path.Length;
+        while (end > 0 && (path[end - 1] is '/' or '\\'))
+            end--;
+
+        path = path[..end];
+
+        if (path.IndexOf('\\') < 0)
+            return path.ToString();
+
+        return string.Create(path.Length, path, static (chars, src) =>
+        {
+            for (var i = 0; i < src.Length; i++)
+                chars[i] = src[i] == '\\' ? '/' : src[i];
+        });
     }
 
     private static int FindPathStart(ReadOnlySpan<char> line)

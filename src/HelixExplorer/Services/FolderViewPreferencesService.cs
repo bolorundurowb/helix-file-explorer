@@ -3,16 +3,10 @@ using HelixExplorer.Core.Settings;
 
 namespace HelixExplorer.Services;
 
-public sealed class FolderViewPreferencesService : IFolderViewPreferencesService
+public sealed class FolderViewPreferencesService(IFolderViewPreferencesStore store) : IFolderViewPreferencesService
 {
-    private readonly IFolderViewPreferencesStore _store;
     private readonly Dictionary<string, FolderViewPreferences> _prefs = new(StringComparer.OrdinalIgnoreCase);
     private readonly Lock _gate = new();
-
-    public FolderViewPreferencesService(IFolderViewPreferencesStore store)
-    {
-        _store = store;
-    }
 
     public bool TryGet(string path, out FolderViewPreferences preferences)
     {
@@ -29,7 +23,7 @@ public sealed class FolderViewPreferencesService : IFolderViewPreferencesService
                 return true;
             }
 
-            if (!_store.TryGet(normalized, out var fromStore))
+            if (!store.TryGet(normalized, out var fromStore))
                 return false;
 
             // Write-through cache: populate on first miss so navigation never hits SQLite twice.
@@ -49,7 +43,7 @@ public sealed class FolderViewPreferencesService : IFolderViewPreferencesService
         {
             var copy = Clone(preferences);
             _prefs[normalized] = copy;
-            _store.Upsert(normalized, copy);
+            store.Upsert(normalized, copy);
         }
     }
 
@@ -62,7 +56,7 @@ public sealed class FolderViewPreferencesService : IFolderViewPreferencesService
         lock (_gate)
         {
             _prefs.Remove(normalized);
-            _store.Delete(normalized);
+            store.Delete(normalized);
         }
     }
 

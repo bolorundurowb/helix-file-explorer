@@ -26,33 +26,43 @@ public sealed class FileVisualService(IFileVisualProvider provider) : IDisposabl
         if (_disposed || string.IsNullOrWhiteSpace(path))
             return null;
 
-        var key = new VisualCacheKey(path, size, preferThumbnail);
+        var key = new VisualCacheKey(CachePathFor(path, isDirectory, preferThumbnail), size, preferThumbnail);
         Touch(key);
 
         // Loads must not be keyed to the caller's token; a cancelled caller would poison the cache.
         var task = _cache.GetOrAdd(key, static (k, state) =>
-            state.self.LoadAndCacheAsync(k, state.isDirectory), (self: this, isDirectory));
+            state.self.LoadAndCacheAsync(k, state.path, state.isDirectory), (self: this, path, isDirectory));
 
         if (task.IsCanceled || task.IsFaulted)
         {
             _cache.TryRemove(key, out _);
             RemoveFromLru(key);
             task = _cache.GetOrAdd(key, static (k, state) =>
-                state.self.LoadAndCacheAsync(k, state.isDirectory), (self: this, isDirectory));
+                state.self.LoadAndCacheAsync(k, state.path, state.isDirectory), (self: this, path, isDirectory));
             Touch(key);
         }
 
         return await task.WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<Bitmap?> LoadAndCacheAsync(VisualCacheKey key, bool isDirectory)
+    internal static string CachePathFor(string path, bool isDirectory, bool preferThumbnail)
+    {
+        if (isDirectory || preferThumbnail || FileVisualRules.HasPerFileIcon(path))
+            return path;
+
+        // Generic file icons are identical per extension; keying by extension lets a folder full of
+        // the same file type share one shell query and PNG decode instead of thrashing the LRU cache.
+        return Path.GetExtension(path).ToUpperInvariant();
+    }
+
+    private async Task<Bitmap?> LoadAndCacheAsync(VisualCacheKey key, string requestPath, bool isDirectory)
     {
         if (_disposed)
             return null;
 
         try
         {
-            var request = new FileVisualRequest(key.Path, isDirectory, key.Size, key.PreferThumbnail);
+            var request = new FileVisualRequest(requestPath, isDirectory, key.Size, key.PreferThumbnail);
             var data = await provider.GetAsync(request, CancellationToken.None).ConfigureAwait(false);
             if (data is null || data.Png.Length == 0)
             {

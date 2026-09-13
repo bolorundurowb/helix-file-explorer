@@ -8,22 +8,19 @@ namespace HelixExplorer.Core.Persistence;
 /// SQLite implementation of <see cref="IFolderViewPreferencesStore"/>.
 /// All access is serialized on <see cref="IAppDatabase.ConnectionGate"/>.
 /// </summary>
-public sealed class FolderViewPreferencesStore : IFolderViewPreferencesStore
+public sealed class FolderViewPreferencesStore(IAppDatabase db) : IFolderViewPreferencesStore
 {
-    private readonly IAppDatabase _db;
     private static readonly JsonSerializerOptions CollapsedKeysOptions = new()
     {
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
     };
 
-    public FolderViewPreferencesStore(IAppDatabase db) => _db = db;
-
     public bool TryGet(string normalizedPath, out FolderViewPreferences preferences)
     {
         preferences = new FolderViewPreferences();
-        lock (_db.ConnectionGate)
+        lock (db.ConnectionGate)
         {
-            using var cmd = _db.Connection.CreateCommand();
+            using var cmd = db.Connection.CreateCommand();
             cmd.CommandText = """
                 SELECT view_mode, sort_column, sort_descending, directory_sort,
                        thumbnail_size, group_by, collapsed_group_keys
@@ -50,9 +47,9 @@ public sealed class FolderViewPreferencesStore : IFolderViewPreferencesStore
 
     public void Upsert(string normalizedPath, FolderViewPreferences preferences)
     {
-        lock (_db.ConnectionGate)
+        lock (db.ConnectionGate)
         {
-            using var cmd = _db.Connection.CreateCommand();
+            using var cmd = db.Connection.CreateCommand();
             cmd.CommandText = """
                 INSERT INTO folder_view_preferences
                     (path, view_mode, sort_column, sort_descending, directory_sort,
@@ -84,9 +81,9 @@ public sealed class FolderViewPreferencesStore : IFolderViewPreferencesStore
 
     public void Delete(string normalizedPath)
     {
-        lock (_db.ConnectionGate)
+        lock (db.ConnectionGate)
         {
-            using var cmd = _db.Connection.CreateCommand();
+            using var cmd = db.Connection.CreateCommand();
             cmd.CommandText = "DELETE FROM folder_view_preferences WHERE path = @path;";
             cmd.Parameters.AddWithValue("@path", normalizedPath);
             cmd.ExecuteNonQuery();

@@ -118,4 +118,29 @@ public class GitPorcelainParserTests
 
         snapshot.GetStatusForPath(@"C:\repo\file!name.txt").Must().Be(GitFileStatus.Modified);
     }
+
+    [Fact]
+    public void Parse_UntrackedPathWithBackslashes_NormalizesToForwardSlashes()
+    {
+        var output = NulDelimited(
+            "# branch.head main",
+            @"? dir\file.txt");
+
+        var snapshot = GitPorcelainParser.Parse(output, @"C:\repo");
+
+        snapshot.GetStatusForPath(@"C:\repo\dir\file.txt").Must().Be(GitFileStatus.Untracked);
+        snapshot.GetStatusForPath(@"C:\repo\dir/file.txt").Must().Be(GitFileStatus.Untracked);
+    }
+
+    [Fact]
+    public void Parse_QuotedPathWithTrailingSlash_IsTrimmed()
+    {
+        var output = NulDelimited(
+            "# branch.head main",
+            "1 .M N... 100644 100644 100644 1111111111111111111111111111111111111111 2222222222222222222222222222222222222222 \"dir/sub/\"");
+
+        var snapshot = GitPorcelainParser.Parse(output, @"C:\repo");
+
+        snapshot.GetStatusForPath(@"C:\repo\dir\sub").Must().Be(GitFileStatus.Modified);
+    }
 }

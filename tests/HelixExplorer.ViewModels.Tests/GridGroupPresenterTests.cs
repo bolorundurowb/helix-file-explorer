@@ -255,4 +255,70 @@ public class GroupedListingPublishTests
         wide.Entries.Select(e => e.Name).Must().BeSequenceEqual(new[] { "alpha.txt", "zulu.txt" });
         ReferenceEquals(wide.Entries[0], alpha).Must().BeTrue();
     }
+
+    [Fact]
+    public void ApplySortAndPublish_FilterNarrowThenWiden_RetainsFilteredOutViewModel()
+    {
+        var coordinator = new PaneListingCoordinator();
+        var entries = new[] { File("alpha.txt"), File("zulu.txt") };
+
+        var all = coordinator.ApplySortAndPublish(Request(GroupByMode.None, entries));
+        var alpha = all.Entries[0];
+        var zulu = all.Entries[1];
+
+        coordinator.ApplySortAndPublish(FilteredRequest("alpha", entries));
+
+        // Narrowing must not discard the filtered-out view model: widening restores the same instance.
+        var wide = coordinator.ApplySortAndPublish(FilteredRequest(string.Empty, entries));
+        ReferenceEquals(wide.Entries[0], alpha).Must().BeTrue();
+        ReferenceEquals(wide.Entries[1], zulu).Must().BeTrue();
+    }
+
+    [Fact]
+    public void ApplySortAndPublish_SubsequentPublish_ReusesViewModelsAndEmitsNoVisualTargets()
+    {
+        var coordinator = new PaneListingCoordinator();
+        var entries = new[] { File("alpha.txt"), File("zulu.txt") };
+
+        var first = coordinator.ApplySortAndPublish(Request(GroupByMode.None, entries));
+        first.VisualTargets.Count.Must().Be(2);
+
+        var second = coordinator.ApplySortAndPublish(Request(GroupByMode.None, entries));
+
+        second.VisualTargets.Must().BeEmpty();
+        ReferenceEquals(second.Entries[0], first.Entries[0]).Must().BeTrue();
+        ReferenceEquals(second.Entries[1], first.Entries[1]).Must().BeTrue();
+    }
+
+    [Fact]
+    public void ClearEntryPool_ForcesRecreationOnNextPublish()
+    {
+        var coordinator = new PaneListingCoordinator();
+        var entries = new[] { File("alpha.txt") };
+
+        var first = coordinator.ApplySortAndPublish(Request(GroupByMode.None, entries));
+        var original = first.Entries[0];
+
+        coordinator.ClearEntryPool();
+        var second = coordinator.ApplySortAndPublish(Request(GroupByMode.None, entries));
+
+        ReferenceEquals(second.Entries[0], original).Must().BeFalse();
+    }
+
+    [Fact]
+    public void RemoveFromPool_OnlyRecreatesRemovedPath()
+    {
+        var coordinator = new PaneListingCoordinator();
+        var entries = new[] { File("alpha.txt"), File("zulu.txt") };
+
+        var first = coordinator.ApplySortAndPublish(Request(GroupByMode.None, entries));
+        var alpha = first.Entries[0];
+        var zulu = first.Entries[1];
+
+        coordinator.RemoveFromPool(@"C:\root\alpha.txt");
+        var second = coordinator.ApplySortAndPublish(Request(GroupByMode.None, entries));
+
+        ReferenceEquals(second.Entries[0], alpha).Must().BeFalse();
+        ReferenceEquals(second.Entries[1], zulu).Must().BeTrue();
+    }
 }

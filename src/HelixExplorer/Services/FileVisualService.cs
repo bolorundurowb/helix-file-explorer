@@ -45,7 +45,7 @@ public sealed class FileVisualService(IFileVisualProvider provider) : IDisposabl
         return await task.WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    private static string CachePathFor(string path, bool isDirectory, bool preferThumbnail)
+    internal static string CachePathFor(string path, bool isDirectory, bool preferThumbnail)
     {
         if (isDirectory || preferThumbnail || FileVisualRules.HasPerFileIcon(path))
             return path;

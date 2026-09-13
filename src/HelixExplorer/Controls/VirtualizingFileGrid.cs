@@ -359,7 +359,7 @@ public sealed class VirtualizingFileGrid : TemplatedControl
     /// keeps the same reference across refreshes. Comparing references is therefore a faithful,
     /// allocation-free stand-in for the previous whole-directory path string.
     /// </summary>
-    private static bool SameReferences(List<object> a, List<object> b)
+    internal static bool SameReferences(List<object> a, List<object> b)
     {
         if (a.Count != b.Count)
             return false;

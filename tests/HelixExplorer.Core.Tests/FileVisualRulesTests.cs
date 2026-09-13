@@ -27,6 +27,8 @@ public sealed class FileVisualRulesTests
         FileVisualRules.HasPerFileIcon(@"C:\lib.DLL").Must().BeTrue();
         FileVisualRules.HasPerFileIcon(@"C:\shortcut.lnk").Must().BeTrue();
         FileVisualRules.HasPerFileIcon(@"C:\icon.ico").Must().BeTrue();
+        FileVisualRules.HasPerFileIcon(@"C:\app.EXE").Must().BeTrue();
+        FileVisualRules.HasPerFileIcon(@"C:\link.url").Must().BeTrue();
 
         FileVisualRules.HasPerFileIcon(@"C:\notes.txt").Must().BeFalse();
         FileVisualRules.HasPerFileIcon(@"C:\image.png").Must().BeFalse();

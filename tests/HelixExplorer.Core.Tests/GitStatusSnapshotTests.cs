@@ -115,6 +115,54 @@ public sealed class GitStatusSnapshotTests
         snapshot.GetStatusForPath(@"C:\repo/src/a.txt").Must().Be(GitFileStatus.Modified);
     }
 
+    [Fact]
+    public void GetStatusForPath_NestedFolder_AggregatesAcrossIntermediatePrefixes()
+    {
+        var snapshot = CreateSnapshot(("src/sub/a.txt", GitFileStatus.Modified));
+
+        snapshot.GetStatusForPath(@"C:\repo\src\sub").Must().Be(GitFileStatus.Modified);
+        snapshot.GetStatusForPath(@"C:\repo\src").Must().Be(GitFileStatus.Modified);
+    }
+
+    [Fact]
+    public void GetStatusForPath_DirectoryWithTrailingSeparators_IsNormalized()
+    {
+        var snapshot = CreateSnapshot(("src/a.txt", GitFileStatus.Modified));
+
+        snapshot.GetStatusForPath(@"C:\repo\src\").Must().Be(GitFileStatus.Modified);
+        snapshot.GetStatusForPath(@"C:\repo\src/").Must().Be(GitFileStatus.Modified);
+    }
+
+    [Fact]
+    public void GetStatusForPath_RepoRootWithTrailingSeparator_IsNormalized()
+    {
+        var snapshot = new GitStatusSnapshot(
+            new GitStatus("main", 0, 1, 0, true),
+            repoRoot: @"C:\repo\",
+            new Dictionary<string, GitFileStatus>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["readme.txt"] = GitFileStatus.Modified
+            });
+
+        snapshot.GetStatusForPath(@"C:\repo\readme.txt").Must().Be(GitFileStatus.Modified);
+    }
+
+    [Fact]
+    public void GetStatusForPath_SiblingFolderSharingRootPrefix_ReturnsNone()
+    {
+        var snapshot = CreateSnapshot(("readme.txt", GitFileStatus.Modified));
+
+        snapshot.GetStatusForPath(@"C:\repo2\readme.txt").Must().Be(GitFileStatus.None);
+    }
+
+    [Fact]
+    public void GetStatusForPath_MixedSeparatorsAreEquivalent()
+    {
+        var snapshot = CreateSnapshot(("src/sub/a.txt", GitFileStatus.Modified));
+
+        snapshot.GetStatusForPath(@"C:\repo/src\sub/a.txt").Must().Be(GitFileStatus.Modified);
+    }
+
     private static GitStatusSnapshot CreateSnapshot(params (string Path, GitFileStatus Status)[] files)
     {
         var dictionary = new Dictionary<string, GitFileStatus>(StringComparer.OrdinalIgnoreCase);

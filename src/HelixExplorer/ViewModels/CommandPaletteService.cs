@@ -47,6 +47,8 @@ public sealed class CommandPaletteService
         _allCommands.Add(new CommandItem("Redo", "File", vm => _ = vm.RedoCommand.ExecuteAsync(null), "Ctrl+Y"));
         _allCommands.Add(new CommandItem("Cut", "File", vm => vm.CutCommand.Execute(null), "Ctrl+X"));
         _allCommands.Add(new CommandItem("Copy", "File", vm => vm.CopyCommand.Execute(null), "Ctrl+C"));
+        _allCommands.Add(new CommandItem("Copy to Other Pane", "File", vm => _ = vm.CopyToOtherPaneCommand.ExecuteAsync(null), "Alt+F5"));
+        _allCommands.Add(new CommandItem("Move to Other Pane", "File", vm => _ = vm.MoveToOtherPaneCommand.ExecuteAsync(null), "Alt+F6"));
         _allCommands.Add(new CommandItem("Paste", "File", vm => vm.PasteCommand.Execute(null), "Ctrl+V"));
         _allCommands.Add(new CommandItem("Delete", "File", vm => vm.DeleteCommand.Execute(null), "Delete"));
         _allCommands.Add(new CommandItem("Delete Permanently", "File", vm => vm.DeletePermanentlyCommand.Execute(null), "Shift+Delete"));

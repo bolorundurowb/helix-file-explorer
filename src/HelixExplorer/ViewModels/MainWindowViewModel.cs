@@ -1166,10 +1166,17 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         EmptyRecycleBinCommand.NotifyCanExecuteChanged();
         UndoCommand.NotifyCanExecuteChanged();
         RedoCommand.NotifyCanExecuteChanged();
+        CopyToOtherPaneCommand.NotifyCanExecuteChanged();
+        MoveToOtherPaneCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand]
-    private void ToggleDualPane() => SelectedTab?.ToggleDualPaneCommand.Execute(null);
+    private void ToggleDualPane()
+    {
+        SelectedTab?.ToggleDualPaneCommand.Execute(null);
+        OnPropertyChanged(nameof(IsDualPaneActive));
+        NotifyGlobalFileCommandsCanExecuteChanged();
+    }
 
     [RelayCommand]
     private void ToggleFilter() => FocusFilter();
@@ -1231,6 +1238,30 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     [RelayCommand(CanExecute = nameof(CanDeletePermanentlySelection))]
     private void DeletePermanently() => SelectedTab?.ActivePane?.DeletePermanentlyCommand.Execute(null);
+
+    private bool CanCopyToOtherPane()
+        => CanUseGlobalFileShortcuts()
+           && SelectedTab?.IsDualPane == true
+           && SelectedTab.CanCopyToOtherPane;
+
+    private bool CanMoveToOtherPane()
+        => CanUseGlobalFileShortcuts()
+           && SelectedTab?.IsDualPane == true
+           && SelectedTab.CanMoveToOtherPane;
+
+    [RelayCommand(CanExecute = nameof(CanCopyToOtherPane))]
+    private async Task CopyToOtherPane()
+    {
+        if (SelectedTab is { } tab)
+            await tab.CopyToOtherPaneAsync().ConfigureAwait(true);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanMoveToOtherPane))]
+    private async Task MoveToOtherPane()
+    {
+        if (SelectedTab is { } tab)
+            await tab.MoveToOtherPaneAsync().ConfigureAwait(true);
+    }
 
     private bool CanRestoreFromRecycleBin()
         => CanUseGlobalFileShortcuts() && ActivePane?.RestoreFromRecycleBinCommand.CanExecute(null) == true;

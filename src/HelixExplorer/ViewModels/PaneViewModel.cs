@@ -154,7 +154,14 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     public event EventHandler<FileSystemEntry>? EntryActivated;
     public event EventHandler<string>? OpenInNewTabRequested;
     public event EventHandler<string>? OpenInOtherPaneRequested;
+    public event EventHandler<IReadOnlyList<string>>? CopyToOtherPaneRequested;
+    public event EventHandler<IReadOnlyList<string>>? MoveToOtherPaneRequested;
     public event EventHandler? SelectionChanged;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CopyToOtherPaneCommand))]
+    [NotifyCanExecuteChangedFor(nameof(MoveToOtherPaneCommand))]
+    private bool _isDualPane;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsDetailsView))]
@@ -1699,6 +1706,29 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         OpenInOtherPaneRequested?.Invoke(this, entry.IsDirectory ? entry.FullPath : Path.GetDirectoryName(entry.FullPath) ?? CurrentPath);
     }
 
+    [RelayCommand(CanExecute = nameof(CanTransferToOtherPane))]
+    private void CopyToOtherPane()
+    {
+        if (!CanTransferToOtherPane())
+            return;
+
+        var paths = SelectedEntries.Select(e => e.FullPath).ToList();
+        CopyToOtherPaneRequested?.Invoke(this, paths);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanTransferToOtherPane))]
+    private void MoveToOtherPane()
+    {
+        if (!CanTransferToOtherPane())
+            return;
+
+        var paths = SelectedEntries.Select(e => e.FullPath).ToList();
+        MoveToOtherPaneRequested?.Invoke(this, paths);
+    }
+
+    public bool CanTransferToOtherPane()
+        => IsDualPane && CanModifySelection();
+
     [RelayCommand(CanExecute = nameof(CanOpenInTerminal))]
     private void OpenInTerminal()
     {
@@ -1903,9 +1933,9 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
 
     private bool HasSingleSelection() => SelectedEntries.Count == 1;
 
-    private bool CanModifyHere() => !IsArchive && !IsHome && !IsShellNamespace;
+    public bool CanModifyHere() => !IsArchive && !IsHome && !IsShellNamespace;
 
-    private bool CanModifySelection() => CanModifyHere() && HasSelection();
+    public bool CanModifySelection() => CanModifyHere() && HasSelection();
 
     private bool CanDeletePermanently() => (CanModifyHere() || IsRecycleBin) && HasSelection();
 
@@ -2021,6 +2051,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         OpenInNewTabCommand.NotifyCanExecuteChanged();
         OpenInNewWindowCommand.NotifyCanExecuteChanged();
         OpenInOtherPaneCommand.NotifyCanExecuteChanged();
+        CopyToOtherPaneCommand.NotifyCanExecuteChanged();
+        MoveToOtherPaneCommand.NotifyCanExecuteChanged();
         PinToSidebarCommand.NotifyCanExecuteChanged();
         UnpinFromSidebarCommand.NotifyCanExecuteChanged();
         CopyPathCommand.NotifyCanExecuteChanged();

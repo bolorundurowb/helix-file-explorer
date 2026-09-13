@@ -148,6 +148,20 @@
                     <PathIcon Data="{DynamicResource HelixIconPanelLeftGeometry}" />
                 </MenuItem.Icon>
             </MenuItem>
+            <MenuItem Header="Copy to other pane"
+                      Command="{Binding CopyToOtherPaneCommand}"
+                      InputGesture="Alt+F5">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconCopyGeometry}" />
+                </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Move to other pane"
+                      Command="{Binding MoveToOtherPaneCommand}"
+                      InputGesture="Alt+F6">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconArrowRightGeometry}" />
+                </MenuItem.Icon>
+            </MenuItem>
             <Separator />
             <MenuItem Header="Open in Terminal" Command="{Binding OpenInTerminalCommand}">
                 <MenuItem.Icon>

@@ -51,6 +51,8 @@
         <KeyBinding Gesture="Ctrl+Shift+C" Command="{Binding CopyPathCommand}" />
         <KeyBinding Gesture="Ctrl+A" Command="{Binding SelectAllCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+A" Command="{Binding InvertSelectionCommand}" />
+        <KeyBinding Gesture="Alt+F5" Command="{Binding CopyToOtherPaneCommand}" />
+        <KeyBinding Gesture="Alt+F6" Command="{Binding MoveToOtherPaneCommand}" />
         <KeyBinding Gesture="Ctrl+OemTilde"
                     Command="{Binding OpenInTerminalCommand}" />
     </Window.KeyBindings>

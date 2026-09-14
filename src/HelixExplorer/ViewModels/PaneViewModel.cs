@@ -317,20 +317,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         _refreshCoordinator.CancelGitRefresh();
         _watcher.Watch(isHomeRoute || IsArchive || ShellPath.IsShellPath(value) ? string.Empty : value);
         UpdateRecycleBinWatcher();
-        PasteCommand.NotifyCanExecuteChanged();
         RefreshPasteAvailability();
-        CutCommand.NotifyCanExecuteChanged();
-        CopyCommand.NotifyCanExecuteChanged();
-        DeleteCommand.NotifyCanExecuteChanged();
-        DeletePermanentlyCommand.NotifyCanExecuteChanged();
-        RestoreFromRecycleBinCommand.NotifyCanExecuteChanged();
-        EmptyRecycleBinCommand.NotifyCanExecuteChanged();
-        BeginRenameCommand.NotifyCanExecuteChanged();
-        ShowMoreOptionsCommand.NotifyCanExecuteChanged();
-        CompressToZipCommand.NotifyCanExecuteChanged();
-        ExtractHereCommand.NotifyCanExecuteChanged();
-        NewFolderCommand.NotifyCanExecuteChanged();
-        OpenInTerminalCommand.NotifyCanExecuteChanged();
+        NotifyCommandsCanExecuteChanged();
 
         if (isHomeRoute)
         {
@@ -2045,6 +2033,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         ShowMoreOptionsCommand.NotifyCanExecuteChanged();
         CompressToZipCommand.NotifyCanExecuteChanged();
         ExtractHereCommand.NotifyCanExecuteChanged();
+        NewFolderCommand.NotifyCanExecuteChanged();
         SetFolderColorCommand.NotifyCanExecuteChanged();
         ClearFolderColorCommand.NotifyCanExecuteChanged();
         OpenCommand.NotifyCanExecuteChanged();

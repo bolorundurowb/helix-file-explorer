@@ -22,6 +22,13 @@ public static class FileSystemEntryComparer
     }
 
     /// <summary>
+    /// <see cref="GroupedComparer"/> is immutable and stateless, so its 16 column/direction/kind
+    /// permutations are precomputed and shared. <see cref="For"/> runs on every directory listing and
+    /// sort, so it must not allocate a comparer each time.
+    /// </summary>
+    private static readonly GroupedComparer[,,] GroupedComparers = CreateGroupedComparers();
+
+    /// <summary>
     /// Directory sort mode defaults to <see cref="DirectorySortMode.FoldersFirst"/> to preserve
     /// historical behavior for callers that have not been updated yet.
     /// </summary>
@@ -33,13 +40,7 @@ public static class FileSystemEntryComparer
         if (directorySort is DirectorySortMode.FoldersFirst or DirectorySortMode.FilesFirst)
         {
             var filesFirst = directorySort == DirectorySortMode.FilesFirst;
-            return column switch
-            {
-                SortColumn.Size => new GroupedComparer(SortColumn.Size, descending, filesFirst),
-                SortColumn.Modified => new GroupedComparer(SortColumn.Modified, descending, filesFirst),
-                SortColumn.Type => new GroupedComparer(SortColumn.Type, descending, filesFirst),
-                _ => new GroupedComparer(SortColumn.Name, descending, filesFirst)
-            };
+            return GroupedComparers[(int)column, descending ? 1 : 0, filesFirst ? 1 : 0];
         }
 
         return column switch
@@ -49,6 +50,25 @@ public static class FileSystemEntryComparer
             SortColumn.Type => descending ? MixedTypeDesc.Instance : MixedTypeAsc.Instance,
             _ => descending ? MixedNameDesc.Instance : MixedNameAsc.Instance
         };
+    }
+
+    private static GroupedComparer[,,] CreateGroupedComparers()
+    {
+        var columns = Enum.GetValues<SortColumn>();
+        var array = new GroupedComparer[columns.Length, 2, 2];
+        foreach (var column in columns)
+        {
+            for (var descending = 0; descending < 2; descending++)
+            {
+                for (var filesFirst = 0; filesFirst < 2; filesFirst++)
+                {
+                    array[(int)column, descending, filesFirst] =
+                        new GroupedComparer(column, descending == 1, filesFirst == 1);
+                }
+            }
+        }
+
+        return array;
     }
 
     private static int CompareByKind(in FileSystemEntry a, in FileSystemEntry b, bool filesFirst)

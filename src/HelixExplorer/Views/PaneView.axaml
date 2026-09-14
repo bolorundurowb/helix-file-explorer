@@ -716,7 +716,7 @@
                     <StaticResource ResourceKey="EntryContextMenu" />
                 </controls:VirtualizingFileGrid.ContextMenu>
                 <controls:VirtualizingFileGrid.HeaderTemplate>
-                    <DataTemplate x:DataType="vm:GroupHeaderViewModel" x:CompileBindings="False">
+                    <DataTemplate x:DataType="vm:GroupHeaderViewModel">
                         <Border Classes="groupHeader"
                                 Background="Transparent"
                                 Margin="6,10,6,2"
@@ -750,9 +750,9 @@
                     </DataTemplate>
                 </controls:VirtualizingFileGrid.HeaderTemplate>
                 <controls:VirtualizingFileGrid.ItemTemplate>
-                    <DataTemplate x:DataType="vm:EntryItemViewModel" x:CompileBindings="False">
+                    <DataTemplate x:DataType="vm:EntryItemViewModel">
                         <Border Classes="fileTile"
-                                Width="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=controls:VirtualizingFileGrid}}"
+                                Width="{Binding ItemSize, RelativeSource={RelativeSource AncestorType=controls:VirtualizingFileGrid}}"
                                 Margin="6"
                                 CornerRadius="6"
                                 ClipToBounds="{Binding IsNotRenaming}"
@@ -799,8 +799,8 @@
                                           IsHitTestVisible="False" />
                                 <StackPanel Margin="4" Spacing="4" ToolTip.Tip="{Binding Name}"
                                             Opacity="{Binding IsCut, Converter={StaticResource CutOpacityConverter}}">
-                                <controls:EntryVisualView Width="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=controls:VirtualizingFileGrid}}"
-                                                          Height="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=controls:VirtualizingFileGrid}}"
+                                <controls:EntryVisualView Width="{Binding ItemSize, RelativeSource={RelativeSource AncestorType=controls:VirtualizingFileGrid}}"
+                                                          Height="{Binding ItemSize, RelativeSource={RelativeSource AncestorType=controls:VirtualizingFileGrid}}"
                                                           HorizontalAlignment="Center"
                                                           Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}" />
                                 <TextBlock Text="{Binding DisplayName}"

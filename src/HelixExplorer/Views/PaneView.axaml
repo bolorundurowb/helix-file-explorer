@@ -93,7 +93,7 @@
 
     <UserControl.Resources>
         <ContextMenu x:Key="EntryContextMenu"
-                     x:CompileBindings="False"
+                     x:DataType="vm:PaneViewModel"
                      Opening="OnEntryContextMenuOpening">
             <MenuItem Classes="ctxToolbarHost" StaysOpenOnClick="True">
                 <MenuItem.Header>
@@ -333,7 +333,7 @@
             </MenuItem>
         </ContextMenu>
         <ContextMenu x:Key="EmptyAreaContextMenu"
-                     x:CompileBindings="False"
+                     x:DataType="vm:PaneViewModel"
                      Opening="OnEntryContextMenuOpening">
             <MenuItem Classes="ctxToolbarHost" StaysOpenOnClick="True">
                 <MenuItem.Header>

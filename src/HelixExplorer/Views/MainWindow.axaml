@@ -128,7 +128,7 @@
                                                 DragDrop.Drop="OnSidebarDrop">
                                             <Border.ContextMenu>
                                                 <ContextMenu Opening="OnSidebarContextMenuOpening"
-                                                             x:CompileBindings="False"
+                                                             x:DataType="vm:SidebarItemViewModel"
                                                              Tag="{Binding}">
                                                     <MenuItem Header="Pin to sidebar" Click="OnSidebarPinClick" />
                                                     <MenuItem Header="Unpin from sidebar" Click="OnSidebarUnpinClick" />

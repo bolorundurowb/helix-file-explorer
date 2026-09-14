@@ -3,11 +3,11 @@
              xmlns:vm="using:HelixExplorer.ViewModels"
              xmlns:views="using:HelixExplorer.Views"
              xmlns:controls="using:HelixExplorer.Controls"
-             x:Class="HelixExplorer.Views.DualPaneView"
-             x:DataType="vm:TabViewModel"
-             x:CompileBindings="False">
+              x:Class="HelixExplorer.Views.DualPaneView"
+              x:DataType="vm:TabViewModel">
     <Panel>
-        <views:SettingsPage IsVisible="{Binding IsSettingsTab}"
+        <views:SettingsPage x:DataType="vm:TabViewModel"
+                            IsVisible="{Binding IsSettingsTab}"
                             DataContext="{Binding Settings}" />
 
         <Panel IsVisible="{Binding IsBrowserTab}">

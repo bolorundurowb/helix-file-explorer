@@ -2,6 +2,13 @@ name: Release
 
 on:
   workflow_dispatch:
+  push:
+    branches: [master]
+    # A version bump lands in Directory.Build.props. Trigger on any change to it; the
+    # tag-existence check below skips non-version edits and unchanged versions so a
+    # release only publishes when the version actually moves.
+    paths:
+      - 'Directory.Build.props'
 
 jobs:
   build-and-release:

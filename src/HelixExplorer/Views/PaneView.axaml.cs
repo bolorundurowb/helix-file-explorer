@@ -17,8 +17,6 @@ using HelixExplorer.Core.Sorting;
 using HelixExplorer.Input;
 using HelixExplorer.Services;
 using HelixExplorer.ViewModels;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace HelixExplorer.Views;
 
@@ -41,8 +39,6 @@ public sealed partial class PaneView : UserControl
     }
 
     private PaneViewModel? _pane;
-    private IExternalFileDragPayloadBuilder? _dragPayloadBuilder;
-    private HelixExplorer.Core.Infrastructure.IExternalFileDragService? _externalFileDragService;
     private Point? _pressPoint;
     private PointerPressedEventArgs? _pressArgs;
     private Control? _pressHost;
@@ -1429,7 +1425,7 @@ public sealed partial class PaneView : UserControl
 
         var physicalPaths = await Pane.ResolvePhysicalPathsAsync(virtualPaths).ConfigureAwait(true);
 
-        if (ExternalFileDragService is { } nativeDrag)
+        if (Pane.ExternalFileDragService is { } nativeDrag)
         {
             nativeDrag.DoDragDrop(
                 physicalPaths,
@@ -1503,19 +1499,11 @@ public sealed partial class PaneView : UserControl
         if (storage is null || paths.Count == 0)
             return null;
 
-        return await DragPayloadBuilder.BuildAsync(storage, paths).ConfigureAwait(true);
+        if (Pane?.DragPayloadBuilder is not { } builder)
+            return null;
+
+        return await builder.BuildAsync(storage, paths).ConfigureAwait(true);
     }
-
-    /// <summary>
-    /// Falls back to a direct construct when <see cref="App.Services"/> is unavailable (design-time previews).
-    /// </summary>
-    private IExternalFileDragPayloadBuilder DragPayloadBuilder =>
-        _dragPayloadBuilder ??= App.Services?.GetService<IExternalFileDragPayloadBuilder>()
-            ?? new AvaloniaExternalFileDragPayloadBuilder(
-                NullLogger<AvaloniaExternalFileDragPayloadBuilder>.Instance);
-
-    private HelixExplorer.Core.Infrastructure.IExternalFileDragService? ExternalFileDragService =>
-        _externalFileDragService ??= App.Services?.GetService<HelixExplorer.Core.Infrastructure.IExternalFileDragService>();
 
     private void OnDragOver(object? sender, DragEventArgs e)
     {

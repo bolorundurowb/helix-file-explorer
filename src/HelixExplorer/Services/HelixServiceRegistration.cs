@@ -1,4 +1,5 @@
 using Avalonia.Threading;
+using CommunityToolkit.Mvvm.Messaging;
 using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.FileSystem.Undo;
@@ -27,6 +28,9 @@ public static class HelixServiceRegistration
     {
         services.AddHelixWindowsServices();
         services.AddSingleton<IUiThreadDispatcher, AvaloniaUiThreadDispatcher>();
+        // Per-window messenger so cross-component messages (navigation, URL open) stay window-local
+        // in a multi-window process; a WeakReferenceMessenger avoids leaking window-scoped recipients.
+        services.AddScoped<IMessenger>(_ => new WeakReferenceMessenger());
         services.AddSingleton<ISettingsStore, JsonSettingsStore>();
         services.AddSingleton<IAppDatabase, SqliteAppDatabase>();
         services.AddSingleton<IFolderViewPreferencesStore, FolderViewPreferencesStore>();

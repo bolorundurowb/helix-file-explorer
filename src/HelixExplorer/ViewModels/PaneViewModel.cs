@@ -41,6 +41,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     private readonly IShellFolderEnumerator _shellEnumerator;
     private readonly IFileOperationHistory _history;
     private readonly ILogger<PaneViewModel> _logger;
+    private readonly IExternalFileDragService? _externalFileDragService;
+    private readonly IExternalFileDragPayloadBuilder? _dragPayloadBuilder;
     private readonly PaneSelectionModel _selection = new();
     private readonly PaneNavigationController _navigation;
     private readonly PaneListingCoordinator _listing = new();
@@ -97,7 +99,9 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         IShellFolderEnumerator shell,
         IFileOperationHistory history,
         IPaneCoordinatorFactory coordinatorFactory,
-        ILogger<PaneViewModel> logger)
+        ILogger<PaneViewModel> logger,
+        IExternalFileDragService? externalFileDragService = null,
+        IExternalFileDragPayloadBuilder? dragPayloadBuilder = null)
     {
         _fileSystem = fileSystem;
         _archive = archive;
@@ -114,6 +118,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         _shellEnumerator = shell;
         _history = history;
         _logger = logger;
+        _externalFileDragService = externalFileDragService;
+        _dragPayloadBuilder = dragPayloadBuilder;
         _navigation = new PaneNavigationController(fileSystem, archive);
         _fileOperations = coordinatorFactory.CreateFileOperationCoordinator();
         _refreshCoordinator = coordinatorFactory.CreateRefreshCoordinator();
@@ -157,6 +163,12 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     public event EventHandler<IReadOnlyList<string>>? CopyToOtherPaneRequested;
     public event EventHandler<IReadOnlyList<string>>? MoveToOtherPaneRequested;
     public event EventHandler? SelectionChanged;
+
+    /// <summary>Native drag-out to external targets; injected via <see cref="PaneViewModelFactory"/>.</summary>
+    public IExternalFileDragService? ExternalFileDragService => _externalFileDragService;
+
+    /// <summary>Builds the Avalonia drag payload; injected via <see cref="PaneViewModelFactory"/>.</summary>
+    public IExternalFileDragPayloadBuilder? DragPayloadBuilder => _dragPayloadBuilder;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(CopyToOtherPaneCommand))]

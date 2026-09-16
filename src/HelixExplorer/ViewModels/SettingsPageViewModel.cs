@@ -176,7 +176,7 @@ public sealed partial class SettingsPageViewModel : ObservableObject
     {
         var directory = AppPaths.GetVersionedLogsDirectory();
         Directory.CreateDirectory(directory);
-        Main.OpenUrl(directory);
+        Main.NavigateActive(directory);
     }
 
     private static bool IsNewerVersion(string latest, string current)

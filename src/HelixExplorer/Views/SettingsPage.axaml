@@ -333,6 +333,20 @@
                                     Padding="16,8" />
                         </StackPanel>
                     </Border>
+                    <Border Classes="settingsRow">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="Data &amp; logs"
+                                       FontSize="14"
+                                       FontWeight="SemiBold" />
+                            <TextBlock Text="Logs are written to your temp folder, versioned by release."
+                                       FontSize="12"
+                                       Opacity="0.6" />
+                            <Button Content="Open logs folder"
+                                    Command="{Binding OpenLogsFolderCommand}"
+                                    HorizontalAlignment="Left"
+                                    Padding="16,8" />
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
 
             </StackPanel>

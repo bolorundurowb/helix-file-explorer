@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Core.Theming;
 
 namespace HelixExplorer.ViewModels;
@@ -168,6 +169,14 @@ public sealed partial class SettingsPageViewModel : ObservableObject
     {
         if (UpdateReleaseUrl is { Length: > 0 } url)
             Main.OpenUrl(url);
+    }
+
+    [RelayCommand]
+    private void OpenLogsFolder()
+    {
+        var directory = AppPaths.GetVersionedLogsDirectory();
+        Directory.CreateDirectory(directory);
+        Main.NavigateActive(directory);
     }
 
     private static bool IsNewerVersion(string latest, string current)

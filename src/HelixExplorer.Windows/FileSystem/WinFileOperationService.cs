@@ -281,9 +281,13 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
     {
         var destPath = Path.Combine(destination, Path.GetFileName(source));
 
-        // Copying onto the same path is a no-op; Replace must not delete the source.
+        // Copying an item back into its own directory is not a no-op: Explorer yields a sibling
+        // copy ("a (1).txt"), so uniquify the destination the same way a Keep Both conflict would.
+        // A move onto the same path stays a no-op (see MoveOne).
         if (PathUtilities.PathsEqual(source, destPath))
-            return;
+            destPath = File.Exists(source)
+                ? FileOperationPathHelper.EnsureUniqueFilePath(destPath)
+                : FileOperationPathHelper.EnsureUniqueDirectoryPath(destPath);
 
         if (File.Exists(source))
         {

@@ -39,6 +39,10 @@ Use it when you need dual-pane workflows, tabs that restore between sessions, ar
 |-------------------------------------------------------------------------------|----------------------------------------------------------------|
 | ![File operations in the status centre](assets/screenshots/status-centre.jpg) | ![Tabs with accent colors](assets/screenshots/tab-accents.jpg) |
 
+| Omnibar                                                             |
+|---------------------------------------------------------------------|
+| ![Address bar with navigation and search](assets/screenshots/omnibar.png) |
+
 ## Installation
 
 1. Open the [latest release](https://github.com/bolorundurowb/helix-file-explorer/releases/latest).

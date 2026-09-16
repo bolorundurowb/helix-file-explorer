@@ -21,7 +21,12 @@ using Microsoft.Extensions.Logging;
 
 namespace HelixExplorer.ViewModels;
 
-public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPaneRefreshHost
+public sealed partial class PaneViewModel :
+    ObservableObject,
+    IDisposable,
+    IPaneRefreshHost,
+    IPaneInlineRenameHost,
+    IPaneThumbnailHost
 {
     public const double MinThumbnailSize = 32;
     public const double MaxThumbnailSize = 256;
@@ -51,13 +56,12 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     private readonly PaneRefreshCoordinator _refreshCoordinator;
     private readonly PaneSearchCoordinator _searchCoordinator;
     private readonly PaneShellActionCoordinator _shellActions;
-    private EntryItemViewModel? _renamingEntry;
-    private bool _isCommittingRename;
+    private readonly PaneThumbnailCoordinator _thumbnails;
+    private readonly PaneInlineRenameCoordinator _inlineRename;
     private bool _syncingSelectedEntry;
 
     /// <summary>Entry the pending navigation wants focused once the destination listing publishes.</summary>
     private string? _pendingFocusPath;
-    private CancellationTokenSource? _thumbnailVisualCts;
     private IReadOnlyList<FileSystemEntry> _allEntries = Array.Empty<FileSystemEntry>();
     private IReadOnlyList<FileSystemEntry> _directoryEntries = Array.Empty<FileSystemEntry>();
 
@@ -83,48 +87,32 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     /// </summary>
     private DateTime _groupingUtcNow = DateTime.UtcNow;
 
-    public PaneViewModel(
-        IFileSystemProvider fileSystem,
-        IArchiveProvider archive,
-        IFolderColorService folderColors,
-        IFolderViewPreferencesService folderViewPrefs,
-        IClipboardService clipboard,
-        IUiHost uiHost,
-        IGitProvider git,
-        IFileChangeWatcher watcher,
-        ISettingsStore settingsStore,
-        IQuickAccessProvider quickAccess,
-        IUserDialogService dialogs,
-        IWindowHostService windowHost,
-        IShellFolderEnumerator shell,
-        IFileOperationHistory history,
-        IPaneCoordinatorFactory coordinatorFactory,
-        ILogger<PaneViewModel> logger,
-        IExternalFileDragService? externalFileDragService = null,
-        IExternalFileDragPayloadBuilder? dragPayloadBuilder = null)
+    public PaneViewModel(PaneViewModelDependencies dependencies)
     {
-        _fileSystem = fileSystem;
-        _archive = archive;
-        _folderColors = folderColors;
-        _folderViewPrefs = folderViewPrefs;
-        _clipboard = clipboard;
-        _uiHost = uiHost;
-        _git = git;
-        _watcher = watcher;
-        _settingsStore = settingsStore;
-        _quickAccess = quickAccess;
-        _dialogs = dialogs;
-        _windowHost = windowHost;
-        _shellEnumerator = shell;
-        _history = history;
-        _logger = logger;
-        _externalFileDragService = externalFileDragService;
-        _dragPayloadBuilder = dragPayloadBuilder;
-        _navigation = new PaneNavigationController(fileSystem, archive);
-        _fileOperations = coordinatorFactory.CreateFileOperationCoordinator();
-        _refreshCoordinator = coordinatorFactory.CreateRefreshCoordinator();
-        _searchCoordinator = coordinatorFactory.CreateSearchCoordinator();
-        _shellActions = coordinatorFactory.CreateShellActionCoordinator();
+        _fileSystem = dependencies.FileSystem;
+        _archive = dependencies.Archive;
+        _folderColors = dependencies.FolderColors;
+        _folderViewPrefs = dependencies.FolderViewPreferences;
+        _clipboard = dependencies.Clipboard;
+        _uiHost = dependencies.UiHost;
+        _git = dependencies.Git;
+        _watcher = dependencies.Watcher;
+        _settingsStore = dependencies.SettingsStore;
+        _quickAccess = dependencies.QuickAccess;
+        _dialogs = dependencies.Dialogs;
+        _windowHost = dependencies.WindowHost;
+        _shellEnumerator = dependencies.ShellEnumerator;
+        _history = dependencies.History;
+        _logger = dependencies.Logger;
+        _externalFileDragService = dependencies.ExternalFileDragService;
+        _dragPayloadBuilder = dependencies.DragPayloadBuilder;
+        _navigation = new PaneNavigationController(dependencies.FileSystem, dependencies.Archive);
+        _fileOperations = dependencies.CoordinatorFactory.CreateFileOperationCoordinator();
+        _refreshCoordinator = dependencies.CoordinatorFactory.CreateRefreshCoordinator();
+        _searchCoordinator = dependencies.CoordinatorFactory.CreateSearchCoordinator();
+        _shellActions = dependencies.CoordinatorFactory.CreateShellActionCoordinator();
+        _thumbnails = dependencies.CoordinatorFactory.CreateThumbnailCoordinator();
+        _inlineRename = dependencies.CoordinatorFactory.CreateInlineRenameCoordinator();
         _watcher.Changed += OnWatcherChanged;
         _clipboard.Changed += OnClipboardChanged;
 
@@ -292,6 +280,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     public ObservableCollection<object> GridItems { get; } = new();
 
     public ObservableCollection<EntryItemViewModel> SelectedEntries => _selection.SelectedEntries;
+
+    IReadOnlyList<EntryItemViewModel> IPaneInlineRenameHost.SelectedEntries => SelectedEntries;
 
     public ObservableCollection<string> Branches { get; } = new();
 
@@ -564,32 +554,24 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
 
     partial void OnThumbnailSizeChanged(double value)
     {
-        var clamped = Math.Clamp(value, MinThumbnailSize, MaxThumbnailSize);
+        var clamped = _thumbnails.ApplySizeChange(new PaneThumbnailSizeChange(
+            value,
+            IsGridView,
+            () => RequestEntryVisuals(),
+            () => LayoutChanged?.Invoke(this, EventArgs.Empty),
+            SchedulePersistFolderViewPreferences));
         if (Math.Abs(clamped - value) > double.Epsilon)
-        {
             ThumbnailSize = clamped;
-        }
-        else if (IsGridView)
-        {
-            ScheduleDebouncedVisualReload();
-        }
-
-        LayoutChanged?.Invoke(this, EventArgs.Empty);
-        SchedulePersistFolderViewPreferences();
     }
 
     partial void OnViewModeChanged(LayoutMode value)
-    {
-        if (value == LayoutMode.Grid)
-            ScheduleDebouncedVisualReload();
-        else
-            RequestEntryVisuals();
-
-        RebuildGridItems();
-        NotifyGroupOptionProperties();
-        LayoutChanged?.Invoke(this, EventArgs.Empty);
-        SchedulePersistFolderViewPreferences();
-    }
+        => _thumbnails.ApplyViewModeChange(new PaneThumbnailViewModeChange(
+            value == LayoutMode.Grid,
+            () => RequestEntryVisuals(),
+            RebuildGridItems,
+            NotifyGroupOptionProperties,
+            () => LayoutChanged?.Invoke(this, EventArgs.Empty),
+            SchedulePersistFolderViewPreferences));
 
     private void ApplyFolderViewPreferences(string path)
     {
@@ -690,34 +672,6 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
                 _folderPrefPersistCts = null;
                 cts.Dispose();
             }
-        }
-    }
-
-    private void ScheduleDebouncedVisualReload()
-    {
-        try { _thumbnailVisualCts?.Cancel(); } catch (ObjectDisposedException) { }
-        _thumbnailVisualCts?.Dispose();
-        var cts = new CancellationTokenSource();
-        _thumbnailVisualCts = cts;
-        FireAndForgetSafe.Run(DebouncedVisualReloadAsync(cts), _logger);
-    }
-
-    private async Task DebouncedVisualReloadAsync(CancellationTokenSource cts)
-    {
-        try
-        {
-            await Task.Delay(175, cts.Token).ConfigureAwait(true);
-            if (_disposed || !ReferenceEquals(_thumbnailVisualCts, cts))
-                return;
-            RequestEntryVisuals();
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        finally
-        {
-            if (ReferenceEquals(cts, Interlocked.CompareExchange(ref _thumbnailVisualCts, null, cts)))
-                cts.Dispose();
         }
     }
 
@@ -1052,7 +1006,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         RestoreSelection(result.Entries, previouslySelected, previousSelectedEntryPath);
         ApplyPendingFocus(result.Entries);
         UpdateStatusText();
-        _refreshCoordinator.RequestEntryVisuals(this, result.VisualTargets);
+        _thumbnails.RequestEntryVisuals(this, result.VisualTargets);
         return result;
     }
 
@@ -1095,7 +1049,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         => ObservableCollectionDiff.Apply(Entries, nextEntries);
 
     private void RequestEntryVisuals(IReadOnlyList<EntryItemViewModel>? targets = null)
-        => _refreshCoordinator.RequestEntryVisuals(this, targets);
+        => _thumbnails.RequestEntryVisuals(this, targets);
 
     private void UpdateStatusText()
     {
@@ -1390,92 +1344,24 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     }
 
     [RelayCommand(CanExecute = nameof(CanRename))]
-    private void BeginRename()
-    {
-        if (SelectedEntries.Count != 1)
-            return;
-
-        var entry = SelectedEntries[0];
-        ClearRenameState();
-        _renamingEntry = entry;
-        entry.RenameText = entry.Name;
-        RenameText = entry.Name;
-        entry.IsRenaming = true;
-        IsRenaming = true;
-    }
+    private void BeginRename() => _inlineRename.Begin(this);
 
     [RelayCommand]
-    private async Task CommitRename()
-    {
-        if (_isCommittingRename)
-            return;
-
-        if (!IsRenaming || _renamingEntry is null)
-        {
-            ClearRenameState();
-            return;
-        }
-
-        var entry = _renamingEntry;
-        var newName = entry.RenameText.Trim();
-
-        if (string.IsNullOrWhiteSpace(newName) || newName == entry.Name)
-        {
-            ClearRenameState();
-            return;
-        }
-
-        _isCommittingRename = true;
-        try
-        {
-            var oldPath = entry.FullPath;
-            await _fileOperations.RenameAsync(
-                oldPath,
-                newName,
-                refreshAsync: async () =>
-                {
-                    _listing.RemoveFromPool(oldPath);
-                    await RefreshAsync(showLoading: false).ConfigureAwait(true);
-                },
-                onClearRename: ClearRenameState,
-                setStatusText: text => StatusText = text).ConfigureAwait(true);
-        }
-        finally
-        {
-            _isCommittingRename = false;
-        }
-    }
+    private Task CommitRename() => _inlineRename.CommitAsync(this);
 
     [RelayCommand]
     private void CancelRename() => ClearRenameState();
 
-    private void ClearRenameState()
-    {
-        // Null the field and clear pane IsRenaming before mutating the entry. Setting
-        // entry.IsRenaming=false collapses the TextBox and raises LostFocus, which can
-        // re-enter CommitRename/ClearRenameState and otherwise NRE on _renamingEntry.
-        var entry = _renamingEntry;
-        _renamingEntry = null;
-        IsRenaming = false;
-        RenameText = string.Empty;
+    private void ClearRenameState() => _inlineRename.Clear(this);
 
-        if (entry is not null)
-        {
-            entry.IsRenaming = false;
-            entry.RenameText = string.Empty;
-        }
+    public async Task RefreshAfterRenameAsync(string oldPath)
+    {
+        _listing.RemoveFromPool(oldPath);
+        await RefreshAsync(showLoading: false).ConfigureAwait(true);
     }
 
     public static int GetRenameBaseNameLength(string name, bool isDirectory)
-    {
-        if (string.IsNullOrEmpty(name) || isDirectory)
-            return name.Length;
-
-        var extension = Path.GetExtension(name);
-        return string.IsNullOrEmpty(extension) || extension.Length >= name.Length
-            ? name.Length
-            : name.Length - extension.Length;
-    }
+        => PaneInlineRenameCoordinator.GetBaseNameLength(name, isDirectory);
 
     [RelayCommand(CanExecute = nameof(CanModifyHere))]
     private async Task NewFolder()
@@ -2122,6 +2008,10 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
 
     bool IPaneRefreshHost.IsDisposed => _disposed;
 
+    bool IPaneThumbnailHost.IsDisposed => _disposed;
+
+    IReadOnlyList<EntryItemViewModel> IPaneThumbnailHost.Entries => Entries;
+
     string IPaneRefreshHost.CurrentPath => CurrentPath;
 
     bool IPaneRefreshHost.IsHome => IsHome;
@@ -2145,14 +2035,6 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
     DirectorySortMode IPaneRefreshHost.DirectorySort => DirectorySort;
 
     GroupByMode IPaneRefreshHost.GroupBy => GroupBy;
-
-    bool IPaneRefreshHost.IsGridView => IsGridView;
-
-    double IPaneRefreshHost.ThumbnailSize => ThumbnailSize;
-
-    LayoutMode IPaneRefreshHost.ViewMode => ViewMode;
-
-    IReadOnlyList<EntryItemViewModel> IPaneRefreshHost.Entries => Entries;
 
     void IPaneRefreshHost.SetLoading(bool loading) => IsLoading = loading;
 
@@ -2193,9 +2075,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable, IPane
         if (Interlocked.Exchange(ref _disposed, true))
             return;
         CancelSearch();
-        try { _thumbnailVisualCts?.Cancel(); } catch (ObjectDisposedException) { }
-        _thumbnailVisualCts?.Dispose();
-        _thumbnailVisualCts = null;
+        _thumbnails.Dispose();
         try { _folderPrefPersistCts?.Cancel(); } catch (ObjectDisposedException) { }
         _folderPrefPersistCts?.Dispose();
         _folderPrefPersistCts = null;

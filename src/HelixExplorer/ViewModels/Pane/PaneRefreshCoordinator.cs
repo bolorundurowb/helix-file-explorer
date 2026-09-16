@@ -29,11 +29,6 @@ public interface IPaneRefreshHost
     bool SortDescending { get; }
     DirectorySortMode DirectorySort { get; }
     GroupByMode GroupBy { get; }
-    bool IsGridView { get; }
-    double ThumbnailSize { get; }
-    LayoutMode ViewMode { get; }
-    IReadOnlyList<EntryItemViewModel> Entries { get; }
-
     void SetLoading(bool loading);
     void SetStatusText(string text);
     ListingPublishResult ApplySortAndPublish(ListingPublishRequest request);
@@ -53,21 +48,11 @@ public sealed class PaneRefreshCoordinator(
     IFileSystemProvider fileSystem,
     IArchiveProvider archive,
     IGitProvider git,
-    FileVisualService visuals,
     ILogger<PaneRefreshCoordinator> logger)
     : IDisposable
 {
     private CancellationTokenSource? _refreshCts;
     private CancellationTokenSource? _gitCts;
-    private CancellationTokenSource? _visualCts;
-
-    /// <summary>
-    /// Bounded concurrency for entry visual loading. Conservative starting point; adjust here after
-    /// measuring large photo folders (and consider a separate icon vs thumbnail cap).
-    /// </summary>
-    private const int MaxConcurrentVisuals = 4;
-
-    private readonly BoundedVisualLoader _visualLoader = new(MaxConcurrentVisuals);
     private int _refreshGeneration;
     private bool _watcherRefreshPending;
     private bool _refreshInFlight;
@@ -219,26 +204,6 @@ public sealed class PaneRefreshCoordinator(
         host.RequestRefresh();
     }
 
-    public void RequestEntryVisuals(IPaneRefreshHost host, IReadOnlyList<EntryItemViewModel>? targets = null)
-    {
-        // Snapshot first so empty VisualTargets (sort/filter reuse) do not cancel in-flight loads.
-        var entries = (targets ?? host.Entries).ToList();
-        if (entries.Count == 0)
-            return;
-
-        CancelVisuals();
-        _visualCts = new CancellationTokenSource();
-        var ct = _visualCts.Token;
-        var size = host.IsGridView ? (int)host.ThumbnailSize : 20;
-        var isGrid = host.IsGridView;
-
-        // Bound concurrency so opening a folder of photos does not spawn one decode task per entry.
-        _ = _visualLoader.RunAsync(
-            entries,
-            (entry, token) => entry.RefreshVisualAsync(visuals, size, isGrid, token),
-            ct);
-    }
-
     public void CancelRefresh()
     {
         var previous = Interlocked.Exchange(ref _refreshCts, null);
@@ -257,13 +222,6 @@ public sealed class PaneRefreshCoordinator(
         try { _gitCts.Cancel(); } catch (ObjectDisposedException) { }
         _gitCts.Dispose();
         _gitCts = null;
-    }
-
-    public void CancelVisuals()
-    {
-        try { _visualCts?.Cancel(); } catch (ObjectDisposedException) { }
-        _visualCts?.Dispose();
-        _visualCts = null;
     }
 
     private void StartGitStatusRefresh(IPaneRefreshHost host, int generation, string path)
@@ -338,6 +296,5 @@ public sealed class PaneRefreshCoordinator(
 
         CancelRefresh();
         CancelGitRefresh();
-        CancelVisuals();
     }
 }

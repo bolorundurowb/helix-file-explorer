@@ -20,7 +20,7 @@ public sealed class PaneViewModelFactory(IServiceProvider serviceProvider) : IPa
     public PaneViewModel Create()
     {
         var watcherFactory = serviceProvider.GetRequiredService<Func<IFileChangeWatcher>>();
-        return new PaneViewModel(
+        return new PaneViewModel(new PaneViewModelDependencies(
             serviceProvider.GetRequiredService<IFileSystemProvider>(),
             serviceProvider.GetRequiredService<IArchiveProvider>(),
             serviceProvider.GetRequiredService<IFolderColorService>(),
@@ -38,6 +38,6 @@ public sealed class PaneViewModelFactory(IServiceProvider serviceProvider) : IPa
             serviceProvider.GetRequiredService<IPaneCoordinatorFactory>(),
             serviceProvider.GetRequiredService<ILogger<PaneViewModel>>(),
             serviceProvider.GetRequiredService<IExternalFileDragService>(),
-            serviceProvider.GetRequiredService<IExternalFileDragPayloadBuilder>());
+            serviceProvider.GetRequiredService<IExternalFileDragPayloadBuilder>()));
     }
 }

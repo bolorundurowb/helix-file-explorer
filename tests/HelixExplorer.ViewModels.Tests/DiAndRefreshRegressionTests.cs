@@ -27,11 +27,16 @@ public class ScopedDiWiringTests
         Descriptor<IPaneCoordinatorFactory>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
         Descriptor<IPaneViewModelFactory>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
         Descriptor<AppSettingsCoordinator>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
+        Descriptor<WindowLayoutCoordinator>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
+        Descriptor<NetworkLocationCoordinator>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
+        Descriptor<MainWindowViewModelDependencies>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
         Descriptor<SidebarViewModel>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
         Descriptor<CommandPaletteService>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
         Descriptor<TabSessionCoordinator>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
         Descriptor<PaneFileOperationCoordinator>(services).Lifetime.Must().Be(ServiceLifetime.Transient);
         Descriptor<PaneShellActionCoordinator>(services).Lifetime.Must().Be(ServiceLifetime.Transient);
+        Descriptor<PaneThumbnailCoordinator>(services).Lifetime.Must().Be(ServiceLifetime.Transient);
+        Descriptor<PaneInlineRenameCoordinator>(services).Lifetime.Must().Be(ServiceLifetime.Transient);
         Descriptor<FileOperationUndoService>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
 
         // Undo must be process-wide: a scoped history would give each window its own stack, so an

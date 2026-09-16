@@ -70,21 +70,7 @@ public sealed class VirtualFileSystemProvider(VirtualFileSystem fileSystem) : IF
                 if (child.IsDirectory && depth < options.MaxDepth)
                     queue.Enqueue((child, depth + 1));
 
-                var relative = child.FullPath.Length > root.FullPath.Length
-                    ? child.FullPath[(root.FullPath.Length + 1)..].Replace('\\', '/')
-                    : child.Name;
-
-                var nameMatches = EntryNameMatcher.Matches(child.Name, trimmed)
-                                  || EntryNameMatcher.Matches(relative, trimmed);
-
-                var contentMatches = false;
-                if (!nameMatches && scanContent && !child.IsDirectory
-                    && TextFileClassifier.IsLikelyTextExtension(Path.GetExtension(child.Name)))
-                {
-                    contentMatches = ContainsContent(child, trimmed, options.MaxContentBytes);
-                }
-
-                if (!nameMatches && !contentMatches)
+                if (!MatchesQuery(child, root.FullPath, trimmed, scanContent, options.MaxContentBytes))
                     continue;
 
                 results.Add(ToEntry(child));
@@ -108,6 +94,29 @@ public sealed class VirtualFileSystemProvider(VirtualFileSystem fileSystem) : IF
     public bool DirectoryExists(string path) => fileSystem.Find(ResolvePath(path))?.IsDirectory == true;
 
     public bool FileExists(string path) => fileSystem.Find(ResolvePath(path)) is { IsDirectory: false };
+
+    private static bool MatchesQuery(
+        VirtualFileSystem.VirtualEntry child,
+        string rootPath,
+        string query,
+        bool scanContent,
+        long maxContentBytes)
+    {
+        var relative = child.FullPath.Length > rootPath.Length
+            ? child.FullPath[(rootPath.Length + 1)..].Replace('\\', '/')
+            : child.Name;
+
+        if (EntryNameMatcher.Matches(child.Name, query)
+            || EntryNameMatcher.Matches(relative, query))
+        {
+            return true;
+        }
+
+        return scanContent
+               && !child.IsDirectory
+               && TextFileClassifier.IsLikelyTextExtension(Path.GetExtension(child.Name))
+               && ContainsContent(child, query, maxContentBytes);
+    }
 
     private static bool ContainsContent(VirtualFileSystem.VirtualEntry file, string query, long maxBytes)
         => file.Content.Length > 0

@@ -19,13 +19,11 @@ using HelixExplorer.ViewModels.Pane;
 
 namespace HelixExplorer.ViewModels;
 
-public partial class MainWindowViewModel : ObservableObject, IDisposable
+public partial class MainWindowViewModel : ObservableObject, IDisposable, INetworkLocationHost
 {
     private readonly IThemeService _themeService;
     private readonly IAccentBrushService _accentBrushes;
     private readonly IQuickAccessProvider _quickAccess;
-    private readonly INetworkLocationProvider _networkLocations;
-    private readonly INetworkDiscoveryAvailability _networkAvailability;
     private readonly IClipboardService _clipboard;
     private readonly IArchiveProvider _archive;
     private readonly IFolderColorService _folderColors;
@@ -40,61 +38,37 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly IUserDialogService _dialogs;
     private readonly HomePageViewModel _homePage;
     private readonly SettingsPageViewModel _settingsPage;
+    private readonly WindowLayoutCoordinator _windowLayout;
+    private readonly NetworkLocationCoordinator _networkCoordinator;
     private readonly IMessenger _messenger;
     private readonly string _homePath;
     private readonly List<string> _recentPaths = new();
-    private IReadOnlyList<NetworkLocationInfo> _lastNetworkLocations = [];
-    private bool _networkBrowsingVerified;
-    private CancellationTokenSource? _networkCts;
     private bool _disposed;
     private TabViewModel? _lastBrowserTab;
-    private bool _restoreWindowLayout;
 
-    private const double MinWindowWidth = 800;
-    private const double MinWindowHeight = 500;
-
-    public MainWindowViewModel(
-        IThemeService themeService,
-        IAccentBrushService accentBrushes,
-        IQuickAccessProvider quickAccess,
-        INetworkLocationProvider networkLocations,
-        INetworkDiscoveryAvailability networkAvailability,
-        IClipboardService clipboard,
-        IArchiveProvider archive,
-        IFolderColorService folderColors,
-        IVolumeChangeWatcher volumeWatcher,
-        IPaneViewModelFactory paneFactory,
-        AppSettingsCoordinator settingsCoordinator,
-        SidebarViewModel sidebar,
-        CommandPaletteService commandPalette,
-        TabSessionCoordinator tabSession,
-        FileOperationReporter operationReporter,
-        FileOperationUndoService undo,
-        IUserDialogService dialogs,
-        HomePageViewModel homePage,
-        IMessenger messenger)
+    public MainWindowViewModel(MainWindowViewModelDependencies dependencies)
     {
-        _themeService = themeService;
-        _accentBrushes = accentBrushes;
-        _quickAccess = quickAccess;
-        _networkLocations = networkLocations;
-        _networkAvailability = networkAvailability;
-        _clipboard = clipboard;
-        _archive = archive;
-        _folderColors = folderColors;
-        _volumeWatcher = volumeWatcher;
-        _paneFactory = paneFactory;
-        _settingsCoordinator = settingsCoordinator;
-        _sidebar = sidebar;
-        _commandPalette = commandPalette;
-        _tabSession = tabSession;
-        _operationReporter = operationReporter;
-        _undo = undo;
-        _dialogs = dialogs;
-        OperationReporter = operationReporter;
-        _homePage = homePage;
-        _messenger = messenger;
-        _settingsPage = new SettingsPageViewModel(this, messenger);
+        _themeService = dependencies.ThemeService;
+        _accentBrushes = dependencies.AccentBrushes;
+        _quickAccess = dependencies.QuickAccess;
+        _clipboard = dependencies.Clipboard;
+        _archive = dependencies.Archive;
+        _folderColors = dependencies.FolderColors;
+        _volumeWatcher = dependencies.VolumeWatcher;
+        _paneFactory = dependencies.PaneFactory;
+        _settingsCoordinator = dependencies.SettingsCoordinator;
+        _sidebar = dependencies.Sidebar;
+        _commandPalette = dependencies.CommandPalette;
+        _tabSession = dependencies.TabSession;
+        _operationReporter = dependencies.OperationReporter;
+        _undo = dependencies.Undo;
+        _dialogs = dependencies.Dialogs;
+        OperationReporter = dependencies.OperationReporter;
+        _homePage = dependencies.HomePage;
+        _windowLayout = dependencies.WindowLayout;
+        _networkCoordinator = dependencies.NetworkLocations;
+        _messenger = dependencies.Messenger;
+        _settingsPage = new SettingsPageViewModel(this, _messenger);
         _messenger.Register<MainWindowViewModel, GlobalNavigationRequestMessage>(this, static (r, m) => r.HandleGlobalNavigation(m));
         _messenger.Register<MainWindowViewModel, OpenUrlRequestMessage>(this, static (r, m) => r.OpenUrl(m.Url));
         _operationReporter.PropertyChanged += OnOperationReporterPropertyChanged;
@@ -125,8 +99,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _themeService.ThemeChanged += OnThemeServiceChanged;
 
         _sidebar.Rebuild(settings.PinnedPaths, settings.UnpinnedPaths);
-        _networkAvailability.AvailabilityChanged += OnNetworkAvailabilityChanged;
-        _ = RefreshNetworkLocationsAsync();
+        _networkCoordinator.AvailabilityChanged += OnNetworkAvailabilityChanged;
+        _networkCoordinator.Start(this);
 
         _folderColors.ColorsChanged += OnFolderColorsChanged;
         _volumeWatcher.VolumesChanged += OnVolumesChanged;
@@ -206,7 +180,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public void InitializeWindow(bool restoreSession, string? initialPath = null)
     {
-        _restoreWindowLayout = restoreSession;
+        _windowLayout.Initialize(restoreSession);
 
         if (restoreSession)
         {
@@ -255,53 +229,22 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         }
     }
 
-    public bool ShouldRestoreWindowLayout => _restoreWindowLayout;
+    public bool ShouldRestoreWindowLayout => _windowLayout.ShouldRestore;
 
-    public void ApplyWindowLayout(Avalonia.Controls.Window window)
-    {
-        if (!_restoreWindowLayout)
-            return;
-
-        var settings = GetSettings();
-        if (settings.WindowWidth is not > 0 || settings.WindowHeight is not > 0)
-            return;
-
-        window.WindowStartupLocation = Avalonia.Controls.WindowStartupLocation.Manual;
-        window.Width = Math.Max(MinWindowWidth, settings.WindowWidth.Value);
-        window.Height = Math.Max(MinWindowHeight, settings.WindowHeight.Value);
-
-        if (settings.WindowX.HasValue && settings.WindowY.HasValue)
-            window.Position = new Avalonia.PixelPoint(settings.WindowX.Value, settings.WindowY.Value);
-
-        if (settings.WindowMaximized)
-            window.WindowState = Avalonia.Controls.WindowState.Maximized;
-    }
+    public void ApplyWindowLayout(Avalonia.Controls.Window window) => _windowLayout.Apply(window);
 
     public void CaptureWindowLayout(Avalonia.Controls.Window window)
-    {
-        if (!_restoreWindowLayout)
-            return;
-
-        var maximized = window.WindowState == Avalonia.Controls.WindowState.Maximized;
-
-        _settingsCoordinator.SaveNow(settings =>
-        {
-            settings.WindowMaximized = maximized;
-            if (!maximized)
-            {
-                settings.WindowWidth = Math.Max(MinWindowWidth, window.Width);
-                settings.WindowHeight = Math.Max(MinWindowHeight, window.Height);
-                settings.WindowX = window.Position.X;
-                settings.WindowY = window.Position.Y;
-            }
-
-            settings.SidebarWidth = SidebarWidth;
-        });
-    }
+        => _windowLayout.Capture(new WindowLayoutCapture(
+            window.Width,
+            window.Height,
+            window.Position.X,
+            window.Position.Y,
+            window.WindowState == Avalonia.Controls.WindowState.Maximized,
+            SidebarWidth));
 
     public void SyncSidebarWidth(double width)
     {
-        var clamped = Math.Clamp(width, 200, 450);
+        var clamped = WindowLayoutCoordinator.ClampSidebarWidth(width);
         if (Math.Abs(clamped - SidebarWidth) <= double.Epsilon)
             return;
 
@@ -335,78 +278,24 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public bool IsNetworkBannerVisible => IsDiscoveringNetwork || HasNetworkNotice;
 
-    private async Task RefreshNetworkLocationsAsync()
-    {
-        _networkCts?.Cancel();
-        _networkCts = new CancellationTokenSource();
-        var ct = _networkCts.Token;
+    bool INetworkLocationHost.IsDisposed => _disposed;
 
-        IsDiscoveringNetwork = true;
-        HasNetworkNotice = false;
-        NetworkBannerText = UiStrings.NetworkDiscoveryBanner;
-        try
-        {
-            _networkAvailability.Refresh();
-            var result = await _networkLocations.GetNetworkLocationsAsync(ct).ConfigureAwait(true);
-            if (!ct.IsCancellationRequested)
-            {
-                _lastNetworkLocations = result.Locations;
-                if (result.Status == NetworkDiscoveryStatus.Discovered)
-                    _networkBrowsingVerified = true;
-
-                RebuildSidebar();
-                UpdateNetworkNotice();
-            }
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        finally
-        {
-            if (!ct.IsCancellationRequested)
-            {
-                IsDiscoveringNetwork = false;
-                RefreshHomeDashboard();
-            }
-        }
-    }
-
-    private void UpdateNetworkNotice()
-    {
-        if (!NetworkNoticePolicy.ShouldShowUnavailableNotice(
-                _networkBrowsingVerified,
-                _lastNetworkLocations.Count > 0,
-                _networkAvailability.IsUnavailable))
-        {
-            HasNetworkNotice = false;
-            return;
-        }
-
-        NetworkBannerText = UiStrings.NetworkDiscoveryFailed;
-        HasNetworkNotice = true;
-    }
-
-    private void OnNetworkAvailabilityChanged(object? sender, EventArgs e) => UpdateNetworkNotice();
+    private void OnNetworkAvailabilityChanged(object? sender, EventArgs e)
+        => _networkCoordinator.UpdateNotice(this);
 
     private void NoteNetworkBrowsing(string? path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-            return;
-
-        if (!NetworkPath.IsUnc(path) && !NetworkPath.IsNetworkRoot(path))
-            return;
-
-        _networkBrowsingVerified = true;
-        HasNetworkNotice = false;
-    }
+        => _networkCoordinator.NoteBrowsing(this, path);
 
     private void RebuildSidebar()
+        => RebuildSidebar(_networkCoordinator.Locations);
+
+    public void RebuildSidebar(IReadOnlyList<NetworkLocationInfo> locations)
     {
         var settings = GetSettings();
         _sidebar.Rebuild(
             settings.PinnedPaths,
             settings.UnpinnedPaths,
-            _lastNetworkLocations,
+            locations,
             ActivePane?.CurrentPath);
     }
 
@@ -673,8 +562,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         if (value)
         {
-            _networkAvailability.Refresh();
-            UpdateNetworkNotice();
+            _networkCoordinator.RefreshAvailability();
+            _networkCoordinator.UpdateNotice(this);
         }
 
         foreach (var tab in Tabs)
@@ -1131,9 +1020,12 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         => ActivePane?.SetGroupByCommand.Execute(mode);
 
     private void RefreshHomeDashboard()
+        => RefreshHomeDashboard(_networkCoordinator.Locations);
+
+    public void RefreshHomeDashboard(IReadOnlyList<NetworkLocationInfo> locations)
     {
         _homePage.SetRecentFiles(_recentPaths);
-        _homePage.SetNetworkLocations(_lastNetworkLocations);
+        _homePage.SetNetworkLocations(locations);
         _homePage.RefreshPins();
         _homePage.RefreshDrives();
     }
@@ -1480,10 +1372,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _disposed = true;
 
         _messenger.UnregisterAll(this);
-        _networkCts?.Cancel();
-        _networkCts?.Dispose();
-
-        _networkAvailability.AvailabilityChanged -= OnNetworkAvailabilityChanged;
+        _networkCoordinator.AvailabilityChanged -= OnNetworkAvailabilityChanged;
+        _networkCoordinator.Dispose();
         _folderColors.ColorsChanged -= OnFolderColorsChanged;
         _volumeWatcher.VolumesChanged -= OnVolumesChanged;
         _volumeWatcher.Dispose();

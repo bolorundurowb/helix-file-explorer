@@ -69,9 +69,13 @@ public static class HelixServiceRegistration
         services.AddTransient<PaneFileOperationCoordinator>();
         services.AddTransient<PaneSearchCoordinator>();
         services.AddTransient<PaneShellActionCoordinator>();
+        services.AddTransient<PaneThumbnailCoordinator>();
+        services.AddTransient<PaneInlineRenameCoordinator>();
         services.AddScoped<IPaneCoordinatorFactory, PaneCoordinatorFactory>();
         services.AddScoped<IPaneViewModelFactory, PaneViewModelFactory>();
         services.AddScoped<AppSettingsCoordinator>();
+        services.AddScoped<WindowLayoutCoordinator>();
+        services.AddScoped<NetworkLocationCoordinator>();
         services.AddScoped<SidebarViewModel>();
         services.AddScoped<CommandPaletteService>();
         services.AddScoped<TabSessionCoordinator>();
@@ -87,6 +91,7 @@ public static class HelixServiceRegistration
         // progress appears in the window the user pressed the shortcut in.
         services.AddSingleton<IFileOperationHistory, FileOperationHistory>();
         services.AddScoped<FileOperationUndoService>();
+        services.AddScoped<MainWindowViewModelDependencies>();
         services.AddScoped<MainWindowViewModel>();
         services.AddTransient<MainWindow>();
         return services;

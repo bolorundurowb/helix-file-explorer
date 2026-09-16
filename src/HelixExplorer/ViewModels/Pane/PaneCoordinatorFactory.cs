@@ -16,6 +16,10 @@ public interface IPaneCoordinatorFactory
     PaneSearchCoordinator CreateSearchCoordinator();
 
     PaneShellActionCoordinator CreateShellActionCoordinator();
+
+    PaneThumbnailCoordinator CreateThumbnailCoordinator();
+
+    PaneInlineRenameCoordinator CreateInlineRenameCoordinator();
 }
 
 public sealed class PaneCoordinatorFactory(IServiceProvider serviceProvider) : IPaneCoordinatorFactory
@@ -31,4 +35,10 @@ public sealed class PaneCoordinatorFactory(IServiceProvider serviceProvider) : I
 
     public PaneShellActionCoordinator CreateShellActionCoordinator()
         => serviceProvider.GetRequiredService<PaneShellActionCoordinator>();
+
+    public PaneThumbnailCoordinator CreateThumbnailCoordinator()
+        => serviceProvider.GetRequiredService<PaneThumbnailCoordinator>();
+
+    public PaneInlineRenameCoordinator CreateInlineRenameCoordinator()
+        => serviceProvider.GetRequiredService<PaneInlineRenameCoordinator>();
 }

@@ -33,6 +33,56 @@ public class WinFileOperationServiceTests
     }
 
     [Fact]
+    public async Task CopyAsync_SameDirectory_CreatesSiblingCopy()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var file = Path.Combine(root, "a.txt");
+            await File.WriteAllTextAsync(file, "original");
+
+            var service = CreateService();
+            var result = await service.CopyAsync([file], root);
+
+            result.Failed.Must().Be(0);
+            File.Exists(file).Must().BeTrue();
+            (await File.ReadAllTextAsync(file)).Must().Be("original");
+            File.Exists(Path.Combine(root, "a (1).txt")).Must().BeTrue();
+            result.Changes.Count.Must().Be(1);
+            result.Changes[0].DestinationPath.Must().Be(Path.Combine(root, "a (1).txt"));
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [Fact]
+    public async Task CopyAsync_SameDirectory_CreatesSiblingFolderCopy()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var folder = Path.Combine(root, "folder");
+            Directory.CreateDirectory(folder);
+            await File.WriteAllTextAsync(Path.Combine(folder, "keep.txt"), "keep-me");
+
+            var service = CreateService();
+            var result = await service.CopyAsync([folder], root);
+
+            result.Failed.Must().Be(0);
+            Directory.Exists(folder).Must().BeTrue();
+            File.Exists(Path.Combine(root, "folder (1)", "keep.txt")).Must().BeTrue();
+            result.Changes.Count.Must().Be(1);
+            result.Changes[0].DestinationPath.Must().Be(Path.Combine(root, "folder (1)"));
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [Fact]
     public async Task MoveAsync_SamePathDirectoryReplace_DoesNotDeleteSource()
     {
         var root = CreateTempDirectory();

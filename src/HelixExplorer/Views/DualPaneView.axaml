@@ -6,9 +6,9 @@
               x:Class="HelixExplorer.Views.DualPaneView"
               x:DataType="vm:TabViewModel">
     <Panel>
-        <views:SettingsPage x:DataType="vm:TabViewModel"
-                            IsVisible="{Binding IsSettingsTab}"
-                            DataContext="{Binding Settings}" />
+        <Panel x:DataType="vm:TabViewModel" IsVisible="{Binding IsSettingsTab}">
+            <views:SettingsPage DataContext="{Binding Settings}" />
+        </Panel>
 
         <Panel IsVisible="{Binding IsBrowserTab}">
             <controls:PaneContentHost IsVisible="{Binding IsSinglePane}"

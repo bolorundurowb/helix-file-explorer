@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Formatting;
 using HelixExplorer.Core.Models;
@@ -13,20 +14,21 @@ public sealed partial class HomePageViewModel : ObservableObject
     private readonly IQuickAccessProvider _quickAccess;
     private readonly IVolumeProvider _volumes;
     private readonly ISettingsStore _settingsStore;
+    private readonly IMessenger _messenger;
 
     public HomePageViewModel(
         IQuickAccessProvider quickAccess,
         IVolumeProvider volumes,
-        ISettingsStore settingsStore)
+        ISettingsStore settingsStore,
+        IMessenger messenger)
     {
         _quickAccess = quickAccess;
         _volumes = volumes;
         _settingsStore = settingsStore;
+        _messenger = messenger;
         RefreshPins();
         RefreshDrives();
     }
-
-    public event EventHandler<string>? NavigateRequested;
 
     public ObservableCollection<HomeQuickAccessItem> QuickAccess { get; } = new();
     public ObservableCollection<HomeDriveItem> Drives { get; } = new();
@@ -39,7 +41,7 @@ public sealed partial class HomePageViewModel : ObservableObject
     public void RequestNavigate(string? path)
     {
         if (!string.IsNullOrWhiteSpace(path))
-            NavigateRequested?.Invoke(this, path);
+            _messenger.Send(new GlobalNavigationRequestMessage(path));
     }
 
     [RelayCommand]

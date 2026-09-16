@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Core.Theming;
 
@@ -23,9 +24,12 @@ public sealed partial class SettingsPageViewModel : ObservableObject
     private const string ReleasesUrl =
         "https://api.github.com/repos/bolorundurowb/helix-file-explorer/releases/latest";
 
-    public SettingsPageViewModel(MainWindowViewModel main)
+    private readonly IMessenger _messenger;
+
+    public SettingsPageViewModel(MainWindowViewModel main, IMessenger messenger)
     {
         Main = main;
+        _messenger = messenger;
         AppVersion = AppAssembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
                      ?? AppAssembly.GetName().Version?.ToString(3)
                      ?? "0.0.0";
@@ -168,7 +172,7 @@ public sealed partial class SettingsPageViewModel : ObservableObject
     private void OpenReleaseUrl()
     {
         if (UpdateReleaseUrl is { Length: > 0 } url)
-            Main.OpenUrl(url);
+            _messenger.Send(new OpenUrlRequestMessage(url));
     }
 
     [RelayCommand]
@@ -176,7 +180,7 @@ public sealed partial class SettingsPageViewModel : ObservableObject
     {
         var directory = AppPaths.GetVersionedLogsDirectory();
         Directory.CreateDirectory(directory);
-        Main.NavigateActive(directory);
+        _messenger.Send(new GlobalNavigationRequestMessage(directory));
     }
 
     private static bool IsNewerVersion(string latest, string current)

@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Infrastructure;
@@ -39,6 +40,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly IUserDialogService _dialogs;
     private readonly HomePageViewModel _homePage;
     private readonly SettingsPageViewModel _settingsPage;
+    private readonly IMessenger _messenger;
     private readonly string _homePath;
     private readonly List<string> _recentPaths = new();
     private IReadOnlyList<NetworkLocationInfo> _lastNetworkLocations = [];
@@ -69,7 +71,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         FileOperationReporter operationReporter,
         FileOperationUndoService undo,
         IUserDialogService dialogs,
-        HomePageViewModel homePage)
+        HomePageViewModel homePage,
+        IMessenger messenger)
     {
         _themeService = themeService;
         _accentBrushes = accentBrushes;
@@ -90,8 +93,10 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _dialogs = dialogs;
         OperationReporter = operationReporter;
         _homePage = homePage;
-        _settingsPage = new SettingsPageViewModel(this);
-        _homePage.NavigateRequested += OnHomeNavigateRequested;
+        _messenger = messenger;
+        _settingsPage = new SettingsPageViewModel(this, messenger);
+        _messenger.Register<MainWindowViewModel, GlobalNavigationRequestMessage>(this, static (r, m) => r.HandleGlobalNavigation(m));
+        _messenger.Register<MainWindowViewModel, OpenUrlRequestMessage>(this, static (r, m) => r.OpenUrl(m.Url));
         _operationReporter.PropertyChanged += OnOperationReporterPropertyChanged;
         _undo.Changed += OnHistoryChanged;
 
@@ -1133,8 +1138,9 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
         _homePage.RefreshDrives();
     }
 
-    private void OnHomeNavigateRequested(object? sender, string path)
+    private void HandleGlobalNavigation(GlobalNavigationRequestMessage message)
     {
+        var path = message.Path;
         if (string.IsNullOrWhiteSpace(path))
             return;
 
@@ -1473,6 +1479,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable
             return;
         _disposed = true;
 
+        _messenger.UnregisterAll(this);
         _networkCts?.Cancel();
         _networkCts?.Dispose();
 

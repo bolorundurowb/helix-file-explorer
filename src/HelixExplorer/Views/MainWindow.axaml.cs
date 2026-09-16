@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
@@ -352,14 +353,25 @@ public partial class MainWindow : Window
     private int _dragSourceIndex = -1;
     private Point _dragStartPosition;
     private bool _isDragging;
+    private long _lastTabWheelTimestamp;
 
     private const double TabDragThreshold = 6;
+    private static readonly TimeSpan TabWheelScrollInterval = TimeSpan.FromMilliseconds(360);
 
     private void OnTabStripWheel(object? sender, PointerWheelEventArgs e)
     {
         if (DataContext is not MainWindowViewModel vm)
             return;
 
+        var timestamp = Stopwatch.GetTimestamp();
+        if (_lastTabWheelTimestamp != 0
+            && Stopwatch.GetElapsedTime(_lastTabWheelTimestamp, timestamp) < TabWheelScrollInterval)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        _lastTabWheelTimestamp = timestamp;
         vm.CycleSelectedTab(e.Delta.Y > 0 ? -1 : 1);
         e.Handled = true;
     }

@@ -12,8 +12,7 @@
         ExtendClientAreaToDecorationsHint="True"
         ExtendClientAreaTitleBarHeightHint="45"
         WindowDecorations="Full"
-        Background="{DynamicResource HelixChromeBrush}"
-        Icon="avares://HelixExplorer/Assets/helix-explorer-icon.png">
+        Background="{DynamicResource HelixChromeBrush}">
 
     <Window.Styles>
         <Style Selector="WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel > TextBlock">
@@ -95,7 +94,7 @@
                         <StackPanel Orientation="Horizontal"
                                     Spacing="8"
                                     VerticalAlignment="Center">
-                            <Image Source="avares://HelixExplorer/Assets/helix-explorer-icon.png"
+                            <Image x:Name="AppLogoImage"
                                    Width="24"
                                    Height="24"
                                    VerticalAlignment="Center" />

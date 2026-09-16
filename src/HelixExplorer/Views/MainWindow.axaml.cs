@@ -7,6 +7,8 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using HelixExplorer.ViewModels;
@@ -20,6 +22,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        ApplyBuildIcon();
         Activated += OnActivated;
         Deactivated += (_, _) => SetWindowActive(false);
         Opened += OnOpened;
@@ -30,6 +33,20 @@ public partial class MainWindow : Window
         SidebarSplitter.DragCompleted += OnSidebarDragCompleted;
 
         AttachTabOverflowHandlers();
+    }
+
+    private void ApplyBuildIcon()
+    {
+        var uri = new Uri(
+#if DEBUG
+            "avares://HelixExplorer/Assets/helix-explorer-icon-dev.png"
+#else
+            "avares://HelixExplorer/Assets/helix-explorer-icon.png"
+#endif
+        );
+
+        Icon = new WindowIcon(AssetLoader.Open(uri));
+        AppLogoImage.Source = new Bitmap(AssetLoader.Open(uri));
     }
 
     private void OnActivated(object? sender, EventArgs e)

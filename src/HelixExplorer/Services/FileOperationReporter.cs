@@ -11,11 +11,18 @@ public sealed partial class FileOperationReporter : ObservableObject, IFileOpera
     private readonly ManualResetEventSlim _pauseGate = new(initialState: true);
     private CancellationTokenSource? _activeCts;
 
-    [ObservableProperty] private double _progress;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ProgressPercentText))]
+    private double _progress;
 
-    [ObservableProperty] private bool _isIndeterminate;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ProgressPercentText))]
+    [NotifyPropertyChangedFor(nameof(ShowDeterminateProgress))]
+    private bool _isIndeterminate;
 
-    [ObservableProperty] private string _activeTitle = string.Empty;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ActiveDisplayTitle))]
+    private string _activeTitle = string.Empty;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasActiveDetail))]
@@ -26,12 +33,22 @@ public sealed partial class FileOperationReporter : ObservableObject, IFileOpera
     [NotifyPropertyChangedFor(nameof(CanPauseOperation))]
     [NotifyPropertyChangedFor(nameof(CanResumeOperation))]
     [NotifyPropertyChangedFor(nameof(CanCancelOperation))]
+    [NotifyPropertyChangedFor(nameof(ShowDeterminateProgress))]
+    [NotifyPropertyChangedFor(nameof(ShowIdleEmpty))]
+    [NotifyPropertyChangedFor(nameof(ProgressBarOpacity))]
     private bool _hasActive;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanPauseOperation))]
     [NotifyPropertyChangedFor(nameof(CanResumeOperation))]
+    [NotifyPropertyChangedFor(nameof(ActiveDisplayTitle))]
+    [NotifyPropertyChangedFor(nameof(ProgressBarOpacity))]
     private bool _isPaused;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanPauseOperation))]
+    [NotifyPropertyChangedFor(nameof(CanCancelOperation))]
+    private bool _isCancelling;
 
     public ObservableCollection<OperationEntry> Completed { get; } = new();
 
@@ -41,11 +58,26 @@ public sealed partial class FileOperationReporter : ObservableObject, IFileOpera
 
     public bool HasCompleted => Completed.Count > 0;
 
-    public bool CanPauseOperation => HasActive && !IsPaused;
+    public bool ShowIdleEmpty => !HasActive && !HasCompleted;
+
+    public bool ShowDeterminateProgress => HasActive && !IsIndeterminate;
+
+    public double ProgressBarOpacity => HasActive && IsPaused ? 0.45 : 1;
+
+    public string ActiveDisplayTitle =>
+        IsPaused && !IsCancelling && !string.IsNullOrEmpty(ActiveTitle)
+            ? $"{ActiveTitle} (Paused)"
+            : ActiveTitle;
+
+    public string ProgressPercentText => ShowDeterminateProgress
+        ? $"{Math.Clamp(Progress, 0, 1) * 100:0}%"
+        : string.Empty;
+
+    public bool CanPauseOperation => HasActive && !IsPaused && !IsCancelling;
 
     public bool CanResumeOperation => HasActive && IsPaused;
 
-    public bool CanCancelOperation => HasActive;
+    public bool CanCancelOperation => HasActive && !IsCancelling;
 
     public CancellationToken CancellationToken => _activeCts?.Token ?? CancellationToken.None;
 
@@ -55,6 +87,7 @@ public sealed partial class FileOperationReporter : ObservableObject, IFileOpera
         _activeCts = new CancellationTokenSource();
         _pauseGate.Set();
         IsPaused = false;
+        IsCancelling = false;
         HasActive = true;
         ActiveTitle = title;
         ActiveDetail = string.Empty;
@@ -87,24 +120,24 @@ public sealed partial class FileOperationReporter : ObservableObject, IFileOpera
 
     public void Complete(FileOperationKind kind, int itemCount, string message)
     {
-        EndActiveOperation();
         Progress = 1;
         ActiveDetail = string.Empty;
-        AddCompleted(new OperationEntry(message, Failed: false, Succeeded: true, Cancelled: false, Kind: kind, ItemCount: itemCount));
+        AddCompleted(new OperationEntry(message, Failed: false, Succeeded: true, Cancelled: false, Kind: kind, ItemCount: itemCount, CompletedAt: DateTime.Now));
+        EndActiveOperation();
     }
 
     public void Fail(string message)
     {
-        EndActiveOperation();
         ActiveDetail = string.Empty;
-        AddCompleted(new OperationEntry(message, Failed: true, Succeeded: false, Cancelled: false, Kind: null, ItemCount: 0));
+        AddCompleted(new OperationEntry(message, Failed: true, Succeeded: false, Cancelled: false, Kind: null, ItemCount: 0, CompletedAt: DateTime.Now));
+        EndActiveOperation();
     }
 
     public void Cancelled(string message)
     {
-        EndActiveOperation();
         ActiveDetail = string.Empty;
-        AddCompleted(new OperationEntry(message, Failed: false, Succeeded: false, Cancelled: true, Kind: null, ItemCount: 0));
+        AddCompleted(new OperationEntry(message, Failed: false, Succeeded: false, Cancelled: true, Kind: null, ItemCount: 0, CompletedAt: DateTime.Now));
+        EndActiveOperation();
     }
 
     public void WaitIfPaused(CancellationToken cancellationToken)
@@ -121,6 +154,7 @@ public sealed partial class FileOperationReporter : ObservableObject, IFileOpera
     {
         Completed.Insert(0, entry);
         OnPropertyChanged(nameof(HasCompleted));
+        OnPropertyChanged(nameof(ShowIdleEmpty));
         ClearCompletedCommand.NotifyCanExecuteChanged();
     }
 
@@ -131,13 +165,14 @@ public sealed partial class FileOperationReporter : ObservableObject, IFileOpera
     {
         Completed.Clear();
         OnPropertyChanged(nameof(HasCompleted));
+        OnPropertyChanged(nameof(ShowIdleEmpty));
         ClearCompletedCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand(CanExecute = nameof(CanPauseOperation))]
     private void PauseOperation()
     {
-        if (!HasActive || IsPaused)
+        if (!HasActive || IsPaused || IsCancelling)
             return;
 
         IsPaused = true;
@@ -159,9 +194,10 @@ public sealed partial class FileOperationReporter : ObservableObject, IFileOpera
     [RelayCommand(CanExecute = nameof(CanCancelOperation))]
     private void CancelOperation()
     {
-        if (!HasActive)
+        if (!HasActive || IsCancelling)
             return;
 
+        IsCancelling = true;
         ActiveTitle = "Cancelling operation…";
         _pauseGate.Set();
         IsPaused = false;
@@ -177,6 +213,7 @@ public sealed partial class FileOperationReporter : ObservableObject, IFileOpera
     {
         HasActive = false;
         IsPaused = false;
+        IsCancelling = false;
         _pauseGate.Set();
         _activeCts?.Dispose();
         _activeCts = null;
@@ -205,4 +242,5 @@ public sealed record OperationEntry(
     bool Succeeded = true,
     bool Cancelled = false,
     FileOperationKind? Kind = null,
-    int ItemCount = 0);
+    int ItemCount = 0,
+    DateTime CompletedAt = default);

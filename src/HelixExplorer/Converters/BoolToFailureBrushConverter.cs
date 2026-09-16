@@ -12,7 +12,12 @@ public sealed class BoolToFailureBrushConverter : IValueConverter
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         if (value is true)
-            return new SolidColorBrush(Color.FromRgb(0xD1, 0x34, 0x38));
+        {
+            if (Application.Current?.TryGetResource("HelixDangerBrush", Application.Current.ActualThemeVariant, out var danger) == true)
+                return danger;
+
+            return new SolidColorBrush(Color.FromRgb(0xC4, 0x2B, 0x1C));
+        }
 
         if (Application.Current?.TryGetResource("HelixEntryForegroundBrush", Application.Current.ActualThemeVariant, out var brush) == true)
             return brush;

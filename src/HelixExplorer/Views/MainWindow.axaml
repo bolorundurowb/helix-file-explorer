@@ -52,6 +52,7 @@
         <KeyBinding Gesture="Ctrl+Shift+A" Command="{Binding InvertSelectionCommand}" />
         <KeyBinding Gesture="Alt+F5" Command="{Binding CopyToOtherPaneCommand}" />
         <KeyBinding Gesture="Alt+F6" Command="{Binding MoveToOtherPaneCommand}" />
+        <KeyBinding Gesture="Ctrl+Shift+J" Command="{Binding ToggleStatusCentreCommand}" />
         <KeyBinding Gesture="Ctrl+OemTilde"
                     Command="{Binding OpenInTerminalCommand}" />
     </Window.KeyBindings>
@@ -938,13 +939,40 @@
                     <TextBlock Text="{Binding SelectedTab.ActivePane.SelectedCount, StringFormat='{}{0} selected'}"
                                VerticalAlignment="Center" FontSize="12" Opacity="0.7"
                                IsVisible="{Binding ShowFileToolbar}" />
-                    <Button Classes="toolButton"
+                    <Button x:Name="StatusCentreChip"
+                            Classes="toolButton"
                             Command="{Binding ToggleStatusCentreCommand}"
                             ToolTip.Tip="Status centre"
                             Padding="6,2"
                             Cursor="Hand">
-                        <PathIcon Data="{DynamicResource HelixIconInfoGeometry}"
-                                  Width="14" Height="14" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <PathIcon Data="{DynamicResource HelixIconListGeometry}"
+                                      Width="14" Height="14"
+                                      Foreground="{Binding StatusCentre.HasUnreadFailure, Converter={StaticResource BoolToFailureBrushConverter}}" />
+                            <StackPanel Spacing="2"
+                                        Width="168"
+                                        VerticalAlignment="Center"
+                                        IsVisible="{Binding OperationReporter.HasActive}">
+                                <TextBlock Text="{Binding OperationReporter.ActiveDisplayTitle}"
+                                           FontSize="11"
+                                           TextTrimming="CharacterEllipsis" />
+                                <ProgressBar Minimum="0"
+                                             Maximum="1"
+                                             Height="3"
+                                             MinHeight="3"
+                                             Value="{Binding OperationReporter.Progress}"
+                                             IsIndeterminate="{Binding OperationReporter.IsIndeterminate}" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding OperationReporter.ProgressPercentText}"
+                                       FontSize="11"
+                                       Opacity="0.75"
+                                       VerticalAlignment="Center"
+                                       IsVisible="{Binding OperationReporter.ShowDeterminateProgress}" />
+                            <Ellipse Width="8" Height="8"
+                                     Fill="{DynamicResource HelixDangerBrush}"
+                                     VerticalAlignment="Center"
+                                     IsVisible="{Binding StatusCentre.HasUnreadFailure}" />
+                        </StackPanel>
                     </Button>
                 </StackPanel>
             </Grid>
@@ -977,6 +1005,6 @@
         <views:CommandPaletteOverlay IsVisible="{Binding IsCommandPaletteOpen}"
                                       IsHitTestVisible="{Binding IsCommandPaletteOpen}"
                                       DataContext="{Binding}" />
-        <views:StatusCentreFlyout DataContext="{Binding}" />
+        <views:StatusCentreFlyout x:Name="StatusCentreOverlay" DataContext="{Binding}" />
     </Grid>
 </Window>

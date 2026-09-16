@@ -63,7 +63,8 @@ public sealed class FileOperationUndoService(
             return isUndo ? UiStrings.NothingToUndo : UiStrings.NothingToRedo;
 
         var kind = ReporterKindFor(batch, isUndo);
-        reporter.Begin(kind, batch.Changes.Count, isUndo ? UiStrings.Undoing : UiStrings.Redoing);
+        // Inverse batches do not report per-item progress; keep the bar indeterminate instead of 0%.
+        reporter.Begin(kind, totalItems: 0, isUndo ? UiStrings.Undoing : UiStrings.Redoing);
 
         try
         {

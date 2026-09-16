@@ -27,6 +27,7 @@ public sealed class CommandPaletteService
         _allCommands.Add(new CommandItem("Filter", "View", vm => vm.FocusFilterCommand.Execute(null), "Ctrl+F"));
         _allCommands.Add(new CommandItem("Search", "View", vm => vm.FocusSearchCommand.Execute(null), "Ctrl+Shift+F"));
         _allCommands.Add(new CommandItem("Settings", "View", vm => vm.OpenSettingsCommand.Execute(null)));
+        _allCommands.Add(new CommandItem("Toggle Status Centre", "View", vm => vm.ToggleStatusCentreCommand.Execute(null), "Ctrl+Shift+J"));
         _allCommands.Add(new CommandItem("Go Back", "Navigation", vm => vm.ActivePane?.GoBackCommand.Execute(null)));
         _allCommands.Add(new CommandItem("Go Forward", "Navigation", vm => vm.ActivePane?.GoForwardCommand.Execute(null)));
         _allCommands.Add(new CommandItem("Go Up", "Navigation", vm => vm.ActivePane?.GoUpCommand.Execute(null)));

@@ -42,6 +42,32 @@ public class FileOperationUndoServiceTests
     }
 
     [Fact]
+    public async Task Undo_BeginsWithUnknownTotalSoProgressIsIndeterminate()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var created = Path.Combine(root, "copied.txt");
+            await File.WriteAllTextAsync(created, "x");
+
+            var history = new FileOperationHistory();
+            history.Push(new FileOperationBatch(
+                UndoableOperationKind.Copy,
+                "copy of 1 item",
+                [new FileOperationChange(Path.Combine(root, "original.txt"), created)]));
+
+            var reporter = new CapturingReporter();
+            await CreateService(history, new RecordingFileOps(), reporter: reporter).UndoAsync();
+
+            reporter.LastBeginTotalItems.Must().Be(0);
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [Fact]
     public async Task UndoCopy_RecyclesOnlyRecordedTopLevelPaths()
     {
         var root = CreateTempDirectory();
@@ -444,6 +470,19 @@ public class FileOperationUndoServiceTests
             => throw new NotSupportedException();
 
         public void CleanupExtractedFiles() { }
+    }
+
+    private sealed class CapturingReporter : IFileOperationReporter
+    {
+        public int LastBeginTotalItems { get; private set; } = -1;
+        public bool IsBusy { get; set; }
+        public CancellationToken CancellationToken => CancellationToken.None;
+        public void WaitIfPaused(CancellationToken cancellationToken) { }
+        public void Begin(FileOperationKind kind, int totalItems, string title) => LastBeginTotalItems = totalItems;
+        public void Report(FileOperationProgress progress) { }
+        public void Complete(FileOperationKind kind, int itemCount, string message) { }
+        public void Fail(string message) { }
+        public void Cancelled(string message) { }
     }
 
     private sealed class StubReporter : IFileOperationReporter

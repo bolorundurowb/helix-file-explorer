@@ -11,6 +11,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using HelixExplorer.ViewModels;
 
 namespace HelixExplorer.Views;
@@ -33,6 +34,7 @@ public partial class MainWindow : Window
         SidebarSplitter.DragCompleted += OnSidebarDragCompleted;
 
         AttachTabOverflowHandlers();
+        AddHandler(PointerPressedEvent, OnWindowPointerPressed, RoutingStrategies.Tunnel);
     }
 
     private void ApplyBuildIcon()
@@ -218,6 +220,22 @@ public partial class MainWindow : Window
             binding.Gesture = KeyGesture.Parse(MainWindowViewModel.AppDefaultTerminalGesture);
         }
     }
+
+    private void OnWindowPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm || !vm.IsStatusCentreOpen)
+            return;
+
+        if (IsWithin(StatusCentreOverlay, e.Source) || IsWithin(StatusCentreChip, e.Source))
+            return;
+
+        vm.CloseStatusCentreCommand.Execute(null);
+    }
+
+    private static bool IsWithin(Visual? ancestor, object? source)
+        => ancestor is not null
+           && source is Visual visual
+           && (ReferenceEquals(ancestor, visual) || ancestor.IsVisualAncestorOf(visual));
 
     private void OnClosing(object? sender, CancelEventArgs e)
     {

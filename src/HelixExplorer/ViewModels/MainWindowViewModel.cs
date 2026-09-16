@@ -34,6 +34,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
     private readonly CommandPaletteService _commandPalette;
     private readonly TabSessionCoordinator _tabSession;
     private readonly FileOperationReporter _operationReporter;
+    private readonly StatusCentreCoordinator _statusCentre;
     private readonly FileOperationUndoService _undo;
     private readonly IUserDialogService _dialogs;
     private readonly HomePageViewModel _homePage;
@@ -64,6 +65,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
         _undo = dependencies.Undo;
         _dialogs = dependencies.Dialogs;
         OperationReporter = dependencies.OperationReporter;
+        _statusCentre = new StatusCentreCoordinator(_operationReporter, () => IsCommandPaletteOpen);
+        _statusCentre.PropertyChanged += OnStatusCentrePropertyChanged;
         _homePage = dependencies.HomePage;
         _windowLayout = dependencies.WindowLayout;
         _networkCoordinator = dependencies.NetworkLocations;
@@ -71,7 +74,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
         _settingsPage = new SettingsPageViewModel(this, _messenger);
         _messenger.Register<MainWindowViewModel, GlobalNavigationRequestMessage>(this, static (r, m) => r.HandleGlobalNavigation(m));
         _messenger.Register<MainWindowViewModel, OpenUrlRequestMessage>(this, static (r, m) => r.OpenUrl(m.Url));
-        _operationReporter.PropertyChanged += OnOperationReporterPropertyChanged;
         _undo.Changed += OnHistoryChanged;
 
         _homePath = _quickAccess.GetPath(KnownFolderKind.Home)
@@ -257,6 +259,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
 
     public FileOperationReporter OperationReporter { get; }
 
+    public StatusCentreCoordinator StatusCentre => _statusCentre;
+
     public bool IsDualPaneActive => SelectedTab?.IsDualPane == true;
 
     public ObservableCollection<CommandItem> FilteredCommands { get; } = new();
@@ -323,7 +327,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
     [NotifyPropertyChangedFor(nameof(ShowBrowserChrome))]
     private TabViewModel? _selectedTab;
 
-    [ObservableProperty] private bool _isStatusCentreOpen;
+    public bool IsStatusCentreOpen => _statusCentre.IsOpen;
 
     public bool IsBrowserTab => SelectedTab?.IsBrowserTab ?? true;
 
@@ -822,7 +826,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
         if (!IsCommandPaletteOpen)
             return;
 
-        IsStatusCentreOpen = false;
+        _statusCentre.Close();
         foreach (var tab in Tabs.Where(t => t.IsBrowserTab))
             RecordRecent(tab.ActivePane?.CurrentPath);
 
@@ -858,22 +862,18 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
     }
 
     [RelayCommand]
-    private void ToggleStatusCentre() => IsStatusCentreOpen = !IsStatusCentreOpen;
+    private void ToggleStatusCentre() => _statusCentre.Toggle();
 
-    private void OnOperationReporterPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    [RelayCommand]
+    private void CloseStatusCentre() => _statusCentre.Close();
+
+    private void OnStatusCentrePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (_disposed)
             return;
 
-        // Auto-open the status centre the moment an operation starts, so the user sees progress
-        // without having to click the status button. Keep it open after completion so the green
-        // check / failure row is visible; the user dismisses it via the Close/Clear buttons.
-        if (e.PropertyName == nameof(FileOperationReporter.HasActive)
-            && _operationReporter.HasActive
-            && !IsCommandPaletteOpen)
-        {
-            IsStatusCentreOpen = true;
-        }
+        if (e.PropertyName == nameof(StatusCentreCoordinator.IsOpen))
+            OnPropertyChanged(nameof(IsStatusCentreOpen));
     }
 
     [RelayCommand]
@@ -1378,7 +1378,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
         _volumeWatcher.VolumesChanged -= OnVolumesChanged;
         _volumeWatcher.Dispose();
         _themeService.ThemeChanged -= OnThemeServiceChanged;
-        _operationReporter.PropertyChanged -= OnOperationReporterPropertyChanged;
+        _statusCentre.PropertyChanged -= OnStatusCentrePropertyChanged;
+        _statusCentre.Dispose();
         _operationReporter.Dispose();
 
         // The history outlives this window, so a window that forgets to unsubscribe keeps its whole

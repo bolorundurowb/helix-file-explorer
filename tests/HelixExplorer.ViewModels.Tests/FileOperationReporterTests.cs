@@ -65,6 +65,7 @@ public class FileOperationReporterTests
         entry.Cancelled.Must().BeFalse();
         entry.Kind.Must().Be(FileOperationKind.Copy);
         entry.ItemCount.Must().Be(1);
+        entry.CompletedAt.Must().NotBe(default(DateTime));
     }
 
     [Fact]
@@ -143,6 +144,20 @@ public class FileOperationReporterTests
 
         reporter.HasCompleted.Must().BeFalse();
         reporter.Completed.Must().BeEmpty();
+    }
+
+    [Fact]
+    public void CancelOperation_DisablesPauseWhileCancelling()
+    {
+        var reporter = new FileOperationReporter();
+        reporter.Begin(FileOperationKind.Move, 1, "Moving");
+
+        reporter.CancelOperationCommand.Execute(null);
+
+        reporter.IsCancelling.Must().BeTrue();
+        reporter.CanPauseOperation.Must().BeFalse();
+        reporter.CanCancelOperation.Must().BeFalse();
+        reporter.ActiveTitle.Must().Be("Cancelling operation…");
     }
 
     [Fact]

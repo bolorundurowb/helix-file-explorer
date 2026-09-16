@@ -225,7 +225,7 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
             catch (Exception ex)
             {
                 logger.LogError(ex, "{Kind} failed for '{Source}'", kind, source);
-                failures.Add(new FileOperationFailure(source, FileSystemError.DescribeFileOperation(ex)));
+                failures.Add(new FileOperationFailure(source, FileSystemErrorMessages.DescribeFileOperation(ex)));
             }
 
             progress?.Report(new FileOperationProgress(i + 1, total, source, kind));

@@ -127,7 +127,7 @@ public sealed class PaneRefreshCoordinator(
             }
             catch (Exception ex)
             {
-                errorMessage = FileSystemError.Describe(ex, path);
+                errorMessage = FileSystemErrorMessages.Describe(ex, path);
                 logger.LogError(ex, "Pane refresh failed for '{Path}'", path);
                 listing = DirectoryListing.Empty;
             }

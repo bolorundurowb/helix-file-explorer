@@ -24,6 +24,7 @@ public static class WindowsServiceExtensions
         services.AddSingleton<IFileVisualProvider, Shell.WinFileVisualProvider>();
         services.AddTransient<IFileChangeWatcher, FileSystem.FileChangeWatcherService>();
         services.AddScoped<Func<IFileChangeWatcher>>(sp => () => sp.GetRequiredService<IFileChangeWatcher>());
+        services.AddSingleton<IStaTaskScheduler, Shell.StaTaskScheduler>();
         return services;
     }
 }

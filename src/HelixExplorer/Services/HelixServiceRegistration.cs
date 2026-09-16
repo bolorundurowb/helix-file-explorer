@@ -26,6 +26,7 @@ public static class HelixServiceRegistration
     public static IServiceCollection AddHelixApplicationServices(this IServiceCollection services)
     {
         services.AddHelixWindowsServices();
+        services.AddSingleton<IUiThreadDispatcher, AvaloniaUiThreadDispatcher>();
         services.AddSingleton<ISettingsStore, JsonSettingsStore>();
         services.AddSingleton<IAppDatabase, SqliteAppDatabase>();
         services.AddSingleton<IFolderViewPreferencesStore, FolderViewPreferencesStore>();

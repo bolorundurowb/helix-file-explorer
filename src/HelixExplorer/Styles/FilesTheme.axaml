@@ -171,7 +171,7 @@
         <Setter Property="Spacing" Value="0" />
         <Setter Property="VerticalAlignment" Value="Stretch" />
         <Setter Property="HorizontalAlignment" Value="Right" />
-        <Setter Property="Margin" Value="0, 5,-46,0" />
+        <Setter Property="Margin" Value="0, 0,-46,0" />
     </Style>
     <Style Selector="WindowDrawnDecorations:has-shadow /template/ Panel#PART_OverlayWrapper">
         <Setter Property="Margin" Value="0" />

@@ -26,6 +26,15 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        // The desktop window graph (DI host, app database, session restore) is only required under
+        // the classic desktop lifetime. Headless/test hosts have no desktop lifetime and must skip it
+        // so they never touch the real app data or database.
+        if (ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            base.OnFrameworkInitializationCompleted();
+            return;
+        }
+
         AppPaths.EnsureDirectoriesExist();
 
         _fileLoggerProvider = new RollingFileLoggerProvider(new RollingFileLoggerOptions
@@ -61,23 +70,20 @@ public partial class App : Application
             AppPaths.AppData,
             _fileLoggerProvider.LogsDirectory);
 
-        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-        {
-            desktop.ShutdownRequested += OnShutdownRequested;
+        desktop.ShutdownRequested += OnShutdownRequested;
 
-            var windowHost = _host.Services.GetRequiredService<IWindowHostService>();
-            var initialPath = ParseInitialPath(Program.StartupArgs);
-            var restoreSession = initialPath is null
-                && _host.Services.GetRequiredService<ISettingsStore>().Load().RestoreSessionOnStartup;
-            var mainWindow = windowHost.OpenWindowAsync(
-                initialPath: initialPath,
-                restoreSession: restoreSession).GetAwaiter().GetResult();
-            desktop.MainWindow = mainWindow;
+        var windowHost = _host.Services.GetRequiredService<IWindowHostService>();
+        var initialPath = ParseInitialPath(Program.StartupArgs);
+        var restoreSession = initialPath is null
+            && _host.Services.GetRequiredService<ISettingsStore>().Load().RestoreSessionOnStartup;
+        var mainWindow = windowHost.OpenWindowAsync(
+            initialPath: initialPath,
+            restoreSession: restoreSession).GetAwaiter().GetResult();
+        desktop.MainWindow = mainWindow;
 
-            var mainWindowViewModel = (MainWindowViewModel)mainWindow.DataContext!;
-            var startupCoordinator = _host.Services.GetRequiredService<ApplicationStartupCoordinator>();
-            startupCoordinator.Initialize(this, mainWindowViewModel);
-        }
+        var mainWindowViewModel = (MainWindowViewModel)mainWindow.DataContext!;
+        var startupCoordinator = _host.Services.GetRequiredService<ApplicationStartupCoordinator>();
+        startupCoordinator.Initialize(this, mainWindowViewModel);
 
         base.OnFrameworkInitializationCompleted();
     }

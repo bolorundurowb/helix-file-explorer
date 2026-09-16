@@ -1,7 +1,5 @@
-using HelixExplorer.Core.Filtering;
 using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Models;
-using HelixExplorer.Core.Sorting;
 
 namespace HelixExplorer.ViewModels.Pane;
 
@@ -17,63 +15,32 @@ public sealed class PaneListingCoordinator
 
     public ListingPublishResult ApplySortAndPublish(ListingPublishRequest request)
     {
-        _visibleBuffer.Clear();
-        foreach (var entry in request.AllEntries)
-        {
-            if (!request.ShowHiddenFiles && entry.IsHidden)
-                continue;
-
-            _visibleBuffer.Add(entry);
-        }
-
-        var totalCount = _visibleBuffer.Count;
-
-        FileNameFilter.Apply(_visibleBuffer, request.IsFilterVisible ? request.FilterText : null, _viewBuffer);
-        _viewBuffer.Sort(FileSystemEntryComparer.ForGrouped(
+        ListingPipeline.FilterHidden(request.AllEntries, request.ShowHiddenFiles, _visibleBuffer);
+        ListingPipeline.FilterText(_visibleBuffer, request.IsFilterVisible, request.FilterText, _viewBuffer);
+        ListingPipeline.Sort(
+            _viewBuffer,
             request.GroupBy,
             request.GroupingUtcNow,
             request.SortColumn,
             request.SortDescending,
-            request.DirectorySort));
+            request.DirectorySort);
 
-        long listingSizeBytes = 0;
-        foreach (var entry in _viewBuffer)
-        {
-            if (!entry.IsDirectory)
-                listingSizeBytes += entry.SizeBytes;
-        }
-
-        var visualTargets = new List<EntryItemViewModel>();
-        var nextEntries = new List<EntryItemViewModel>(_viewBuffer.Count);
-
-        foreach (var entry in _viewBuffer)
-        {
-            var path = entry.FullPath;
-            var gitStatus = request.GitSnapshot.GetStatusForPath(path);
-
-            if (!_entryPool.TryGetValue(path, out var item))
-            {
-                item = new EntryItemViewModel(entry, request.ShowFileExtensions, gitStatus);
-                _entryPool[path] = item;
-                visualTargets.Add(item);
-            }
-            else
-            {
-                item.UpdateEntry(entry, request.ShowFileExtensions, gitStatus);
-            }
-
-            nextEntries.Add(item);
-        }
+        var aggregate = ListingPipeline.Aggregate(_visibleBuffer, _viewBuffer);
+        var (entries, visualTargets) = ListingPipeline.Materialize(
+            _viewBuffer,
+            request.GitSnapshot,
+            request.ShowFileExtensions,
+            _entryPool);
 
         // Stale pool entries are retained until the pane navigates (ClearEntryPool) so filter
         // widening (e.g. backspace) reuses their view models and cached icons instead of
         // re-creating them and re-querying the shell.
         return new ListingPublishResult(
-            nextEntries,
+            entries,
             visualTargets,
-            totalCount,
-            _viewBuffer.Count,
-            listingSizeBytes);
+            aggregate.TotalCount,
+            aggregate.ItemCount,
+            aggregate.SizeBytes);
     }
 }
 

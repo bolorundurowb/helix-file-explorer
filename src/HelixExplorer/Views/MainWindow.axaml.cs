@@ -372,7 +372,8 @@ public partial class MainWindow : Window
         }
 
         _lastTabWheelTimestamp = timestamp;
-        vm.CycleSelectedTab(e.Delta.Y > 0 ? -1 : 1);
+        var delta = e.Delta.X != 0 ? e.Delta.X : e.Delta.Y;
+        vm.CycleSelectedTab(delta > 0 ? -1 : 1);
         e.Handled = true;
     }
 

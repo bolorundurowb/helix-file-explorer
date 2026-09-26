@@ -88,6 +88,24 @@ public class FileNameFilterTests
         dest.Must().Contain(e => e.Name == "alpha.pdf");
         dest.Must().Contain(e => e.Name == "gamma.PDF");
     }
+
+    [Fact]
+    public void Apply_FallsBackToOriginalPath()
+    {
+        var source = new[]
+        {
+            Entry("march.pdf") with { OriginalPath = @"C:\Users\me\Invoices\march.pdf" },
+            Entry("photo.png") with { OriginalPath = @"D:\Pictures\photo.png" },
+            Entry("invoices-notes.txt")
+        };
+        var dest = new List<FileSystemEntry>();
+
+        FileNameFilter.Apply(source, "invoices", dest);
+
+        dest.Select(e => e.Name).Must().BeSequenceEqual(new[] { "march.pdf", "invoices-notes.txt" });
+        FileNameFilter.Matches(source[0], "Invoices").Must().BeTrue();
+        FileNameFilter.Matches(source[1], "Invoices").Must().BeFalse();
+    }
 }
 
 public class SessionStoreTests

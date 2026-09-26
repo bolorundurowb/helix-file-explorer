@@ -14,6 +14,9 @@ public sealed class WinFileSystemProvider(
     ILogger<WinFileSystemProvider> logger)
     : IFileSystemProvider
 {
+    private const int ErrorAccessDenied = unchecked((int)0x80070005);
+    private const int ErrorLogonFailure = unchecked((int)0x8007052E);
+
     private static readonly EnumerationOptions Options = new()
     {
         IgnoreInaccessible = true,
@@ -80,11 +83,8 @@ public sealed class WinFileSystemProvider(
         {
             return await Task.Run(() => Enumerate(path, cancellationToken), cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is UnauthorizedAccessException || IsAccessDeniedIo(ex))
+        catch (Exception ex) when (NetworkPath.IsUnc(path) && IsCredentialFailure(ex))
         {
-            if (!NetworkPath.IsUnc(path))
-                throw;
-
             if (!await networkConnections.EnsureConnectedAsync(path, cancellationToken).ConfigureAwait(false))
                 throw;
 
@@ -92,10 +92,11 @@ public sealed class WinFileSystemProvider(
         }
     }
 
-    private static bool IsAccessDeniedIo(Exception ex)
-        => ex is IOException io
-           && (io.Message.Contains("denied", StringComparison.OrdinalIgnoreCase)
-               || io.Message.Contains("access", StringComparison.OrdinalIgnoreCase));
+    // Matched by HResult only: message text is localized, and loose "access" matching pulled ordinary
+    // SMB errors into the credential prompt.
+    private static bool IsCredentialFailure(Exception ex)
+        => ex is UnauthorizedAccessException
+           || (ex is IOException io && io.HResult is ErrorAccessDenied or ErrorLogonFailure);
 
     public async ValueTask<SearchResult> SearchRecursiveAsync(
         string path,
@@ -119,7 +120,14 @@ public sealed class WinFileSystemProvider(
             return path;
 
         if (NetworkPath.IsUnc(path))
-            return NetworkPath.Normalize(path);
+        {
+            var normalized = NetworkPath.Normalize(path);
+            // "hostname (DS423+)" is a shell comment, not a server name. Drop it before WNet sees it.
+            if (NetworkPath.IsServerRoot(normalized))
+                return NetworkPath.ServerRootFromShell(normalized, normalized) ?? normalized;
+
+            return normalized;
+        }
 
         try
         {
@@ -147,9 +155,9 @@ public sealed class WinFileSystemProvider(
         var normalized = new List<FileSystemEntry>(entries.Count);
         foreach (var entry in entries)
         {
-            var path = NetworkPath.IsUnc(entry.FullPath)
-                ? NetworkPath.Normalize(entry.FullPath)
-                : NetworkPath.ForServer(entry.Name);
+            var path = NetworkPath.ServerRootFromShell(entry.FullPath, entry.Name);
+            if (path is null)
+                continue;
 
             normalized.Add(entry with { FullPath = path, IsDirectory = true, Extension = string.Empty });
         }
@@ -266,7 +274,12 @@ public sealed class WinFileSystemProvider(
         try
         {
             var dir = new DirectoryInfo(path);
-            foreach (var info in dir.EnumerateFileSystemInfos("*", Options))
+            // IgnoreInaccessible swallows access denied on the share root itself, so a share that needs
+            // credentials would list as empty and never reach the prompt.
+            var infos = NetworkPath.IsUnc(path)
+                ? dir.EnumerateFileSystemInfos()
+                : dir.EnumerateFileSystemInfos("*", Options);
+            foreach (var info in infos)
             {
                 token.ThrowIfCancellationRequested();
 

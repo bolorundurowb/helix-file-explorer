@@ -85,23 +85,9 @@ public sealed class WinNetworkLocationProvider(
 
     private static NetworkLocationInfo? MapShellNetworkEntry(FileSystemEntry entry)
     {
-        var path = NetworkPath.IsUnc(entry.FullPath)
-            ? NetworkPath.Normalize(entry.FullPath)
-            : null;
-
+        var path = NetworkPath.ServerRootFromShell(entry.FullPath, entry.Name);
         if (string.IsNullOrWhiteSpace(path))
-        {
-            var candidate = entry.Name.Trim();
-            if (string.IsNullOrWhiteSpace(candidate)
-                || candidate.Contains(':', StringComparison.Ordinal)
-                || candidate.Contains('\\', StringComparison.Ordinal)
-                || candidate.Contains('/', StringComparison.Ordinal))
-            {
-                return null;
-            }
-
-            path = NetworkPath.ForServer(candidate);
-        }
+            return null;
 
         var display = !string.IsNullOrWhiteSpace(entry.Name)
             ? entry.Name

@@ -44,4 +44,11 @@ public static class HeadlessSession
 
     public static T RunOnUiThread<T>(Func<T> action)
         => Session.Dispatch(action, CancellationToken.None).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Async variant for code that awaits <c>Dispatcher.UIThread</c> hops; the session only pumps those
+    /// while a dispatched job is running.
+    /// </summary>
+    public static T RunOnUiThread<T>(Func<Task<T>> action)
+        => Session.Dispatch(action, CancellationToken.None).GetAwaiter().GetResult();
 }

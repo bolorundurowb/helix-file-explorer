@@ -1,5 +1,6 @@
 using System.Text;
 using HelixExplorer.Core.FileSystem;
+using HelixExplorer.Core.Infrastructure;
 using Microsoft.Extensions.Logging;
 using Vanara.PInvoke;
 using static Vanara.PInvoke.CredUI;
@@ -10,20 +11,26 @@ namespace HelixExplorer.Windows.FileSystem;
 /// <summary>
 /// Prompts for SMB credentials via CredUI and connects with <c>WNetAddConnection2</c>.
 /// </summary>
-public sealed class WinNetworkConnectionService(ILogger<WinNetworkConnectionService> logger) : INetworkConnectionService
+public sealed class WinNetworkConnectionService(
+    IUiThreadDispatcher dispatcher,
+    ILogger<WinNetworkConnectionService> logger) : INetworkConnectionService
 {
     private const int CredUiMaxUsername = 513;
     private const int CredUiMaxPassword = 256;
 
-    public ValueTask<bool> EnsureConnectedAsync(string uncPath, CancellationToken cancellationToken = default)
+    public async ValueTask<bool> EnsureConnectedAsync(string uncPath, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         var target = ResolveConnectTarget(uncPath);
         if (string.IsNullOrEmpty(target))
-            return ValueTask.FromResult(false);
+            return false;
 
-        return ValueTask.FromResult(ConnectWithPrompt(target));
+        // CredUI is modal and needs a message pump; on a thread-pool caller it never shows and never returns.
+        if (dispatcher.CheckAccess())
+            return ConnectWithPrompt(target);
+
+        return await dispatcher.InvokeAsync(() => ConnectWithPrompt(target)).ConfigureAwait(false);
     }
 
     private bool ConnectWithPrompt(string remoteName)

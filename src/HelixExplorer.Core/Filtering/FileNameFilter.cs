@@ -28,8 +28,16 @@ public static class FileNameFilter
         return name.Contains(query, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <remarks>
+    /// Recycle Bin rows keep their pre-delete location in <see cref="FileSystemEntry.OriginalPath"/>;
+    /// matching it lets users find items by the folder they were deleted from.
+    /// </remarks>
     public static bool Matches(in FileSystemEntry entry, string? query)
-        => Matches(entry.Name.AsSpan(), (query ?? string.Empty).AsSpan());
+    {
+        var needle = (query ?? string.Empty).AsSpan();
+        return Matches(entry.Name.AsSpan(), needle)
+               || (entry.OriginalPath is { Length: > 0 } original && Matches(original.AsSpan(), needle));
+    }
 
     public static int Apply(
         IReadOnlyList<FileSystemEntry> source,
@@ -56,23 +64,31 @@ public static class FileNameFilter
         for (var i = 0; i < source.Count; i++)
         {
             var entry = source[i];
-            var name = entry.Name.AsSpan();
-
-            if (useGlob)
+            if (MatchesPrepared(entry.Name.AsSpan(), needle, useGlob, probe, isSingleChar)
+                || (entry.OriginalPath is { Length: > 0 } original
+                    && MatchesPrepared(original.AsSpan(), needle, useGlob, probe, isSingleChar)))
             {
-                if (GlobMatcher.IsMatch(name, needle))
-                    destination.Add(entry);
-                continue;
-            }
-
-            if (probe is not null && !name.ContainsAny(probe))
-                continue;
-
-            if (isSingleChar || name.Contains(needle, StringComparison.OrdinalIgnoreCase))
                 destination.Add(entry);
+            }
         }
 
         return destination.Count;
+    }
+
+    private static bool MatchesPrepared(
+        ReadOnlySpan<char> text,
+        ReadOnlySpan<char> needle,
+        bool useGlob,
+        SearchValues<char>? probe,
+        bool isSingleChar)
+    {
+        if (useGlob)
+            return GlobMatcher.IsMatch(text, needle);
+
+        if (probe is not null && !text.ContainsAny(probe))
+            return false;
+
+        return isSingleChar || text.Contains(needle, StringComparison.OrdinalIgnoreCase);
     }
 
     private static SearchValues<char> CreateCaseInsensitiveProbe(char c)

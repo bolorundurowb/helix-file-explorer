@@ -87,6 +87,48 @@ public static class NetworkPath
 
     public static string ForServer(string server) => Root + server.Trim().Trim('\\', '/');
 
+    /// <summary>
+    /// Path used to open a computer from the Network folder. The shell labels it
+    /// "Name (Comment)" (a Synology shows up as "hostname (DS423+)"); WNet rejects that
+    /// string, so the comment is dropped and a real UNC parsing name wins when present.
+    /// </summary>
+    public static string? ServerRootFromShell(string? parsingName, string? displayName)
+    {
+        if (IsUnc(parsingName))
+        {
+            var normalized = Normalize(parsingName);
+            if (HasShare(normalized))
+                return normalized;
+
+            var server = GetServer(normalized);
+            if (string.IsNullOrEmpty(server))
+                return null;
+
+            server = WithoutComputerComment(server);
+            return string.IsNullOrEmpty(server) ? null : ForServer(server);
+        }
+
+        if (string.IsNullOrWhiteSpace(displayName))
+            return null;
+
+        var name = WithoutComputerComment(displayName);
+        if (name.Length == 0 || name.IndexOfAny(['\\', '/', ':', '*', '?', '"', '<', '>', '|']) >= 0)
+            return null;
+
+        return ForServer(name);
+    }
+
+    /// <summary>Drops a trailing " (comment)" the shell appends to a computer name.</summary>
+    public static string WithoutComputerComment(string serverOrDisplayName)
+    {
+        var name = serverOrDisplayName.Trim().Trim('\\', '/');
+        var split = name.LastIndexOf(" (", StringComparison.Ordinal);
+        if (split > 0 && name.EndsWith(')'))
+            name = name[..split].TrimEnd();
+
+        return name;
+    }
+
     public static IReadOnlyList<NetworkLocationInfo> Deduplicate(IEnumerable<NetworkLocationInfo> locations)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

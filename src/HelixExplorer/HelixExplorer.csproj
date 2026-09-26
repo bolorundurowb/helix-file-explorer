@@ -36,7 +36,7 @@
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\Fonts\**\*.ttf" />
-    <AvaloniaResource Include="Assets\helix-explorer-icon.png" />
-    <AvaloniaResource Include="Assets\helix-explorer-icon-dev.png" />
+    <AvaloniaResource Include="..\..\assets\helix-explorer-icon.png" Link="Assets\helix-explorer-icon.png" />
+    <AvaloniaResource Include="..\..\assets\helix-explorer-icon-dev.png" Link="Assets\helix-explorer-icon-dev.png" />
   </ItemGroup>
 </Project>

@@ -133,6 +133,7 @@ public sealed partial class PaneView : UserControl
         {
             _pane.PropertyChanged -= OnPanePropertyChanged;
             _pane.Navigated -= OnPaneNavigated;
+            _pane.SortChanged -= OnPaneSortChanged;
             _pane.BringEntryIntoViewRequested -= OnBringEntryIntoViewRequested;
         }
 
@@ -145,6 +146,7 @@ public sealed partial class PaneView : UserControl
 
         _pane.PropertyChanged += OnPanePropertyChanged;
         _pane.Navigated += OnPaneNavigated;
+        _pane.SortChanged += OnPaneSortChanged;
         _pane.BringEntryIntoViewRequested += OnBringEntryIntoViewRequested;
         UpdateInactiveClass();
         if (_pane.IsMillerView)
@@ -154,6 +156,13 @@ public sealed partial class PaneView : UserControl
     private void OnPaneNavigated(object? sender, EventArgs e)
     {
         // Miller columns snapshot Entries; ItemCount alone misses same-count navigations.
+        if (_pane?.IsMillerView == true)
+            RebuildMiller();
+    }
+
+    private void OnPaneSortChanged(object? sender, EventArgs e)
+    {
+        // Miller columns snapshot Entries, so a re-sort (same items, same count) is otherwise invisible.
         if (_pane?.IsMillerView == true)
             RebuildMiller();
     }

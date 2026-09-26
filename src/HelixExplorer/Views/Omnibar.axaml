@@ -3,6 +3,14 @@
              xmlns:vm="using:HelixExplorer.ViewModels"
              x:Class="HelixExplorer.Views.Omnibar"
              x:DataType="vm:PaneViewModel">
+    <UserControl.Styles>
+        <!-- A full-height bar in a 28px field would cover the segments it scrolls. -->
+        <Style Selector="ScrollViewer#BreadcrumbScroll ScrollBar.horizontal">
+            <Setter Property="Height" Value="2" />
+            <Setter Property="MaxHeight" Value="2" />
+            <Setter Property="Margin" Value="0" />
+        </Style>
+    </UserControl.Styles>
     <Grid>
         <StackPanel IsVisible="{Binding IsHomeMode}"
                     Orientation="Horizontal"

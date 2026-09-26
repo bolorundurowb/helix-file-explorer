@@ -88,6 +88,39 @@ public sealed class PathUtilitiesTests
         PathUtilities.PathsEqual(a, b).Must().Be(expected);
     }
 
+    [Theory]
+    [InlineData(@"\\server\share\", @"\\server\share", true)]
+    [InlineData(@"\\server\", @"\\server", true)]
+    [InlineData(@"//server/share", @"\\server\share", true)]
+    [InlineData(@"\\", @"\\", true)]
+    [InlineData(@"\\", @"\\server", false)]
+    [InlineData(@"\\server", @"\\server\share", false)]
+    public void PathsEqual_UncPaths(string a, string b, bool expected)
+    {
+        PathUtilities.PathsEqual(a, b).Must().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(@"\\", @"\\")]
+    [InlineData(@"\\server", @"\\server")]
+    [InlineData(@"\\server\", @"\\server")]
+    [InlineData(@"\\server\share\", @"\\server\share")]
+    public void NormalizePath_KeepsUncShape(string path, string expected)
+    {
+        // A bare "\\" once collapsed to "", which no longer matched the network root.
+        PathUtilities.NormalizePath(path).Must().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(@"\\", @"\\server", true)]
+    [InlineData(@"\\server", @"\\server\share", true)]
+    [InlineData(@"\\server\", @"\\server\share\folder", true)]
+    [InlineData(@"\\server", @"\\serverx\share", false)]
+    public void IsSameOrChildPath_UncRoots(string directory, string path, bool expected)
+    {
+        PathUtilities.IsSameOrChildPath(directory, path).Must().Be(expected);
+    }
+
     [Fact]
     public void NormalizePath_ResolvesRelativeSegments()
     {

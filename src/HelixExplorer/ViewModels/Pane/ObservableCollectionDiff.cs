@@ -51,6 +51,14 @@ public static class ObservableCollectionDiff
             return;
         }
 
+        // A re-sort would otherwise be delivered as Moves, which the Details DataGrid ignores; the
+        // surviving rows then keep their old order until the folder is reloaded.
+        if (target is ResettableObservableCollection<T> resettable && !SurvivorsKeepOrder(target, desired, wanted))
+        {
+            resettable.ResetTo(desired);
+            return;
+        }
+
         for (var i = target.Count - 1; i >= 0; i--)
         {
             if (!wanted.Contains(target[i]))
@@ -75,8 +83,39 @@ public static class ObservableCollectionDiff
             target.RemoveAt(target.Count - 1);
     }
 
+    /// <summary>
+    /// True when the items kept from <paramref name="target"/> already appear in <paramref name="desired"/>
+    /// in the same relative order, so only removals and insertions are needed.
+    /// </summary>
+    private static bool SurvivorsKeepOrder<T>(IList<T> target, IReadOnlyList<T> desired, HashSet<T> wanted) where T : class
+    {
+        var cursor = 0;
+        for (var i = 0; i < target.Count; i++)
+        {
+            var item = target[i];
+            if (!wanted.Contains(item))
+                continue;
+
+            while (cursor < desired.Count && !ReferenceEquals(desired[cursor], item))
+                cursor++;
+
+            if (cursor == desired.Count)
+                return false;
+
+            cursor++;
+        }
+
+        return true;
+    }
+
     private static void ReplaceAll<T>(ObservableCollection<T> target, IReadOnlyList<T> desired) where T : class
     {
+        if (target is ResettableObservableCollection<T> resettable)
+        {
+            resettable.ResetTo(desired);
+            return;
+        }
+
         target.Clear();
         foreach (var item in desired)
             target.Add(item);

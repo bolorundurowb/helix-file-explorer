@@ -46,7 +46,7 @@ public static class PathUtilities
             PathKind.Archive => IsSameOrChildArchivePath(directory, path),
             PathKind.Shell or PathKind.RecycleBin =>
                 string.Equals(directory.TrimEnd('\\', '/'), path.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase),
-            PathKind.Unc or PathKind.Physical => IsSameOrChildPhysicalPath(directory, path),
+            PathKind.Unc or PathKind.Physical => IsSameOrChildFileSystemPath(directory, path, kind),
             _ => false
         };
     }
@@ -70,7 +70,9 @@ public static class PathUtilities
                 string.Equals(NormalizeArchivePath(a), NormalizeArchivePath(b), StringComparison.OrdinalIgnoreCase),
             PathKind.Shell or PathKind.RecycleBin =>
                 string.Equals(a.TrimEnd('\\', '/'), b.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase),
-            PathKind.Unc or PathKind.Physical =>
+            PathKind.Unc =>
+                string.Equals(NetworkPath.Normalize(a), NetworkPath.Normalize(b), StringComparison.OrdinalIgnoreCase),
+            PathKind.Physical =>
                 string.Equals(NormalizePhysicalPath(a), NormalizePhysicalPath(b), StringComparison.OrdinalIgnoreCase),
             PathKind.Home or PathKind.Empty => true,
             _ => string.Equals(a, b, StringComparison.OrdinalIgnoreCase)
@@ -87,7 +89,8 @@ public static class PathUtilities
         {
             PathKind.Archive => NormalizeArchivePath(path),
             PathKind.Shell or PathKind.RecycleBin => path,
-            PathKind.Unc or PathKind.Physical => NormalizePhysicalPath(path),
+            PathKind.Unc => NetworkPath.Normalize(path),
+            PathKind.Physical => NormalizePhysicalPath(path),
             _ => path
         };
     }
@@ -177,10 +180,11 @@ public static class PathUtilities
         return depth;
     }
 
-    private static bool IsSameOrChildPhysicalPath(string directory, string path)
+    private static bool IsSameOrChildFileSystemPath(string directory, string path, PathKind kind)
     {
-        var dir = NormalizePhysicalPath(directory);
-        var candidate = NormalizePhysicalPath(path);
+        // GetFullPath rejects bare "\\" and "\\server", and the fallback trim collapses "\\" to "".
+        var dir = kind == PathKind.Unc ? NetworkPath.Normalize(directory) : NormalizePhysicalPath(directory);
+        var candidate = kind == PathKind.Unc ? NetworkPath.Normalize(path) : NormalizePhysicalPath(path);
 
         if (string.Equals(dir, candidate, StringComparison.OrdinalIgnoreCase))
             return true;

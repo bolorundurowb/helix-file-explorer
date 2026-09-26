@@ -77,6 +77,7 @@ public sealed class PaneRefreshCoordinator(
 
         var token = cts.Token;
         _refreshInFlight = true;
+        var loadingCleared = !showLoading;
         host.StopWatcher();
 
         try
@@ -153,7 +154,10 @@ public sealed class PaneRefreshCoordinator(
                 host.OnNavigated();
 
                 if (showLoading)
+                {
                     host.SetLoading(false);
+                    loadingCleared = true;
+                }
 
                 // Visuals are requested by ApplySortAndPublish on the host; do not double-queue here.
             });
@@ -171,6 +175,17 @@ public sealed class PaneRefreshCoordinator(
             {
                 _refreshCts = null;
                 _refreshInFlight = false;
+
+                // Cancel and path-mismatch exits skip the publish; with no newer refresh to take over
+                // the overlay, it would otherwise stay on "Loading…" forever.
+                if (!loadingCleared && !host.IsDisposed)
+                {
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        if (generation == _refreshGeneration && !host.IsDisposed)
+                            host.SetLoading(false);
+                    });
+                }
 
                 if (!host.IsDisposed)
                     host.RestartWatcher();

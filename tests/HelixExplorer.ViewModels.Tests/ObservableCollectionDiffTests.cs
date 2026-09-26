@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using HelixExplorer.ViewModels.Pane;
 
 namespace HelixExplorer.ViewModels.Tests;
@@ -96,6 +97,42 @@ public class ObservableCollectionDiffTests
 
         target.Must().Contain(selected);
         b.Must().Be(target[0]);
+    }
+
+    [Fact]
+    public void Apply_ResettableReorder_RaisesSingleResetInsteadOfMoves()
+    {
+        var a = new Item("a");
+        var b = new Item("b");
+        var c = new Item("c");
+        var target = new ResettableObservableCollection<Item> { a, b, c };
+
+        var actions = new List<NotifyCollectionChangedAction>();
+        target.CollectionChanged += (_, e) => actions.Add(e.Action);
+
+        ObservableCollectionDiff.Apply(target, new[] { c, b, a });
+
+        actions.Must().BeSequenceEqual(new[] { NotifyCollectionChangedAction.Reset });
+        target.Must().BeSequenceEqual(new[] { c, b, a });
+    }
+
+    [Fact]
+    public void Apply_ResettableOrderPreservingRemoval_StaysIncremental()
+    {
+        var a = new Item("a");
+        var b = new Item("b");
+        var c = new Item("c");
+        var d = new Item("d");
+        var e = new Item("e");
+        var target = new ResettableObservableCollection<Item> { a, b, c, d, e };
+
+        var actions = new List<NotifyCollectionChangedAction>();
+        target.CollectionChanged += (_, args) => actions.Add(args.Action);
+
+        ObservableCollectionDiff.Apply(target, new[] { a, c, d, e });
+
+        actions.Must().BeSequenceEqual(new[] { NotifyCollectionChangedAction.Remove });
+        target.Must().BeSequenceEqual(new[] { a, c, d, e });
     }
 
     [Fact]

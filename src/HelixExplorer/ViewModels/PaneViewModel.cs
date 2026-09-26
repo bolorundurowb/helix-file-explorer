@@ -186,7 +186,7 @@ public sealed partial class PaneViewModel :
     [NotifyPropertyChangedFor(nameof(OmnibarQueryPlaceholder))]
     private OmnibarMode _omnibarMode = OmnibarMode.Path;
 
-    public bool IsPathMode => OmnibarMode == OmnibarMode.Path && IsFileSystem;
+    public bool IsPathMode => OmnibarMode == OmnibarMode.Path && (IsFileSystem || IsShellNamespace);
     public bool IsFilterMode => OmnibarMode == OmnibarMode.Filter;
     public bool IsSearchMode => OmnibarMode == OmnibarMode.Search;
     public bool IsHomeMode => OmnibarMode == OmnibarMode.Home || IsHome;
@@ -253,6 +253,19 @@ public sealed partial class PaneViewModel :
     public bool IsShellNamespace => LocationKind == PaneLocationKind.ShellNamespace;
     public bool IsRecycleBin => ShellPath.IsRecycleBin(CurrentPath);
 
+    /// <summary>
+    /// Filter and search need a flat in-memory listing. The Recycle Bin qualifies but stays a shell
+    /// namespace so watchers, paste, and folder-pref writes remain off.
+    /// </summary>
+    private bool CanQueryListing => IsFileSystem || IsRecycleBin;
+
+    /// <summary>
+    /// Recursive search cannot walk a <c>shell:</c> path, so search there narrows the loaded listing instead.
+    /// </summary>
+    private bool UsesInListSearch => IsSearchMode && !IsFileSystem;
+
+    private bool IsListingFiltered => IsFilterMode || UsesInListSearch;
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GoBackCommand))]
     private bool _canGoBack;
@@ -269,7 +282,7 @@ public sealed partial class PaneViewModel :
     /// Flat, filtered, sorted source of truth. File operations, selection, and the non-grid layouts
     /// always read this — never <see cref="GridItems"/>.
     /// </summary>
-    public ObservableCollection<EntryItemViewModel> Entries { get; } = new();
+    public ObservableCollection<EntryItemViewModel> Entries { get; } = new ResettableObservableCollection<EntryItemViewModel>();
 
     /// <summary>
     /// Presentation projection consumed by Grid view only: the same
@@ -277,7 +290,7 @@ public sealed partial class PaneViewModel :
     /// <see cref="GroupHeaderViewModel"/> bands when grouping is on. Left empty for other layouts so
     /// large listings do not pay for a mirror nobody renders.
     /// </summary>
-    public ObservableCollection<object> GridItems { get; } = new();
+    public ObservableCollection<object> GridItems { get; } = new ResettableObservableCollection<object>();
 
     public ObservableCollection<EntryItemViewModel> SelectedEntries => _selection.SelectedEntries;
 
@@ -524,7 +537,7 @@ public sealed partial class PaneViewModel :
 
         if (IsSearchMode)
         {
-            if (string.IsNullOrWhiteSpace(value) || !IsFileSystem)
+            if (string.IsNullOrWhiteSpace(value) || UsesInListSearch)
             {
                 _searchCoordinator.Cancel();
                 _allEntries = _directoryEntries;
@@ -966,7 +979,7 @@ public sealed partial class PaneViewModel :
             GitSnapshot = _gitSnapshot,
             ShowHiddenFiles = ShowHiddenFiles,
             ShowFileExtensions = ShowFileExtensions,
-            IsFilterVisible = IsFilterMode,
+            IsFilterVisible = IsListingFiltered,
             FilterText = FilterText,
             SortColumn = SortColumn,
             SortDescending = SortDescending,
@@ -980,7 +993,7 @@ public sealed partial class PaneViewModel :
         // Always replace the directory cache (including empty listings) so a failed/empty
         // refresh cannot leave a previous folder's entries to be republished later.
         // Search overlays must not clobber the underlying directory listing.
-        if (!IsSearchActive)
+        if (!IsSearchActive || UsesInListSearch)
         {
             _directoryEntries = request.AllEntries;
             if (!IsFilterActive)
@@ -1204,7 +1217,7 @@ public sealed partial class PaneViewModel :
     [RelayCommand]
     public void EnterFilterMode()
     {
-        if (!IsFileSystem)
+        if (!CanQueryListing)
             return;
 
         // The listing the buffer was matched against is about to change.
@@ -1218,7 +1231,7 @@ public sealed partial class PaneViewModel :
     [RelayCommand]
     public void EnterSearchMode()
     {
-        if (!IsFileSystem)
+        if (!CanQueryListing)
             return;
 
         _typeAhead.Reset();
@@ -2024,7 +2037,7 @@ public sealed partial class PaneViewModel :
 
     bool IPaneRefreshHost.ShowFileExtensions => ShowFileExtensions;
 
-    bool IPaneRefreshHost.IsFilterVisible => IsFilterMode;
+    bool IPaneRefreshHost.IsFilterVisible => IsListingFiltered;
 
     string IPaneRefreshHost.FilterText => FilterText;
 

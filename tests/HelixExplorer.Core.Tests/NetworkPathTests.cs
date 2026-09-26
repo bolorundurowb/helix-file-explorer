@@ -72,6 +72,24 @@ public class NetworkPathTests
         NetworkPath.IsServerRoot(path).Must().Be(expected);
     }
 
+    [Theory]
+    [InlineData(@"\\bolorundurology (DS423+)", "bolorundurology (DS423+)", @"\\bolorundurology")]
+    [InlineData(@"\\bolorundurology", "bolorundurology (DS423+)", @"\\bolorundurology")]
+    [InlineData("::{F02C1A0D-BE21-4350-88B0-7367FC96EF3C}", "bolorundurology (DS423+)", @"\\bolorundurology")]
+    [InlineData(@"\\server\share", "server (office)", @"\\server\share")]
+    [InlineData("", "nas", @"\\nas")]
+    public void ServerRootFromShell_DropsComputerComment(string parsingName, string displayName, string expected)
+    {
+        NetworkPath.ServerRootFromShell(parsingName, displayName).Must().Be(expected);
+    }
+
+    [Fact]
+    public void ServerRootFromShell_RejectsNamesThatCannotBeServers()
+    {
+        NetworkPath.ServerRootFromShell("shell:Downloads", "C:\\not-a-server").Must().BeNull();
+        NetworkPath.ServerRootFromShell(null, "   ").Must().BeNull();
+    }
+
     [Fact]
     public void ForServer_BuildsUncRoot()
     {

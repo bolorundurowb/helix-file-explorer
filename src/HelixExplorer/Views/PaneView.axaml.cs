@@ -391,6 +391,16 @@ public sealed partial class PaneView : UserControl
         if (Pane is null)
             return;
 
+        // Ctrl+A must select the name inside the editor, never the files behind it.
+        if (sender is TextBox textBox
+            && e.Key == Key.A
+            && e.KeyModifiers == KeyModifiers.Control)
+        {
+            textBox.SelectAll();
+            e.Handled = true;
+            return;
+        }
+
         switch (RenameKeyGesture.Resolve(e.Key, e.KeyModifiers))
         {
             case RenameKeyAction.Commit:
@@ -429,7 +439,9 @@ public sealed partial class PaneView : UserControl
 
     private void OnPaneKeyDown(object? sender, KeyEventArgs e)
     {
-        if (Pane is null || TextInputFocus.IsActive())
+        // While inline rename is active the file-shortcut handling here must stand aside so keys like
+        // Ctrl+A stay inside the editor instead of reselecting the listing.
+        if (Pane is null || TextInputFocus.IsActive() || Pane.IsRenaming)
             return;
 
         if (e.Key == Key.Enter)

@@ -404,7 +404,7 @@ public sealed class PaneFileOperationCoordinator(
         }
     }
 
-    public async Task CreateFolderAsync(
+    public async Task<string?> CreateFolderAsync(
         string currentPath,
         Func<Task> refreshAsync,
         Action<string> setStatusText)
@@ -423,11 +423,13 @@ public sealed class PaneFileOperationCoordinator(
                 [new FileOperationChange(currentPath, createdPath)]));
 
             await refreshAsync().ConfigureAwait(true);
+            return createdPath;
         }
         catch (Exception ex)
         {
             logger.LogDebug(ex, "NewFolder failed in '{Path}'", currentPath);
             setStatusText(UiStrings.NewFolderFailed);
+            return null;
         }
     }
 

@@ -1085,7 +1085,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
     [RelayCommand]
     private void FocusSearch() => SelectedTab?.ActivePane?.EnterSearchModeCommand.Execute(null);
 
-    private static bool CanUseGlobalFileShortcuts() => !TextInputFocus.IsActive();
+    private bool CanUseGlobalFileShortcuts() => !TextInputFocus.IsActive() && ActivePane is not { IsRenaming: true };
 
     [RelayCommand]
     private void SetViewMode(LayoutMode mode) => SelectedTab?.ActivePane?.SetViewModeCommand.Execute(mode);

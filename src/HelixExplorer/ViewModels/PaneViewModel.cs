@@ -152,6 +152,12 @@ public sealed partial class PaneViewModel :
     public event EventHandler<IReadOnlyList<string>>? MoveToOtherPaneRequested;
     public event EventHandler? SelectionChanged;
 
+    /// <summary>
+    /// Raised after a file operation changed the pane's directory contents, so the owning tab can
+    /// refresh a sibling pane showing the same folder (its own watcher lags behind the debounce).
+    /// </summary>
+    public event EventHandler? DirectoryContentsChanged;
+
     /// <summary>Native drag-out to external targets; injected via <see cref="PaneViewModelFactory"/>.</summary>
     public IExternalFileDragService? ExternalFileDragService => _externalFileDragService;
 
@@ -1011,7 +1017,7 @@ public sealed partial class PaneViewModel :
         _groupingUtcNow = request.GroupingUtcNow;
         TotalCount = result.TotalCount;
         ListingSizeBytes = result.ListingSizeBytes;
-        ClearRenameState();
+        ClearRenameStateIfTargetGone(result.Entries);
         SyncEntriesCollection(result.Entries);
         RebuildGridItems();
         RefreshCutState();
@@ -1367,10 +1373,32 @@ public sealed partial class PaneViewModel :
 
     private void ClearRenameState() => _inlineRename.Clear(this);
 
+    /// <summary>
+    /// Clears an in-progress rename only when its target is no longer in the listing being published.
+    /// A watcher-triggered refresh that re-publishes the same folder (for example right after New
+    /// Folder drops a new entry into rename mode) must not dismiss the editor.
+    /// </summary>
+    private void ClearRenameStateIfTargetGone(IReadOnlyList<EntryItemViewModel> nextEntries)
+    {
+        if (!IsRenaming)
+        {
+            ClearRenameState();
+            return;
+        }
+
+        var targetPath = Entries.FirstOrDefault(e => e.IsRenaming)?.FullPath;
+        if (string.IsNullOrEmpty(targetPath)
+            || !nextEntries.Any(e => PathUtilities.PathsEqual(e.FullPath, targetPath)))
+        {
+            ClearRenameState();
+        }
+    }
+
     public async Task RefreshAfterRenameAsync(string oldPath)
     {
         _listing.RemoveFromPool(oldPath);
         await RefreshAsync(showLoading: false).ConfigureAwait(true);
+        DirectoryContentsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public static int GetRenameBaseNameLength(string name, bool isDirectory)
@@ -1382,10 +1410,22 @@ public sealed partial class PaneViewModel :
         if (string.IsNullOrEmpty(CurrentPath) || IsArchive)
             return;
 
-        await _fileOperations.CreateFolderAsync(
+        var createdPath = await _fileOperations.CreateFolderAsync(
             CurrentPath,
             refreshAsync: () => RefreshAsync(showLoading: false),
             setStatusText: text => StatusText = text).ConfigureAwait(true);
+
+        if (string.IsNullOrEmpty(createdPath))
+            return;
+
+        var entry = Entries.FirstOrDefault(e => PathUtilities.PathsEqual(e.FullPath, createdPath));
+        if (entry is null)
+            return;
+
+        // Match Explorer: a freshly created folder lands in rename mode so the user can name it.
+        UpdateSelection([entry]);
+        RequestBringIntoView(entry);
+        _inlineRename.Begin(this);
     }
 
     [RelayCommand(CanExecute = nameof(CanCompressSelection))]

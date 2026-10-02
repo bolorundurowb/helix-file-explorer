@@ -11,12 +11,14 @@
     <MicrosoftExtensions>10.0.12</MicrosoftExtensions>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="Avalonia" Version="12.1.3" />
-    <PackageVersion Include="Avalonia.Desktop" Version="12.1.3" />
-    <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.1.3" />
-    <PackageVersion Include="Avalonia.Fonts.Inter" Version="12.1.3" />
+    <!--Avalonia Deps-->
+    <PackageVersion Include="Avalonia" Version="$(AvaloniaVersion)" />
+    <PackageVersion Include="Avalonia.Desktop" Version="$(AvaloniaVersion)" />
+    <PackageVersion Include="Avalonia.Themes.Fluent" Version="$(AvaloniaVersion)" />
+    <PackageVersion Include="Avalonia.Fonts.Inter" Version="$(AvaloniaVersion)" />
     <PackageVersion Include="Avalonia.Controls.DataGrid" Version="$(AvaloniaVersion)" />
-    <PackageVersion Include="Avalonia.Headless" Version="12.1.3" />
+    <PackageVersion Include="Avalonia.Headless" Version="$(AvaloniaVersion)" />
+    <!--Microsoft Deps-->
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="$(MicrosoftExtensions)" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="$(MicrosoftExtensions)" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="$(MicrosoftExtensions)" />
@@ -24,14 +26,17 @@
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="$(MicrosoftExtensions)" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Debug" Version="$(MicrosoftExtensions)" />
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="$(MicrosoftExtensions)" />
+    <PackageVersion Include="System.ServiceProcess.ServiceController" Version="$(MicrosoftExtensions)" />
+    <!--Vanara Deps-->
     <PackageVersion Include="Vanara.PInvoke.User32" Version="5.0.7" />
     <PackageVersion Include="Vanara.PInvoke.CredUI" Version="5.0.7" />
     <PackageVersion Include="Vanara.PInvoke.Mpr" Version="5.0.7" />
     <PackageVersion Include="Vanara.Windows.Shell" Version="5.0.7" />
-    <PackageVersion Include="System.ServiceProcess.ServiceController" Version="$(MicrosoftExtensions)" />
+    <!--Other packages-->
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageVersion Include="moment.net" Version="2.1.0" />
     <PackageVersion Include="SharpCompress" Version="0.50.4" />
+    <!--Testing Deps-->
     <PackageVersion Include="coverlet.collector" Version="10.1.0" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
     <PackageVersion Include="OmniAssert" Version="2.3.0" />

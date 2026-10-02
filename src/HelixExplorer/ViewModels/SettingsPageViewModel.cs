@@ -80,19 +80,16 @@ public sealed partial class SettingsPageViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SelectedTitle))]
-    [NotifyPropertyChangedFor(nameof(IsGeneral))]
-    [NotifyPropertyChangedFor(nameof(IsAppearance))]
-    [NotifyPropertyChangedFor(nameof(IsLayout))]
-    [NotifyPropertyChangedFor(nameof(IsFilesFolders))]
-    [NotifyPropertyChangedFor(nameof(IsAbout))]
+    [NotifyPropertyChangedFor(nameof(SelectedSectionIndex))]
     private SettingsSection _selectedSection;
 
     public string SelectedTitle => SelectedSection.Title;
-    public bool IsGeneral => SelectedSection.Key == "general";
-    public bool IsAppearance => SelectedSection.Key == "appearance";
-    public bool IsLayout => SelectedSection.Key == "layout";
-    public bool IsFilesFolders => SelectedSection.Key == "files";
-    public bool IsAbout => SelectedSection.Key == "about";
+
+    /// <summary>
+    /// Index into <see cref="Sections"/> and into the settings page section host.
+    /// The host keeps every section measured so the frames share one width.
+    /// </summary>
+    public int SelectedSectionIndex => Math.Max(0, Sections.IndexOf(SelectedSection));
 
     [RelayCommand]
     public void SelectSection(SettingsSection? section)

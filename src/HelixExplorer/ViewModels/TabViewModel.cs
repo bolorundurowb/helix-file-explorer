@@ -64,6 +64,21 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
     private void OnPaneSelectionChanged(object? sender, EventArgs e)
         => SelectionChanged?.Invoke(this, EventArgs.Empty);
 
+    private void OnPaneDirectoryContentsChanged(object? sender, EventArgs e)
+    {
+        if (!IsDualPane || RightPane is null || sender is not PaneViewModel source)
+            return;
+
+        var sibling = ReferenceEquals(source, LeftPane) ? RightPane : LeftPane;
+        if (sibling is null || string.IsNullOrEmpty(sibling.CurrentPath))
+            return;
+
+        // A rename refreshes only the pane it happened in; the sibling's own watcher is debounced, so
+        // it can linger on a stale entry long enough for a retry to fail on the no-longer-existing path.
+        if (PathUtilities.PathsEqual(source.CurrentPath, sibling.CurrentPath))
+            _ = sibling.RefreshAsync(showLoading: false);
+    }
+
     private void OnClipboardChanged(object? sender, EventArgs e)
     {
         LeftPane.RefreshCutState();
@@ -125,6 +140,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         pane.MoveToOtherPaneRequested += OnPaneMoveToOtherPaneRequested;
         pane.PinPathRequested += OnPanePinPathRequested;
         pane.SelectionChanged += OnPaneSelectionChanged;
+        pane.DirectoryContentsChanged += OnPaneDirectoryContentsChanged;
         pane.ApplyViewSettings(_showHiddenFiles, _showFileExtensions, _directorySort);
         return pane;
     }

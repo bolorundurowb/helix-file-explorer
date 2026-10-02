@@ -4,6 +4,7 @@
              xmlns:theme="using:HelixExplorer.Core.Theming"
              xmlns:settings="using:HelixExplorer.Core.Settings"
              xmlns:models="using:HelixExplorer.Core.Models"
+             xmlns:controls="using:HelixExplorer.Controls"
              x:Class="HelixExplorer.Views.SettingsPage"
              x:DataType="vm:SettingsPageViewModel"
              Background="{DynamicResource HelixSettingsContentBrush}">
@@ -63,7 +64,8 @@
                            FontSize="20"
                            FontWeight="SemiBold"
                            Margin="0,0,0,12" />
-                <StackPanel Spacing="4" IsVisible="{Binding IsGeneral}">
+                <controls:WidestChildPanel ActiveIndex="{Binding SelectedSectionIndex}">
+                <StackPanel Spacing="4">
                     <TextBlock Text="Dual pane mode"
                                FontSize="14" FontWeight="SemiBold" Margin="2,4,0,4" />
                     <Border Classes="settingsRow">
@@ -129,7 +131,7 @@
                     </Border>
                 </StackPanel>
 
-                <StackPanel Spacing="4" IsVisible="{Binding IsAppearance}">
+                <StackPanel Spacing="4">
                     <Border Classes="settingsRow">
                         <Grid ColumnDefinitions="*,Auto">
                             <TextBlock Grid.Column="0" Text="Theme" FontSize="14" VerticalAlignment="Center" />
@@ -223,7 +225,7 @@
                     </Border>
                 </StackPanel>
 
-                <StackPanel Spacing="4" IsVisible="{Binding IsLayout}">
+                <StackPanel Spacing="4">
                     <Border Classes="settingsRow">
                         <Grid ColumnDefinitions="*,Auto">
                             <TextBlock Grid.Column="0" Text="Default view mode" FontSize="14" VerticalAlignment="Center" />
@@ -246,7 +248,7 @@
                     </Border>
                 </StackPanel>
 
-                <StackPanel Spacing="4" IsVisible="{Binding IsFilesFolders}">
+                <StackPanel Spacing="4">
                     <Border Classes="settingsRow">
                         <Grid ColumnDefinitions="*,Auto">
                             <TextBlock Grid.Column="0" Text="Show hidden items" FontSize="14" VerticalAlignment="Center" />
@@ -290,7 +292,7 @@
                     </Border>
                 </StackPanel>
 
-                <StackPanel Spacing="4" IsVisible="{Binding IsAbout}">
+                <StackPanel Spacing="4">
                     <Border Classes="settingsRow">
                         <StackPanel Spacing="10">
                             <TextBlock Text="Helix Explorer"
@@ -348,6 +350,7 @@
                         </StackPanel>
                     </Border>
                 </StackPanel>
+                </controls:WidestChildPanel>
 
             </StackPanel>
         </ScrollViewer>

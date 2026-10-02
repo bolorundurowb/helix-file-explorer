@@ -92,7 +92,7 @@ public sealed class WinFileVisualProvider : IFileVisualProvider
         {
             using var icon = Icon.FromHandle((IntPtr)shfi.hIcon);
             using var bitmap = icon.ToBitmap();
-            using var scaled = ResizeToSquare(bitmap, size);
+            using var scaled = ScaleShellIcon(bitmap, size);
             return EncodePng(scaled);
         }
         catch (Exception)
@@ -125,7 +125,7 @@ public sealed class WinFileVisualProvider : IFileVisualProvider
             {
                 using var icon = Icon.FromHandle((IntPtr)hIcon);
                 using var bitmap = icon.ToBitmap();
-                using var scaled = ResizeToSquare(bitmap, size);
+                using var scaled = ScaleShellIcon(bitmap, size);
                 return EncodePng(scaled);
             }
             finally
@@ -182,6 +182,99 @@ public sealed class WinFileVisualProvider : IFileVisualProvider
 
     private static FileStream OpenReadShared(string path)
         => new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+
+    /// <summary>
+    /// Jumbo shell slots (grid view) store a custom folder icon as a small glyph in the
+    /// corner of a large transparent bitmap when the icon file has no jumbo frame.
+    /// Scaling that canvas keeps the transparent padding and draws the folder tiny next
+    /// to system icons, whose artwork already fills the slot. Crop to the glyph first.
+    /// </summary>
+    private static Bitmap ScaleShellIcon(Bitmap bitmap, int size)
+    {
+        var cropped = TryCropSparseGlyph(bitmap);
+        try
+        {
+            return ResizeToSquare(cropped ?? bitmap, size);
+        }
+        finally
+        {
+            cropped?.Dispose();
+        }
+    }
+
+    private static Bitmap? TryCropSparseGlyph(Bitmap bitmap)
+    {
+        if (bitmap.Width < 2 || bitmap.Height < 2)
+            return null;
+
+        var bounds = FindOpaqueBounds(bitmap);
+        if (bounds is not { } glyph)
+            return null;
+
+        // System folder artwork fills most of the slot (about 0.7 on the short side).
+        // A jumbo placeholder for a 32px custom icon sits near 0.2. Half the canvas
+        // separates those without cropping icons that already have a real large frame.
+        if (glyph.Width >= bitmap.Width * 0.5 && glyph.Height >= bitmap.Height * 0.5)
+            return null;
+
+        return bitmap.Clone(glyph, PixelFormat.Format32bppArgb);
+    }
+
+    private static Rectangle? FindOpaqueBounds(Bitmap bitmap)
+    {
+        var width = bitmap.Width;
+        var height = bitmap.Height;
+        BitmapData data;
+        try
+        {
+            data = bitmap.LockBits(
+                new Rectangle(0, 0, width, height),
+                ImageLockMode.ReadOnly,
+                PixelFormat.Format32bppArgb);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+
+        try
+        {
+            // Scan0 is the top row; stride may be negative. Copy one row at a time so
+            // the bounds stay in bitmap coordinates either way.
+            var row = new byte[width * 4];
+            var minX = width;
+            var minY = height;
+            var maxX = -1;
+            var maxY = -1;
+            for (var y = 0; y < height; y++)
+            {
+                Marshal.Copy(IntPtr.Add(data.Scan0, y * data.Stride), row, 0, row.Length);
+                for (var x = 0; x < width; x++)
+                {
+                    if (row[(x * 4) + 3] < 32)
+                        continue;
+
+                    if (x < minX)
+                        minX = x;
+                    if (y < minY)
+                        minY = y;
+                    if (x > maxX)
+                        maxX = x;
+                    if (y > maxY)
+                        maxY = y;
+                }
+            }
+
+            if (maxX < 0)
+                return null;
+
+            return new Rectangle(minX, minY, maxX - minX + 1, maxY - minY + 1);
+        }
+        finally
+        {
+            bitmap.UnlockBits(data);
+        }
+    }
 
     private static Bitmap ResizeToSquare(Image source, int size)
     {

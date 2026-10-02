@@ -72,6 +72,19 @@ public sealed class SettingsLayoutTests
                 }
 
                 host.Children.Count.Must().Be(5);
+
+                // Only the selected section may paint or take input; the others stay in
+                // the tree purely so their width is measured.
+                host.ActiveIndex = 0;
+                window.UpdateLayout();
+                for (var i = 0; i < host.Children.Count; i++)
+                {
+                    var child = host.Children[i];
+                    child.Opacity.Must().Be(i == 0 ? 1 : 0);
+                    child.IsHitTestVisible.Must().Be(i == 0);
+                    child.IsEnabled.Must().Be(i == 0);
+                }
+
                 foreach (var width in widths)
                 {
                     (Math.Abs(width - widths[0]) < 1).Must().BeTrue();

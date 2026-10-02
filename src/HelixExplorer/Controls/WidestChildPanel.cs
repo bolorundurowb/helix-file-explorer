@@ -54,14 +54,13 @@ public sealed class WidestChildPanel : Panel
 
     protected override Size ArrangeOverride(Size finalSize)
     {
-        var active = ActiveIndex;
+        // Inactive children get the same slot rather than an empty rect: a StackPanel
+        // still lays its rows out at desired size inside a zero-size arrange, so an
+        // empty rect would paint every section over the active one. They are hidden
+        // via Opacity (see UpdateChildState) and clipped by this panel.
+        var slot = new Rect(0, 0, finalSize.Width, finalSize.Height);
         for (var i = 0; i < Children.Count; i++)
-        {
-            if (i == active)
-                Children[i].Arrange(new Rect(0, 0, finalSize.Width, finalSize.Height));
-            else
-                Children[i].Arrange(default);
-        }
+            Children[i].Arrange(slot);
 
         return finalSize;
     }
@@ -73,6 +72,8 @@ public sealed class WidestChildPanel : Panel
         {
             var child = Children[i];
             var isActive = i == active;
+            // IsVisible would zero the desired size and defeat the shared-width measure.
+            child.Opacity = isActive ? 1 : 0;
             child.IsEnabled = isActive;
             child.IsHitTestVisible = isActive;
             if (isActive)

@@ -76,6 +76,12 @@ public sealed partial class PaneViewModel :
     private bool _isRecycleBinWatcherSubscribed;
     private bool _hasPastePayload;
     private bool _suppressFolderPrefPersist;
+
+    /// <summary>
+    /// Extract and compress raise the overlay themselves. While this is set, a refresh they
+    /// started must not turn it back on: <c>showLoading: false</c> never clears the flag.
+    /// </summary>
+    private bool _archiveOverlayHeld;
     private CancellationTokenSource? _folderPrefPersistCts;
 
     private readonly HashSet<string> _collapsedGroupKeys = new(StringComparer.Ordinal);
@@ -1458,6 +1464,7 @@ public sealed partial class PaneViewModel :
             : "Archive.zip";
         var destination = PaneFileOperationCoordinator.GetUniquePath(Path.Combine(hostDir, zipName));
 
+        _archiveOverlayHeld = true;
         try
         {
             IsLoading = true;
@@ -1474,14 +1481,18 @@ public sealed partial class PaneViewModel :
             });
 
             await RefreshAsync(showLoading: false).ConfigureAwait(true);
-            IsLoading = false;
             StatusText = UiStrings.CreatedArchive(Path.GetFileName(destination));
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"CompressToZip failed: {ex.Message}");
             StatusText = UiStrings.CompressToZipFailed;
-            IsLoading = false;
+        }
+        finally
+        {
+            // A throw from the refresh used to skip the success-path clear and could leave the
+            // overlay up if the catch itself failed before its own clear. Same release as extract.
+            await ReleaseArchiveOverlayAsync().ConfigureAwait(true);
         }
     }
 
@@ -1500,6 +1511,7 @@ public sealed partial class PaneViewModel :
         if (physicalArchives.Count == 0 && virtualPaths.Count == 0)
             return;
 
+        _archiveOverlayHeld = true;
         try
         {
             IsLoading = true;
@@ -1562,9 +1574,31 @@ public sealed partial class PaneViewModel :
         }
         finally
         {
-            // A refresh with showLoading: false never touches the overlay, so the flag raised above
-            // has to be dropped here on every path or the pane stays dimmed after a successful extract.
-            IsLoading = false;
+            // showLoading: false never clears the flag raised above. Every exit, including the
+            // unknown-host return and a failed extract, drops it here. The release waits out a
+            // refresh this operation already queued so that refresh cannot turn the overlay back on.
+            await ReleaseArchiveOverlayAsync().ConfigureAwait(true);
+        }
+    }
+
+    private async Task ReleaseArchiveOverlayAsync()
+    {
+        IsLoading = false;
+        try
+        {
+            // Same priority as PaneRefreshCoordinator's SetLoading posts. Jobs already queued by
+            // the refresh run first, while the hold still rejects SetLoading(true).
+            await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Default)
+                .GetTask()
+                .ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or TaskCanceledException)
+        {
+            // Dispatcher is going away. The flag is already clear.
+        }
+        finally
+        {
+            _archiveOverlayHeld = false;
         }
     }
 
@@ -2104,7 +2138,15 @@ public sealed partial class PaneViewModel :
 
     GroupByMode IPaneRefreshHost.GroupBy => GroupBy;
 
-    void IPaneRefreshHost.SetLoading(bool loading) => IsLoading = loading;
+    void IPaneRefreshHost.SetLoading(bool loading)
+    {
+        // Extract/compress own the overlay for the operation. A refresh they started must not
+        // raise it again after they have cleared it.
+        if (loading && _archiveOverlayHeld)
+            return;
+
+        IsLoading = loading;
+    }
 
     void IPaneRefreshHost.SetStatusText(string text) => StatusText = text;
 

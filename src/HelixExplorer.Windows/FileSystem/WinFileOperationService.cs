@@ -60,20 +60,40 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
             // rather than losing entries stamped a moment "before" we started.
             var batchStart = DateTime.UtcNow - RecycleTimestampSkew;
 
-            var (_, deletedPaths) = await ShellFileOperationsHelper
-                .DeleteToRecycleBinAsync(paths, progress, ct).ConfigureAwait(false);
+            ShellDeleteBatch recycle;
+            try
+            {
+                recycle = await ShellFileOperationsHelper
+                    .DeleteToRecycleBinAsync(paths, progress, ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // The helper normally swallows the shell HRESULT. If it still escapes, do not show
+                // ex.Message ("Catastrophic failure") and do not fail items that are already gone.
+                logger.LogError(ex, "Recycle bin delete failed");
+                recycle = new ShellDeleteBatch(
+                    Completed: false,
+                    ex.HResult,
+                    paths.Where(path => !File.Exists(path) && !Directory.Exists(path)).ToList());
+            }
 
-            var deletedSet = new HashSet<string>(deletedPaths, StringComparer.OrdinalIgnoreCase);
-            var recycleFailures = paths
-                .Where(p => !deletedSet.Contains(p))
-                .Select(p => new FileOperationFailure(p, "Recycle bin operation failed."))
-                .ToList();
+            if (recycle.FailureHResult is int recycleHr)
+            {
+                if (FileSystemErrorMessages.IsElevationFailure(recycleHr))
+                    logger.LogInformation("Recycle delete needs administrator permission ({HResult})", recycleHr);
+                else
+                    logger.LogError("Recycle bin delete failed with HRESULT {HResult}", recycleHr);
+            }
+
+            var failureHResult = recycle.Completed ? null : recycle.FailureHResult;
+            var (recycled, recycleFailures) = FileSystemErrorMessages.MapDeleteResults(
+                paths, recycle.DeletedPaths, failureHResult);
 
             var recycleChanges = await Task.Run(
-                () => RecycleBinMatcher.Match(deletedPaths, RecycleBinPaths.ReadEntries(batchStart), batchStart),
+                () => RecycleBinMatcher.Match(recycle.DeletedPaths, RecycleBinPaths.ReadEntries(batchStart), batchStart),
                 ct).ConfigureAwait(false);
 
-            return new FileOperationResult(deletedPaths.Count, 0, recycleFailures.Count, recycleFailures)
+            return new FileOperationResult(recycled, 0, recycleFailures.Count, recycleFailures)
             {
                 Changes = recycleChanges
             };
@@ -132,27 +152,29 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
             IReadOnlyList<string> elevatedDeleted;
             try
             {
-                elevatedDeleted = await ShellFileOperationsHelper
+                var elevated = await ShellFileOperationsHelper
                     .DeletePermanentlyElevatedAsync(needsElevation, ct).ConfigureAwait(false);
+                elevatedDeleted = elevated.DeletedPaths;
+                if (elevated.FailureHResult is int hr)
+                    logger.LogInformation("Elevated delete finished with HRESULT {HResult}", hr);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                // Don't drop items the shell already removed, and don't show the raw HRESULT.
                 logger.LogError(ex, "Elevated delete failed");
-                elevatedDeleted = [];
+                elevatedDeleted = needsElevation.Where(path => !File.Exists(path) && !Directory.Exists(path)).ToList();
             }
 
             var deletedSet = new HashSet<string>(elevatedDeleted, StringComparer.OrdinalIgnoreCase);
+            var (elevatedSucceeded, elevatedFailures) = FileSystemErrorMessages.MapElevationResults(
+                needsElevation, deletedSet);
+            succeeded += elevatedSucceeded;
+            failures.AddRange(elevatedFailures);
+
             foreach (var path in needsElevation)
             {
                 if (deletedSet.Contains(path))
-                {
                     DeleteRecycleBinMetadata(path);
-                    succeeded++;
-                }
-                else
-                {
-                    failures.Add(new FileOperationFailure(path, FileSystemErrorMessages.AdministratorPermissionRequired));
-                }
 
                 completed++;
                 progress?.Report(new FileOperationProgress(completed, total, path, FileOperationKind.Delete));

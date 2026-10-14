@@ -12,6 +12,10 @@ namespace HelixExplorer.Windows.Theming;
 /// marshalling any UI mutation onto the UI thread (the composition root does this via the Avalonia
 /// dispatcher). Disposal is made race-safe against a concurrently firing event via an interlocked
 /// flag so unsubscription and event delivery cannot corrupt each other.
+/// The callback is invoked with <see cref="ThemeMode.System"/> even though that mode is unchanged.
+/// <c>RequestedThemeVariant</c> stays <c>Default</c> in that case, so the theme service must bump
+/// its own revision for name brushes to resolve again. The new light/dark bit is read from
+/// <see cref="TryReadAppsUseLightTheme"/> on the UI thread inside that apply, after the registry write.
 /// </remarks>
 public sealed class WinThemeWatcher : IDisposable
 {
@@ -40,6 +44,23 @@ public sealed class WinThemeWatcher : IDisposable
             return;
 
         _applyTheme(ThemeMode.System);
+    }
+
+    /// <summary>
+    /// Windows app theme: 1 light, 0 dark. Null when the value cannot be read.
+    /// </summary>
+    public static int? TryReadAppsUseLightTheme()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+            return key?.GetValue("AppsUseLightTheme") as int?;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            return null;
+        }
     }
 
     public void Dispose()

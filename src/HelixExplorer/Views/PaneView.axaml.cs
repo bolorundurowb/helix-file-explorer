@@ -4,12 +4,15 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
+using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using HelixExplorer.Controls;
+using HelixExplorer.Converters;
 using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Models;
@@ -70,9 +73,11 @@ public sealed partial class PaneView : UserControl
         };
         var name = new TextBlock
         {
-            Text = item?.DisplayName ?? string.Empty,
+            DataContext = item,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-            TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis
+            TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis,
+            [!TextBlock.TextProperty] = new Binding(nameof(EntryItemViewModel.DisplayName)),
+            [!TextBlock.ForegroundProperty] = CreateNameForegroundBinding(),
         };
         Grid.SetColumn(name, 1);
 
@@ -81,6 +86,18 @@ public sealed partial class PaneView : UserControl
         row.Children.Add(name);
         return row;
     }
+
+    private static MultiBinding CreateNameForegroundBinding() => new()
+    {
+        Converter = GitFileStatusBrushConverter.Instance,
+        Bindings =
+        {
+            new Binding(nameof(EntryItemViewModel.GitStatus)),
+            // Same revision the other name bindings watch. ActualThemeVariant does not change
+            // when System mode is re-applied after an OS light/dark switch.
+            new DynamicResourceExtension(AvaloniaThemeService.ThemeRevisionResourceKey),
+        },
+    };
 
     public PaneView()
     {

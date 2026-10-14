@@ -1094,7 +1094,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
 
     private bool CanCopySelection() => CanUseGlobalFileShortcuts() && ActivePane?.HasSelectionForOps == true;
 
-    private bool CanDeleteSelection() => CanUseGlobalFileShortcuts() && ActivePane?.HasSelectionForOps == true;
+    private bool CanDeleteSelection() => CanUseGlobalFileShortcuts() && ActivePane?.HasSelectionForDelete == true;
 
     private bool CanDeletePermanentlySelection() => CanUseGlobalFileShortcuts() && ActivePane?.HasSelectionForDeletePerm == true;
 
@@ -1131,11 +1131,23 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
     [RelayCommand(CanExecute = nameof(CanPasteSelection))]
     private void Paste() => SelectedTab?.ActivePane?.PasteCommand.Execute(null);
 
+    // RelayCommand.Execute skips CanExecute, and the command palette invokes these directly, so the
+    // pane command is re-checked here to keep archives and shell folders from running a delete.
     [RelayCommand(CanExecute = nameof(CanDeleteSelection))]
-    private void Delete() => SelectedTab?.ActivePane?.DeleteCommand.Execute(null);
+    private void Delete()
+    {
+        var command = SelectedTab?.ActivePane?.DeleteCommand;
+        if (command?.CanExecute(null) == true)
+            command.Execute(null);
+    }
 
     [RelayCommand(CanExecute = nameof(CanDeletePermanentlySelection))]
-    private void DeletePermanently() => SelectedTab?.ActivePane?.DeletePermanentlyCommand.Execute(null);
+    private void DeletePermanently()
+    {
+        var command = SelectedTab?.ActivePane?.DeletePermanentlyCommand;
+        if (command?.CanExecute(null) == true)
+            command.Execute(null);
+    }
 
     private bool CanCopyToOtherPane()
         => CanUseGlobalFileShortcuts()

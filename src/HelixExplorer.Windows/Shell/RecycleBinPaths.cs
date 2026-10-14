@@ -49,7 +49,10 @@ internal static class RecycleBinPaths
         {
             try
             {
-                if (Directory.EnumerateFiles(folder, "$I*", SearchOption.TopDirectoryOnly).Any())
+                // A $I whose $R is gone is a half-removed entry the shell no longer lists; counting it
+                // would keep the bin looking non-empty after its last real item is deleted.
+                if (Directory.EnumerateFiles(folder, "$I*", SearchOption.TopDirectoryOnly)
+                    .Any(iFile => ToContentPath(iFile) is not null))
                     return true;
             }
             catch (UnauthorizedAccessException)

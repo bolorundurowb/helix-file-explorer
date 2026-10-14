@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Windows.Shell;
 using Vanara.PInvoke;
@@ -24,6 +25,18 @@ internal static class ShellFileOperationsHelper
         CancellationToken cancellationToken)
     {
         return STATask.Run(() => DeleteToRecycleBin(paths, progress, cancellationToken), cancellationToken);
+    }
+
+    /// <summary>
+    /// Permanently deletes items the current token was refused access to, letting the shell raise a
+    /// UAC prompt for them as Explorer does.
+    /// </summary>
+    /// <returns>The paths that no longer exist afterwards.</returns>
+    public static Task<IReadOnlyList<string>> DeletePermanentlyElevatedAsync(
+        IReadOnlyList<string> paths,
+        CancellationToken cancellationToken)
+    {
+        return STATask.Run(() => DeletePermanentlyElevated(paths, cancellationToken), cancellationToken);
     }
 
     public static Task<bool> RestoreFromRecycleBinAsync(
@@ -79,7 +92,10 @@ internal static class ShellFileOperationsHelper
         CancellationToken cancellationToken)
     {
         using var op = CreateOperation();
-        op.Options |= ShellFileOperations.OperationFlags.RecycleOnDelete;
+        // NoErrorUI otherwise suppresses the UAC prompt too, and the shell then fails the whole batch
+        // with E_UNEXPECTED ("Catastrophic failure") as soon as one item needs admin rights.
+        op.Options |= ShellFileOperations.OperationFlags.RecycleOnDelete
+                      | ShellFileOperations.OperationFlags.ShowElevationPrompt;
 
         var total = paths.Count;
         var completed = 0;
@@ -104,8 +120,50 @@ internal static class ShellFileOperationsHelper
             op.QueueDeleteOperation(item);
         }
 
-        op.PerformOperations();
+        try
+        {
+            op.PerformOperations();
+        }
+        catch (COMException)
+        {
+            // A declined elevation or an item the shell cannot touch aborts the batch with a failing
+            // HRESULT. The items it did process are already in `deleted`; the caller reports the rest
+            // per item instead of surfacing the raw HRESULT text.
+            return (false, deleted);
+        }
+
         return (!op.AnyOperationsAborted, deleted);
+    }
+
+    private static IReadOnlyList<string> DeletePermanentlyElevated(
+        IReadOnlyList<string> paths,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        using var op = CreateOperation();
+        op.Options |= ShellFileOperations.OperationFlags.ShowElevationPrompt;
+
+        foreach (var path in paths)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            using var item = new ShellItem(path);
+            op.QueueDeleteOperation(item);
+        }
+
+        try
+        {
+            op.PerformOperations();
+        }
+        catch (COMException)
+        {
+            // Declined UAC prompt or an item that stays locked; the existence check below decides.
+        }
+
+        // Existence is the ground truth: elevated deletes run in a broker process, so the per-item
+        // callbacks are not a reliable record of what was removed.
+        return paths.Where(p => !File.Exists(p) && !Directory.Exists(p)).ToList();
     }
 
     private static bool RestoreFromRecycleBin(

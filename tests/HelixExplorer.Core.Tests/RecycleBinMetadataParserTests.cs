@@ -55,6 +55,21 @@ public class RecycleBinMetadataParserTests
         RecycleBinMetadataParser.TryParse(stream).Must().BeNull();
     }
 
+    [Theory]
+    [InlineData(@"C:\$Recycle.Bin\S-1-5-21-1\$RAB12CD.txt", @"C:\$Recycle.Bin\S-1-5-21-1\$IAB12CD.txt")]
+    [InlineData(@"D:\$RECYCLE.BIN\S-1-5-21-1\$RXYZ\", @"D:\$RECYCLE.BIN\S-1-5-21-1\$IXYZ")]
+    public void GetMetadataPath_MapsTopLevelBinItem(string contentPath, string expected)
+        => RecycleBinMetadataParser.GetMetadataPath(contentPath).Must().Be(expected);
+
+    [Theory]
+    [InlineData(@"C:\Users\me\$Report.txt")]
+    [InlineData(@"C:\$Recycle.Bin\S-1-5-21-1\$RXYZ\$Rnested.txt")]
+    [InlineData(@"C:\$Recycle.Bin\S-1-5-21-1\$IAB12CD.txt")]
+    [InlineData(@"C:\$Recycle.Bin\S-1-5-21-1\desktop.ini")]
+    [InlineData("")]
+    public void GetMetadataPath_RejectsNonBinItems(string contentPath)
+        => RecycleBinMetadataParser.GetMetadataPath(contentPath).Must().BeNull();
+
     private static MemoryStream BuildVersion2(long size, DateTime deletedAtUtc, string originalPath)
     {
         var stream = new MemoryStream();

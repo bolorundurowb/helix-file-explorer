@@ -103,6 +103,25 @@ public sealed class PaneRecycleBinQueryTests : IDisposable
     });
 
     /// <summary>
+    /// Delete in the bin must mean permanent delete. Re-recycling $R items made the shell fail the whole
+    /// batch with "Catastrophic failure" once any item needed elevation.
+    /// </summary>
+    [Fact]
+    public void Delete_IsEnabledForSelectedBinItemsWhileOtherEditsStayDisabled() => InRecycleBin(() =>
+    {
+        PublishBinEntries();
+        _pane.DeleteCommand.CanExecute(null).Must().BeFalse();
+
+        _pane.UpdateSelection([_pane.Entries[0]]);
+
+        _pane.DeleteCommand.CanExecute(null).Must().BeTrue();
+        _pane.HasSelectionForDelete.Must().BeTrue();
+        _pane.DeletePermanentlyCommand.CanExecute(null).Must().BeTrue();
+        _pane.CutCommand.CanExecute(null).Must().BeFalse();
+        _pane.HasSelectionForOps.Must().BeFalse();
+    });
+
+    /// <summary>
     /// Entering the bin starts a real shell refresh whose publish is marshalled to the UI thread. Running the
     /// whole test as one UI-thread job keeps that publish from landing between the arrange and assert steps.
     /// </summary>

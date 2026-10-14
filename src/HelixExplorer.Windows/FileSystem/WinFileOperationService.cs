@@ -81,6 +81,11 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
 
         var succeeded = 0;
         var failures = new List<FileOperationFailure>();
+        var needsElevation = new List<string>();
+
+        // Counts items that are actually finished, so items deferred to the elevated pass do not push
+        // the bar to 100% before the UAC prompt has even appeared.
+        var completed = 0;
 
         await Task.Run(() =>
         {
@@ -89,7 +94,7 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
                 ct.ThrowIfCancellationRequested();
                 control?.WaitIfPaused(ct);
                 var path = paths[i];
-                progress?.Report(new FileOperationProgress(i, total, path, FileOperationKind.Delete));
+                progress?.Report(new FileOperationProgress(completed, total, path, FileOperationKind.Delete));
 
                 try
                 {
@@ -100,7 +105,16 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
                     else
                         throw new FileNotFoundException($"The item '{path}' no longer exists.", path);
 
+                    DeleteRecycleBinMetadata(path);
                     succeeded++;
+                }
+                catch (UnauthorizedAccessException ex)
+                {
+                    // Typical for bin items deleted by an admin or another account. Retried through the
+                    // shell below so the user gets a UAC prompt rather than a bare access-denied error.
+                    logger.LogInformation(ex, "Delete of '{Path}' needs elevation", path);
+                    needsElevation.Add(path);
+                    continue;
                 }
                 catch (Exception ex)
                 {
@@ -108,11 +122,69 @@ public sealed class WinFileOperationService(ILogger<WinFileOperationService> log
                     failures.Add(new FileOperationFailure(path, ex.Message));
                 }
 
-                progress?.Report(new FileOperationProgress(i + 1, total, path, FileOperationKind.Delete));
+                completed++;
+                progress?.Report(new FileOperationProgress(completed, total, path, FileOperationKind.Delete));
             }
         }, ct).ConfigureAwait(false);
 
+        if (needsElevation.Count > 0)
+        {
+            IReadOnlyList<string> elevatedDeleted;
+            try
+            {
+                elevatedDeleted = await ShellFileOperationsHelper
+                    .DeletePermanentlyElevatedAsync(needsElevation, ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex, "Elevated delete failed");
+                elevatedDeleted = [];
+            }
+
+            var deletedSet = new HashSet<string>(elevatedDeleted, StringComparer.OrdinalIgnoreCase);
+            foreach (var path in needsElevation)
+            {
+                if (deletedSet.Contains(path))
+                {
+                    DeleteRecycleBinMetadata(path);
+                    succeeded++;
+                }
+                else
+                {
+                    failures.Add(new FileOperationFailure(path, FileSystemErrorMessages.AdministratorPermissionRequired));
+                }
+
+                completed++;
+                progress?.Report(new FileOperationProgress(completed, total, path, FileOperationKind.Delete));
+            }
+        }
+
         return new FileOperationResult(succeeded, 0, failures.Count, failures);
+    }
+
+    /// <summary>
+    /// Removes the <c>$I</c> record paired with a bin item whose <c>$R</c> contents were just deleted.
+    /// </summary>
+    /// <remarks>
+    /// Deleting the <c>$R</c> path directly bypasses the bin's own bookkeeping, so the metadata file
+    /// would otherwise linger. Runs only after the contents are gone: removing <c>$I</c> first and then
+    /// failing on <c>$R</c> would hide an item that still occupies disk space. Best-effort, because an
+    /// orphaned <c>$I</c> is harmless to listing and the item itself is already deleted.
+    /// </remarks>
+    private void DeleteRecycleBinMetadata(string contentPath)
+    {
+        var metadataPath = RecycleBinMetadataParser.GetMetadataPath(contentPath);
+        if (metadataPath is null)
+            return;
+
+        try
+        {
+            File.Delete(metadataPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(ex, "Could not remove recycle-bin metadata '{Path}'", metadataPath);
+        }
     }
 
     public async ValueTask<FileOperationResult> RenameAsync(string path, string newName, CancellationToken ct = default)

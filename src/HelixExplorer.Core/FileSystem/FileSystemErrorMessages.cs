@@ -9,6 +9,8 @@ public static class FileSystemErrorMessages
 {
     private const int ErrorNotSameDevice = unchecked((int)0x80070011);
 
+    public const string AdministratorPermissionRequired = "Administrator permission is required to delete this item";
+
     public static string Describe(Exception exception, string? path = null)
     {
         if (exception is OperationCanceledException)

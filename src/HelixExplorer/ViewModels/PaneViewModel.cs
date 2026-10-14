@@ -837,6 +837,8 @@ public sealed partial class PaneViewModel :
 
     public bool HasSelectionForOps => CanModifySelection();
 
+    public bool HasSelectionForDelete => CanDelete();
+
     public bool HasSelectionForDeletePerm => CanDeletePermanently();
 
     public bool HasSingleSelectionForOps => CanRename();
@@ -1333,15 +1335,24 @@ public sealed partial class PaneViewModel :
             () => RefreshAsync(showLoading: false),
             t => StatusText = t);
 
-    [RelayCommand(CanExecute = nameof(CanModifySelection))]
+    [RelayCommand(CanExecute = nameof(CanDelete))]
     private Task Delete()
-        => SelectedEntries.Count == 0
-            ? Task.CompletedTask
-            : _fileOperations.DeleteAsync(
-                SelectedEntries.Select(e => e.FullPath).ToList(),
-                permanently: false,
-                () => RefreshAsync(showLoading: false),
-                t => StatusText = t);
+    {
+        if (SelectedEntries.Count == 0)
+            return Task.CompletedTask;
+
+        // Items already in the bin can only be destroyed. Sending a $R item through the recycle path
+        // again makes the shell fail the whole batch with E_UNEXPECTED ("Catastrophic failure") the
+        // moment one of them needs elevation, so Delete here means Explorer's permanent delete.
+        if (IsRecycleBin)
+            return DeletePermanently();
+
+        return _fileOperations.DeleteAsync(
+            SelectedEntries.Select(e => e.FullPath).ToList(),
+            permanently: false,
+            () => RefreshAsync(showLoading: false),
+            t => StatusText = t);
+    }
 
     [RelayCommand(CanExecute = nameof(CanDeletePermanently))]
     private async Task DeletePermanently()
@@ -1515,7 +1526,6 @@ public sealed partial class PaneViewModel :
                 if (string.IsNullOrEmpty(hostDir))
                 {
                     StatusText = UiStrings.ExtractLocationUnknown;
-                    IsLoading = false;
                     return;
                 }
 
@@ -1542,8 +1552,6 @@ public sealed partial class PaneViewModel :
 
             if (!IsArchive)
                 await RefreshAsync(showLoading: false).ConfigureAwait(true);
-            else
-                IsLoading = false;
 
             StatusText = UiStrings.Extracted;
         }
@@ -1551,6 +1559,11 @@ public sealed partial class PaneViewModel :
         {
             Debug.WriteLine($"ExtractHere failed: {ex.Message}");
             StatusText = UiStrings.ExtractFailed;
+        }
+        finally
+        {
+            // A refresh with showLoading: false never touches the overlay, so the flag raised above
+            // has to be dropped here on every path or the pane stays dimmed after a successful extract.
             IsLoading = false;
         }
     }
@@ -1875,6 +1888,8 @@ public sealed partial class PaneViewModel :
     public bool CanModifyHere() => !IsArchive && !IsHome && !IsShellNamespace;
 
     public bool CanModifySelection() => CanModifyHere() && HasSelection();
+
+    private bool CanDelete() => CanDeletePermanently();
 
     private bool CanDeletePermanently() => (CanModifyHere() || IsRecycleBin) && HasSelection();
 

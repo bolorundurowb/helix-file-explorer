@@ -59,6 +59,36 @@ public static class RecycleBinMetadataParser
         return (fileSize, deletedAt, originalPath);
     }
 
+    /// <summary>
+    /// The <c>$I</c> metadata path paired with a top-level <c>$R</c> bin item, or null when
+    /// <paramref name="contentPath"/> is not one.
+    /// </summary>
+    /// <remarks>
+    /// Requires the item to sit directly in <c>$RECYCLE.BIN\{SID}</c>, so an ordinary file that happens
+    /// to be named <c>$R…</c>, or a child inside a recycled folder, is never mistaken for a bin entry.
+    /// Existence is not checked; callers deleting the pair treat a missing <c>$I</c> as already gone.
+    /// </remarks>
+    public static string? GetMetadataPath(string contentPath)
+    {
+        if (string.IsNullOrEmpty(contentPath))
+            return null;
+
+        var trimmed = contentPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var fileName = Path.GetFileName(trimmed);
+        if (fileName.Length <= 2 || !fileName.StartsWith("$R", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var sidFolder = Path.GetDirectoryName(trimmed);
+        if (string.IsNullOrEmpty(sidFolder))
+            return null;
+
+        var binRoot = Path.GetFileName(Path.GetDirectoryName(sidFolder));
+        if (!string.Equals(binRoot, "$RECYCLE.BIN", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        return Path.Combine(sidFolder, "$I" + fileName[2..]);
+    }
+
     public static (long Size, DateTime DeletedAtUtc, string OriginalPath)? TryParseFile(string iFilePath)
     {
         try

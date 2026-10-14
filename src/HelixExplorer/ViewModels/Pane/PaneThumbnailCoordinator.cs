@@ -21,6 +21,7 @@ public sealed class PaneThumbnailCoordinator : IDisposable
     private readonly BoundedVisualLoader _visualLoader = new(MaxConcurrentVisuals);
     private CancellationTokenSource? _reloadCancellation;
     private CancellationTokenSource? _visualCancellation;
+    private IPaneThumbnailHost? _host;
     private bool _disposed;
 
     public PaneThumbnailCoordinator(
@@ -29,6 +30,7 @@ public sealed class PaneThumbnailCoordinator : IDisposable
     {
         _visuals = visuals;
         _logger = logger;
+        visuals.AssociationsChanged += OnAssociationsChanged;
     }
 
     public PaneThumbnailCoordinator(ILogger<PaneThumbnailCoordinator> logger)
@@ -73,6 +75,9 @@ public sealed class PaneThumbnailCoordinator : IDisposable
     {
         if (_disposed || host.IsDisposed || _visuals is null)
             return;
+
+        // Association changes have no navigation, so the last host is what gets asked again.
+        _host = host;
 
         // Empty visual targets mean the publish reused existing entries; preserve their in-flight loads.
         var entries = (targets ?? host.Entries).ToList();
@@ -131,10 +136,21 @@ public sealed class PaneThumbnailCoordinator : IDisposable
             return;
 
         _disposed = true;
+        if (_visuals is not null)
+            _visuals.AssociationsChanged -= OnAssociationsChanged;
         try { _reloadCancellation?.Cancel(); } catch (ObjectDisposedException) { }
         _reloadCancellation?.Dispose();
         _reloadCancellation = null;
         CancelVisuals();
+    }
+
+    private void OnAssociationsChanged(object? sender, EventArgs e)
+    {
+        var host = _host;
+        if (_disposed || host is null || host.IsDisposed)
+            return;
+
+        RequestEntryVisuals(host);
     }
 
     private void CancelVisuals()

@@ -34,4 +34,33 @@ public sealed class FileVisualRulesTests
         FileVisualRules.HasPerFileIcon(@"C:\image.png").Must().BeFalse();
         FileVisualRules.HasPerFileIcon(@"C:\noextension").Must().BeFalse();
     }
+
+    [Fact]
+    public void AssociationInvalidation_RemovesExtensionKeys_KeepsFullPathKeys()
+    {
+        string[] keys =
+        [
+            ".TXT",
+            ".PNG",
+            string.Empty,
+            @"C:\apps\helix.exe",
+            @"C:\links\docs.lnk",
+            @"C:\photos\pic.png",
+            @"D:\Work\src",
+            @"\\server\share\tool.exe"
+        ];
+
+        var removed = keys.Where(FileVisualRules.IsExtensionCacheKey).ToArray();
+        var kept = keys.Where(key => !FileVisualRules.IsExtensionCacheKey(key)).ToArray();
+
+        removed.Must().BeSequenceEqual([".TXT", ".PNG", string.Empty]);
+        kept.Must().BeSequenceEqual(
+        [
+            @"C:\apps\helix.exe",
+            @"C:\links\docs.lnk",
+            @"C:\photos\pic.png",
+            @"D:\Work\src",
+            @"\\server\share\tool.exe"
+        ]);
+    }
 }

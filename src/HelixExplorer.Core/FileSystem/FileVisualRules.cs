@@ -29,4 +29,26 @@ public static class FileVisualRules
         var extension = Path.GetExtension(path);
         return extension.Length > 0 && PerFileIconExtensions.Contains(extension);
     }
+
+    /// <summary>
+    /// Extension-shared cache keys (<c>.TXT</c>, or empty when the file has no extension) are the
+    /// only entries a default-app change can invalidate. Full paths are per-file icons, thumbnails,
+    /// and folders, which stay valid across an association change.
+    /// </summary>
+    public static bool IsExtensionCacheKey(string cacheKey)
+    {
+        if (cacheKey.Length == 0)
+            return true;
+
+        if (cacheKey[0] != '.')
+            return false;
+
+        for (var i = 1; i < cacheKey.Length; i++)
+        {
+            if (cacheKey[i] is '\\' or '/' or ':')
+                return false;
+        }
+
+        return true;
+    }
 }

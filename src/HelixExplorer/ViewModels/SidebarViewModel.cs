@@ -7,11 +7,29 @@ using HelixExplorer.Services;
 
 namespace HelixExplorer.ViewModels;
 
-public sealed class SidebarViewModel(
-    IQuickAccessProvider quickAccess,
-    IVolumeProvider volumes,
-    FileVisualService visuals) : ObservableObject
+public sealed class SidebarViewModel : ObservableObject, IDisposable
 {
+    private readonly IQuickAccessProvider quickAccess;
+    private readonly IVolumeProvider volumes;
+    private readonly FileVisualService visuals;
+
+    public SidebarViewModel(
+        IQuickAccessProvider quickAccess,
+        IVolumeProvider volumes,
+        FileVisualService visuals)
+    {
+        this.quickAccess = quickAccess;
+        this.volumes = volumes;
+        this.visuals = visuals;
+        visuals.AssociationsChanged += OnAssociationsChanged;
+    }
+
+    public void Dispose()
+        => visuals.AssociationsChanged -= OnAssociationsChanged;
+
+    private void OnAssociationsChanged(object? sender, EventArgs e)
+        => _ = LoadIconsAsync();
+
     public ObservableCollection<SidebarItemViewModel> Items { get; } = new();
 
     public void Rebuild(

@@ -4,6 +4,7 @@
              xmlns:vm="using:HelixExplorer.ViewModels"
              xmlns:models="using:HelixExplorer.Core.Models"
              xmlns:controls="using:HelixExplorer.Controls"
+             xmlns:services="using:HelixExplorer.Services"
              x:Class="HelixExplorer.Views.PaneView"
              x:DataType="vm:PaneViewModel"
              Focusable="True"
@@ -560,7 +561,7 @@
                                     <TextBlock.Foreground>
                                         <MultiBinding Converter="{StaticResource GitFileStatusBrushConverter}">
                                             <Binding Path="GitStatus" />
-                                            <Binding Path="ActualThemeVariant" RelativeSource="{RelativeSource Self}" />
+                                            <DynamicResource ResourceKey="{x:Static services:AvaloniaThemeService.ThemeRevisionResourceKey}" />
                                         </MultiBinding>
                                     </TextBlock.Foreground>
                                 </TextBlock>
@@ -679,7 +680,7 @@
                             <TextBlock.Foreground>
                                 <MultiBinding Converter="{StaticResource GitFileStatusBrushConverter}">
                                     <Binding Path="GitStatus" />
-                                    <Binding Path="ActualThemeVariant" RelativeSource="{RelativeSource Self}" />
+                                    <DynamicResource ResourceKey="{x:Static services:AvaloniaThemeService.ThemeRevisionResourceKey}" />
                                 </MultiBinding>
                             </TextBlock.Foreground>
                         </TextBlock>
@@ -823,7 +824,7 @@
                                     <TextBlock.Foreground>
                                         <MultiBinding Converter="{StaticResource GitFileStatusBrushConverter}">
                                             <Binding Path="GitStatus" />
-                                            <Binding Path="ActualThemeVariant" RelativeSource="{RelativeSource Self}" />
+                                            <DynamicResource ResourceKey="{x:Static services:AvaloniaThemeService.ThemeRevisionResourceKey}" />
                                         </MultiBinding>
                                     </TextBlock.Foreground>
                                 </TextBlock>

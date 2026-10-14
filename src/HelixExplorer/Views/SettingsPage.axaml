@@ -5,9 +5,41 @@
              xmlns:settings="using:HelixExplorer.Core.Settings"
              xmlns:models="using:HelixExplorer.Core.Models"
              xmlns:controls="using:HelixExplorer.Controls"
+             xmlns:views="using:HelixExplorer.Views"
              x:Class="HelixExplorer.Views.SettingsPage"
              x:DataType="vm:SettingsPageViewModel"
              Background="{DynamicResource HelixSettingsContentBrush}">
+    <UserControl.Resources>
+        <views:AccentSwatchSelectedConverter x:Key="AccentSwatchSelectedConverter" />
+        <views:TerminalGestureConflictConverter x:Key="TerminalGestureConflictConverter" />
+    </UserControl.Resources>
+    <UserControl.Styles>
+        <Style Selector="Border.gestureCapture">
+            <Setter Property="Background" Value="{DynamicResource HelixAddressBarBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource HelixBorderColor}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="MinWidth" Value="180" />
+            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="Padding" Value="10,4" />
+            <Setter Property="Focusable" Value="True" />
+        </Style>
+        <Style Selector="Border.gestureCapture:focus">
+            <Setter Property="BorderBrush" Value="{DynamicResource HelixAccentBrush}" />
+        </Style>
+        <Style Selector="Button.accentSwatch Border.accentRing">
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.accentSwatch.selected Border.accentRing">
+            <Setter Property="BorderBrush" Value="{DynamicResource HelixAccentBrush}" />
+        </Style>
+        <Style Selector="Button.accentSwatch PathIcon.accentCheck">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="Button.accentSwatch.selected PathIcon.accentCheck">
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
+    </UserControl.Styles>
     <Grid ColumnDefinitions="220,*">
 
         <Border Grid.Column="0"
@@ -81,10 +113,14 @@
                         <Grid ColumnDefinitions="*,Auto">
                             <TextBlock Grid.Column="0" Text="Default split direction"
                                        FontSize="14" VerticalAlignment="Center" />
-                            <ComboBox Grid.Column="1" MinWidth="150"
-                                      SelectedItem="{Binding Main.DefaultSplitOrientation, Mode=TwoWay}">
-                                <models:PaneSplitOrientation>Vertical</models:PaneSplitOrientation>
-                                <models:PaneSplitOrientation>Horizontal</models:PaneSplitOrientation>
+                            <ComboBox Grid.Column="1" MinWidth="160"
+                                      x:CompileBindings="False"
+                                      SelectedValue="{Binding Main.DefaultSplitOrientation, Mode=TwoWay}"
+                                      SelectedValueBinding="{Binding Tag}">
+                                <ComboBoxItem Content="Side by side"
+                                              Tag="{x:Static models:PaneSplitOrientation.Vertical}" />
+                                <ComboBoxItem Content="Stacked"
+                                              Tag="{x:Static models:PaneSplitOrientation.Horizontal}" />
                             </ComboBox>
                         </Grid>
                     </Border>
@@ -116,16 +152,29 @@
                         <Grid ColumnDefinitions="*,Auto">
                             <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
                                 <TextBlock Text="Open in Terminal shortcut" FontSize="14" />
-                                <TextBlock Text="Avalonia key gesture syntax, e.g. Ctrl+OemTilde. Empty resets to default."
+                                <TextBlock Text="Focus the field and press a key combination."
                                            FontSize="12" Opacity="0.6" />
                             </StackPanel>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                <TextBox Text="{Binding Main.OpenInTerminalGesture, Mode=TwoWay}"
-                                         MinWidth="180" />
-                                <Button Content="Reset"
-                                        Click="OnResetTerminalGestureClick"
-                                        Padding="10,4"
-                                        ToolTip.Tip="Reset to default (Ctrl+`)" />
+                            <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <Border x:Name="TerminalGestureCapture"
+                                            Classes="gestureCapture"
+                                            ToolTip.Tip="Press a key combination. The stored value is an Avalonia key gesture.">
+                                        <TextBlock Text="{Binding Main.OpenInTerminalGesture}"
+                                                   VerticalAlignment="Center" />
+                                    </Border>
+                                    <Button Content="Reset"
+                                            Click="OnResetTerminalGestureClick"
+                                            Padding="10,4"
+                                            VerticalAlignment="Center"
+                                            ToolTip.Tip="Reset to default (Ctrl+`)" />
+                                </StackPanel>
+                                <TextBlock Text="{Binding Main.OpenInTerminalGesture, Converter={StaticResource TerminalGestureConflictConverter}}"
+                                           Foreground="{DynamicResource HelixDangerBrush}"
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           MaxWidth="260"
+                                           IsVisible="{Binding Main.OpenInTerminalGesture, Converter={StaticResource TerminalGestureConflictConverter}, ConverterParameter=visible}" />
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -164,61 +213,127 @@
                     </Border>
                     <Border Classes="settingsRow">
                         <StackPanel Spacing="10">
-                            <TextBlock Text="Background colour" FontSize="14" />
+                            <TextBlock Text="Accent colour" FontSize="14" />
                             <WrapPanel Orientation="Horizontal">
-                                <Button Classes="settingsNavItem" Width="64" Height="64" Margin="0,0,10,10"
-                                        Click="OnAccentClick" Tag="">
-                                    <StackPanel VerticalAlignment="Center">
-                                        <PathIcon Data="{DynamicResource HelixFolderIconGeometry}"
-                                                  Width="30" Height="30" HorizontalAlignment="Center"
-                                                  Foreground="{DynamicResource HelixSecondaryTextBrush}" />
-                                        <TextBlock Text="Default" FontSize="11" HorizontalAlignment="Center" Margin="0,2,0,0" />
-                                    </StackPanel>
+                                <Button Classes="settingsNavItem accentSwatch" Width="64" Height="64" Margin="0,0,10,10"
+                                        Padding="0" Click="OnAccentClick" Tag=""
+                                        Classes.selected="{Binding Main.AccentColorArgb, Converter={StaticResource AccentSwatchSelectedConverter}, ConverterParameter=default, TargetNullValue=True}">
+                                    <Border Classes="accentRing" BorderThickness="2" CornerRadius="6" Padding="2">
+                                        <Grid>
+                                            <StackPanel VerticalAlignment="Center">
+                                                <PathIcon Data="{DynamicResource HelixFolderIconGeometry}"
+                                                          Width="28" Height="28" HorizontalAlignment="Center"
+                                                          Foreground="{DynamicResource HelixSecondaryTextBrush}" />
+                                                <TextBlock Text="Default" FontSize="11" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                            <PathIcon Classes="accentCheck"
+                                                      Data="{DynamicResource HelixIconCheckmarkGeometry}"
+                                                      Width="14" Height="14"
+                                                      HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                      Margin="0,1,1,0"
+                                                      Foreground="{DynamicResource HelixEntryForegroundBrush}" />
+                                        </Grid>
+                                    </Border>
                                 </Button>
-                                <Button Classes="settingsNavItem" Width="64" Height="64" Margin="0,0,10,10"
-                                        Click="OnAccentClick" Tag="#0078D4">
-                                    <StackPanel VerticalAlignment="Center">
-                                        <PathIcon Data="{DynamicResource HelixFolderIconGeometry}"
-                                                  Width="30" Height="30" HorizontalAlignment="Center"
-                                                  Foreground="#0078D4" />
-                                        <TextBlock Text="Blue" FontSize="11" HorizontalAlignment="Center" Margin="0,2,0,0" />
-                                    </StackPanel>
+                                <Button Classes="settingsNavItem accentSwatch" Width="64" Height="64" Margin="0,0,10,10"
+                                        Padding="0" Click="OnAccentClick" Tag="#0078D4"
+                                        Classes.selected="{Binding Main.AccentColorArgb, Converter={StaticResource AccentSwatchSelectedConverter}, ConverterParameter=#0078D4, TargetNullValue=False}">
+                                    <Border Classes="accentRing" BorderThickness="2" CornerRadius="6" Padding="2">
+                                        <Grid>
+                                            <StackPanel VerticalAlignment="Center">
+                                                <PathIcon Data="{DynamicResource HelixFolderIconGeometry}"
+                                                          Width="28" Height="28" HorizontalAlignment="Center"
+                                                          Foreground="#0078D4" />
+                                                <TextBlock Text="Blue" FontSize="11" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                            <PathIcon Classes="accentCheck"
+                                                      Data="{DynamicResource HelixIconCheckmarkGeometry}"
+                                                      Width="14" Height="14"
+                                                      HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                      Margin="0,1,1,0"
+                                                      Foreground="{DynamicResource HelixEntryForegroundBrush}" />
+                                        </Grid>
+                                    </Border>
                                 </Button>
-                                <Button Classes="settingsNavItem" Width="64" Height="64" Margin="0,0,10,10"
-                                        Click="OnAccentClick" Tag="#107C10">
-                                    <StackPanel VerticalAlignment="Center">
-                                        <PathIcon Data="{DynamicResource HelixFolderIconGeometry}"
-                                                  Width="30" Height="30" HorizontalAlignment="Center"
-                                                  Foreground="#107C10" />
-                                        <TextBlock Text="Green" FontSize="11" HorizontalAlignment="Center" Margin="0,2,0,0" />
-                                    </StackPanel>
+                                <Button Classes="settingsNavItem accentSwatch" Width="64" Height="64" Margin="0,0,10,10"
+                                        Padding="0" Click="OnAccentClick" Tag="#107C10"
+                                        Classes.selected="{Binding Main.AccentColorArgb, Converter={StaticResource AccentSwatchSelectedConverter}, ConverterParameter=#107C10, TargetNullValue=False}">
+                                    <Border Classes="accentRing" BorderThickness="2" CornerRadius="6" Padding="2">
+                                        <Grid>
+                                            <StackPanel VerticalAlignment="Center">
+                                                <PathIcon Data="{DynamicResource HelixFolderIconGeometry}"
+                                                          Width="28" Height="28" HorizontalAlignment="Center"
+                                                          Foreground="#107C10" />
+                                                <TextBlock Text="Green" FontSize="11" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                            <PathIcon Classes="accentCheck"
+                                                      Data="{DynamicResource HelixIconCheckmarkGeometry}"
+                                                      Width="14" Height="14"
+                                                      HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                      Margin="0,1,1,0"
+                                                      Foreground="{DynamicResource HelixEntryForegroundBrush}" />
+                                        </Grid>
+                                    </Border>
                                 </Button>
-                                <Button Classes="settingsNavItem" Width="64" Height="64" Margin="0,0,10,10"
-                                        Click="OnAccentClick" Tag="#8764B8">
-                                    <StackPanel VerticalAlignment="Center">
-                                        <PathIcon Data="{DynamicResource HelixFolderIconGeometry}"
-                                                  Width="30" Height="30" HorizontalAlignment="Center"
-                                                  Foreground="#8764B8" />
-                                        <TextBlock Text="Purple" FontSize="11" HorizontalAlignment="Center" Margin="0,2,0,0" />
-                                    </StackPanel>
+                                <Button Classes="settingsNavItem accentSwatch" Width="64" Height="64" Margin="0,0,10,10"
+                                        Padding="0" Click="OnAccentClick" Tag="#8764B8"
+                                        Classes.selected="{Binding Main.AccentColorArgb, Converter={StaticResource AccentSwatchSelectedConverter}, ConverterParameter=#8764B8, TargetNullValue=False}">
+                                    <Border Classes="accentRing" BorderThickness="2" CornerRadius="6" Padding="2">
+                                        <Grid>
+                                            <StackPanel VerticalAlignment="Center">
+                                                <PathIcon Data="{DynamicResource HelixFolderIconGeometry}"
+                                                          Width="28" Height="28" HorizontalAlignment="Center"
+                                                          Foreground="#8764B8" />
+                                                <TextBlock Text="Purple" FontSize="11" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                            <PathIcon Classes="accentCheck"
+                                                      Data="{DynamicResource HelixIconCheckmarkGeometry}"
+                                                      Width="14" Height="14"
+                                                      HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                      Margin="0,1,1,0"
+                                                      Foreground="{DynamicResource HelixEntryForegroundBrush}" />
+                                        </Grid>
+                                    </Border>
                                 </Button>
-                                <Button Classes="settingsNavItem" Width="64" Height="64" Margin="0,0,10,10"
-                                        Click="OnAccentClick" Tag="#00B294">
-                                    <StackPanel VerticalAlignment="Center">
-                                        <PathIcon Data="{DynamicResource HelixFolderIconGeometry}"
-                                                  Width="30" Height="30" HorizontalAlignment="Center"
-                                                  Foreground="#00B294" />
-                                        <TextBlock Text="Teal" FontSize="11" HorizontalAlignment="Center" Margin="0,2,0,0" />
-                                    </StackPanel>
+                                <Button Classes="settingsNavItem accentSwatch" Width="64" Height="64" Margin="0,0,10,10"
+                                        Padding="0" Click="OnAccentClick" Tag="#00B294"
+                                        Classes.selected="{Binding Main.AccentColorArgb, Converter={StaticResource AccentSwatchSelectedConverter}, ConverterParameter=#00B294, TargetNullValue=False}">
+                                    <Border Classes="accentRing" BorderThickness="2" CornerRadius="6" Padding="2">
+                                        <Grid>
+                                            <StackPanel VerticalAlignment="Center">
+                                                <PathIcon Data="{DynamicResource HelixFolderIconGeometry}"
+                                                          Width="28" Height="28" HorizontalAlignment="Center"
+                                                          Foreground="#00B294" />
+                                                <TextBlock Text="Teal" FontSize="11" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                            <PathIcon Classes="accentCheck"
+                                                      Data="{DynamicResource HelixIconCheckmarkGeometry}"
+                                                      Width="14" Height="14"
+                                                      HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                      Margin="0,1,1,0"
+                                                      Foreground="{DynamicResource HelixEntryForegroundBrush}" />
+                                        </Grid>
+                                    </Border>
                                 </Button>
-                                <Button Classes="settingsNavItem" Width="64" Height="64" Margin="0,0,10,10"
-                                        Click="OnAccentClick" Tag="#E3008C">
-                                    <StackPanel VerticalAlignment="Center">
-                                        <PathIcon Data="{DynamicResource HelixFolderIconGeometry}"
-                                                  Width="30" Height="30" HorizontalAlignment="Center"
-                                                  Foreground="#E3008C" />
-                                        <TextBlock Text="Pink" FontSize="11" HorizontalAlignment="Center" Margin="0,2,0,0" />
-                                    </StackPanel>
+                                <Button Classes="settingsNavItem accentSwatch" Width="64" Height="64" Margin="0,0,10,10"
+                                        Padding="0" Click="OnAccentClick" Tag="#E3008C"
+                                        Classes.selected="{Binding Main.AccentColorArgb, Converter={StaticResource AccentSwatchSelectedConverter}, ConverterParameter=#E3008C, TargetNullValue=False}">
+                                    <Border Classes="accentRing" BorderThickness="2" CornerRadius="6" Padding="2">
+                                        <Grid>
+                                            <StackPanel VerticalAlignment="Center">
+                                                <PathIcon Data="{DynamicResource HelixFolderIconGeometry}"
+                                                          Width="28" Height="28" HorizontalAlignment="Center"
+                                                          Foreground="#E3008C" />
+                                                <TextBlock Text="Pink" FontSize="11" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                            <PathIcon Classes="accentCheck"
+                                                      Data="{DynamicResource HelixIconCheckmarkGeometry}"
+                                                      Width="14" Height="14"
+                                                      HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                      Margin="0,1,1,0"
+                                                      Foreground="{DynamicResource HelixEntryForegroundBrush}" />
+                                        </Grid>
+                                    </Border>
                                 </Button>
                             </WrapPanel>
                         </StackPanel>
@@ -230,11 +345,13 @@
                         <Grid ColumnDefinitions="*,Auto">
                             <TextBlock Grid.Column="0" Text="Default view mode" FontSize="14" VerticalAlignment="Center" />
                             <ComboBox Grid.Column="1" MinWidth="150"
-                                      SelectedItem="{Binding Main.DefaultViewMode, Mode=TwoWay}">
-                                <models:LayoutMode>Details</models:LayoutMode>
-                                <models:LayoutMode>List</models:LayoutMode>
-                                <models:LayoutMode>Grid</models:LayoutMode>
-                                <models:LayoutMode>Miller</models:LayoutMode>
+                                      x:CompileBindings="False"
+                                      SelectedValue="{Binding Main.DefaultViewMode, Mode=TwoWay}"
+                                      SelectedValueBinding="{Binding Tag}">
+                                <ComboBoxItem Content="Details" Tag="{x:Static models:LayoutMode.Details}" />
+                                <ComboBoxItem Content="List" Tag="{x:Static models:LayoutMode.List}" />
+                                <ComboBoxItem Content="Grid" Tag="{x:Static models:LayoutMode.Grid}" />
+                                <ComboBoxItem Content="Columns" Tag="{x:Static models:LayoutMode.Miller}" />
                             </ComboBox>
                         </Grid>
                     </Border>
@@ -269,10 +386,15 @@
                                            FontSize="12" Opacity="0.6" />
                             </StackPanel>
                             <ComboBox Grid.Column="1" MinWidth="220"
-                                      SelectedItem="{Binding Main.DirectorySort, Mode=TwoWay}">
-                                <models:DirectorySortMode>FoldersFirst</models:DirectorySortMode>
-                                <models:DirectorySortMode>FilesFirst</models:DirectorySortMode>
-                                <models:DirectorySortMode>MixedWithFiles</models:DirectorySortMode>
+                                      x:CompileBindings="False"
+                                      SelectedValue="{Binding Main.DirectorySort, Mode=TwoWay}"
+                                      SelectedValueBinding="{Binding Tag}">
+                                <ComboBoxItem Content="Folders first"
+                                              Tag="{x:Static models:DirectorySortMode.FoldersFirst}" />
+                                <ComboBoxItem Content="Files first"
+                                              Tag="{x:Static models:DirectorySortMode.FilesFirst}" />
+                                <ComboBoxItem Content="Mixed"
+                                              Tag="{x:Static models:DirectorySortMode.MixedWithFiles}" />
                             </ComboBox>
                         </Grid>
                     </Border>

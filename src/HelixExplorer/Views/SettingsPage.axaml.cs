@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using HelixExplorer.ViewModels;
 
@@ -9,6 +10,11 @@ public sealed partial class SettingsPage : UserControl
     public SettingsPage()
     {
         InitializeComponent();
+        // Tunnel so the chord is stored before a window KeyBinding runs the same keys.
+        TerminalGestureCapture.AddHandler(
+            InputElement.KeyDownEvent,
+            OnTerminalGestureKeyDown,
+            RoutingStrategies.Tunnel);
     }
 
     private SettingsPageViewModel? ViewModel => DataContext as SettingsPageViewModel;
@@ -29,5 +35,20 @@ public sealed partial class SettingsPage : UserControl
     {
         if (ViewModel is { } vm)
             vm.Main.OpenInTerminalGesture = MainWindowViewModel.AppDefaultTerminalGesture;
+    }
+
+    private void OnTerminalGestureKeyDown(object? sender, KeyEventArgs e)
+    {
+        // Plain Tab still moves focus. Ctrl+Tab is a real chord and must be captured here.
+        if (e.Key == Key.Tab && e.KeyModifiers is KeyModifiers.None or KeyModifiers.Shift)
+            return;
+
+        if (!TerminalGestureSyntax.TryFormat(e.Key, e.KeyModifiers, out var gesture))
+            return;
+
+        if (ViewModel is { } vm)
+            vm.Main.OpenInTerminalGesture = gesture;
+
+        e.Handled = true;
     }
 }

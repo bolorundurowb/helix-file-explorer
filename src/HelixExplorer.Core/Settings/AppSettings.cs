@@ -13,10 +13,11 @@ public sealed class AppSettings
     public bool ShowFileExtensions { get; set; } = true;
 
     /// <summary>
-    /// New installs default to <see cref="DirectorySortMode.MixedWithFiles"/>;
-    /// existing users can switch back to folders-first.
+    /// New installs default to <see cref="DirectorySortMode.FoldersFirst"/>.
+    /// A value already stored in settings is left as written, including
+    /// <see cref="DirectorySortMode.MixedWithFiles"/>.
     /// </summary>
-    public DirectorySortMode DirectorySort { get; set; } = DirectorySortMode.MixedWithFiles;
+    public DirectorySortMode DirectorySort { get; set; } = DirectorySortMode.FoldersFirst;
     public LayoutMode DefaultViewMode { get; set; } = LayoutMode.Details;
     public double DefaultThumbnailSize { get; set; } = 72;
     public bool DefaultDualPane { get; set; }

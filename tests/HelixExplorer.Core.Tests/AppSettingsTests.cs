@@ -25,6 +25,7 @@ public class AppSettingsTests
         settings.SidebarWidth.Must().Be(200);
         settings.SizeDisplay.Must().Be(SizeDisplayMode.Binary);
         settings.ShowFileExtensions.Must().BeTrue();
+        settings.DirectorySort.Must().Be(DirectorySortMode.FoldersFirst);
         settings.DefaultViewMode.Must().Be(LayoutMode.Details);
         settings.DefaultThumbnailSize.Must().Be(72);
         settings.DefaultDualPane.Must().BeFalse();
@@ -46,6 +47,7 @@ public class AppSettingsTests
             SidebarWidth = 280,
             SizeDisplay = SizeDisplayMode.Decimal,
             ShowHiddenFiles = true,
+            DirectorySort = DirectorySortMode.MixedWithFiles,
             DefaultViewMode = LayoutMode.Grid,
             DefaultThumbnailSize = 96,
             DefaultDualPane = true,
@@ -71,6 +73,7 @@ public class AppSettingsTests
         loaded!.SidebarWidth.Must().Be(280);
         loaded!.SizeDisplay.Must().Be(SizeDisplayMode.Decimal);
         loaded!.ShowHiddenFiles.Must().BeTrue();
+        loaded!.DirectorySort.Must().Be(DirectorySortMode.MixedWithFiles);
         loaded!.DefaultViewMode.Must().Be(LayoutMode.Grid);
         loaded!.DefaultThumbnailSize.Must().Be(96);
         loaded!.DefaultDualPane.Must().BeTrue();
@@ -85,6 +88,31 @@ public class AppSettingsTests
         loaded!.AutoCheckForUpdates.Must().BeFalse();
         loaded!.SwitchToNewTabOnOpen.Must().BeFalse();
         loaded!.RestoreSessionOnStartup.Must().BeFalse();
+    }
+
+    [Fact]
+    public void Json_MissingDirectorySort_UsesFoldersFirst()
+    {
+        var loaded = JsonSerializer.Deserialize<AppSettings>("{\"Theme\":\"Light\"}", Options);
+
+        loaded!.Theme.Must().Be(ThemeMode.Light);
+        loaded.DirectorySort.Must().Be(DirectorySortMode.FoldersFirst);
+    }
+
+    [Fact]
+    public void Json_StoredMixedDirectorySort_StaysMixed()
+    {
+        const string json = """
+            {
+              "Theme": "Dark",
+              "DirectorySort": "MixedWithFiles"
+            }
+            """;
+
+        var loaded = JsonSerializer.Deserialize<AppSettings>(json, Options);
+
+        loaded!.Theme.Must().Be(ThemeMode.Dark);
+        loaded.DirectorySort.Must().Be(DirectorySortMode.MixedWithFiles);
     }
 
     [Fact]

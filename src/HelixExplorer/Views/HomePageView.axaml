@@ -140,10 +140,10 @@
 
             <Expander IsExpanded="True" HorizontalAlignment="Stretch">
                 <Expander.Header>
-                    <TextBlock Text="Recent files" FontSize="14" FontWeight="SemiBold" />
+                    <TextBlock Text="Recent folders" FontSize="14" FontWeight="SemiBold" />
                 </Expander.Header>
                 <StackPanel Margin="0,8,0,0">
-                    <TextBlock Text="No recent files yet."
+                    <TextBlock Text="No recent folders yet."
                                FontSize="13"
                                Opacity="0.6"
                                Margin="2,4"
@@ -161,7 +161,7 @@
                                         CommandParameter="{Binding FullPath}">
                                     <Grid ColumnDefinitions="Auto,Auto,*">
                                         <PathIcon Grid.Column="0"
-                                                  Data="{DynamicResource HelixIconDocumentGeometry}"
+                                                  Data="{DynamicResource HelixFolderIconGeometry}"
                                                   Width="16" Height="16"
                                                   Margin="0,0,8,0"
                                                   VerticalAlignment="Center"

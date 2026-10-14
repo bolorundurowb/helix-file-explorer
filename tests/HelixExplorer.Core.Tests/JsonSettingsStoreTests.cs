@@ -88,6 +88,26 @@ public class JsonSettingsStoreTests
 
             loaded.SwitchToNewTabOnOpen.Must().BeTrue();
             loaded.SidebarWidth.Must().Be(260);
+            loaded.DirectorySort.Must().Be(DirectorySortMode.FoldersFirst);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Load_StoredMixedDirectorySort_IsNotReplacedByNewDefault()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "helix-settings-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            File.WriteAllText(path, "{\"Theme\":\"Dark\",\"DirectorySort\":\"MixedWithFiles\"}");
+
+            var loaded = new JsonSettingsStore(path).Load();
+
+            loaded.Theme.Must().Be(ThemeMode.Dark);
+            loaded.DirectorySort.Must().Be(DirectorySortMode.MixedWithFiles);
         }
         finally
         {

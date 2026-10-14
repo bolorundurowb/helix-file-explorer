@@ -550,15 +550,20 @@
                                         IsHitTestVisible="False"
                                         Grid.ColumnSpan="2" />
                                 <controls:EntryVisualView Grid.Column="0"
-                                                          Width="16" Height="16" Margin="0,0,6,0"
-                                                          Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}" />
+                                                          Width="16" Height="16" Margin="0,0,6,0" />
                                 <TextBlock Grid.Column="1"
                                            Text="{Binding DisplayName}"
                                            FontSize="{DynamicResource HelixEntryFontSize}"
                                            TextTrimming="CharacterEllipsis"
                                            VerticalAlignment="Center"
-                                           Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}"
-                                           IsVisible="{Binding IsNotRenaming}" />
+                                           IsVisible="{Binding IsNotRenaming}">
+                                    <TextBlock.Foreground>
+                                        <MultiBinding Converter="{StaticResource GitFileStatusBrushConverter}">
+                                            <Binding Path="GitStatus" />
+                                            <Binding Path="ActualThemeVariant" RelativeSource="{RelativeSource Self}" />
+                                        </MultiBinding>
+                                    </TextBlock.Foreground>
+                                </TextBlock>
                                 <TextBox Grid.Column="1"
                                          Text="{Binding RenameText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                          FontSize="{DynamicResource HelixEntryFontSize}"
@@ -664,15 +669,20 @@
                                 IsHitTestVisible="False"
                                 Grid.ColumnSpan="2" />
                         <controls:EntryVisualView Grid.Column="0"
-                                                  Width="16" Height="16" Margin="0,0,6,0"
-                                                  Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}" />
+                                                  Width="16" Height="16" Margin="0,0,6,0" />
                         <TextBlock Grid.Column="1"
                                    Text="{Binding DisplayName}"
                                    FontSize="{DynamicResource HelixEntryFontSize}"
                                    TextTrimming="CharacterEllipsis"
                                    VerticalAlignment="Center"
-                                   Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}"
-                                   IsVisible="{Binding IsNotRenaming}" />
+                                   IsVisible="{Binding IsNotRenaming}">
+                            <TextBlock.Foreground>
+                                <MultiBinding Converter="{StaticResource GitFileStatusBrushConverter}">
+                                    <Binding Path="GitStatus" />
+                                    <Binding Path="ActualThemeVariant" RelativeSource="{RelativeSource Self}" />
+                                </MultiBinding>
+                            </TextBlock.Foreground>
+                        </TextBlock>
                         <TextBox Grid.Column="1"
                                  Text="{Binding RenameText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                  FontSize="{DynamicResource HelixEntryFontSize}"
@@ -801,8 +811,7 @@
                                             Opacity="{Binding IsCut, Converter={StaticResource CutOpacityConverter}}">
                                 <controls:EntryVisualView Width="{Binding ItemSize, RelativeSource={RelativeSource AncestorType=controls:VirtualizingFileGrid}}"
                                                           Height="{Binding ItemSize, RelativeSource={RelativeSource AncestorType=controls:VirtualizingFileGrid}}"
-                                                          HorizontalAlignment="Center"
-                                                          Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}" />
+                                                          HorizontalAlignment="Center" />
                                 <TextBlock Text="{Binding DisplayName}"
                                            FontSize="{DynamicResource HelixEntryFontSize}"
                                            TextAlignment="Center"
@@ -810,8 +819,14 @@
                                            MaxLines="2"
                                            TextTrimming="CharacterEllipsis"
                                            HorizontalAlignment="Stretch"
-                                           Foreground="{Binding GitStatus, Converter={StaticResource GitFileStatusBrushConverter}}"
-                                           IsVisible="{Binding IsNotRenaming}" />
+                                           IsVisible="{Binding IsNotRenaming}">
+                                    <TextBlock.Foreground>
+                                        <MultiBinding Converter="{StaticResource GitFileStatusBrushConverter}">
+                                            <Binding Path="GitStatus" />
+                                            <Binding Path="ActualThemeVariant" RelativeSource="{RelativeSource Self}" />
+                                        </MultiBinding>
+                                    </TextBlock.Foreground>
+                                </TextBlock>
                                 <!-- Fixed tile width, wrap downward (Explorer/Files-style) — do not grow sideways. -->
                                 <TextBox Classes="gridRenameEditor"
                                          Text="{Binding RenameText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"

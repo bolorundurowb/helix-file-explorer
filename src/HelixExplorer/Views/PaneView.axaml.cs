@@ -484,7 +484,10 @@ public sealed partial class PaneView : UserControl
         }
         else if (e.Key == Key.Delete && e.KeyModifiers == KeyModifiers.None)
         {
-            Pane.DeleteCommand.Execute(null);
+            // RelayCommand.Execute does not consult CanExecute, so check it here or Delete runs in
+            // locations (archives, shell folders) where the command is meant to be disabled.
+            if (Pane.DeleteCommand.CanExecute(null))
+                Pane.DeleteCommand.Execute(null);
             e.Handled = true;
         }
         else if (e.Key == Key.A && e.KeyModifiers == KeyModifiers.Control)

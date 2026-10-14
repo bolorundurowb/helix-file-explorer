@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using HelixExplorer.Core.Windowing;
 
 namespace HelixExplorer.ViewModels;
 
@@ -22,11 +23,20 @@ public sealed class WindowLayoutCoordinator(AppSettingsCoordinator settingsCoord
             return;
 
         window.WindowStartupLocation = WindowStartupLocation.Manual;
-        window.Width = Math.Max(MinWindowWidth, settings.WindowWidth.Value);
-        window.Height = Math.Max(MinWindowHeight, settings.WindowHeight.Value);
+        var width = Math.Max(MinWindowWidth, settings.WindowWidth.Value);
+        var height = Math.Max(MinWindowHeight, settings.WindowHeight.Value);
+        var placed = WindowRestoreClamp.Resolve(
+            settings.WindowX,
+            settings.WindowY,
+            width,
+            height,
+            ReadWorkAreas(window));
 
-        if (settings.WindowX.HasValue && settings.WindowY.HasValue)
-            window.Position = new PixelPoint(settings.WindowX.Value, settings.WindowY.Value);
+        // Saved size is DIPs. Working areas and Position are physical pixels, so only the origin is clamped.
+        window.Width = placed.WidthDip;
+        window.Height = placed.HeightDip;
+        if (placed.X is int x && placed.Y is int y)
+            window.Position = new PixelPoint(x, y);
 
         if (settings.WindowMaximized)
             window.WindowState = WindowState.Maximized;
@@ -53,6 +63,24 @@ public sealed class WindowLayoutCoordinator(AppSettingsCoordinator settingsCoord
     }
 
     public static double ClampSidebarWidth(double width) => Math.Clamp(width, 200, 450);
+
+    private static ScreenWorkArea[] ReadWorkAreas(Window window)
+    {
+        var screens = window.Screens;
+        if (screens.ScreenCount == 0)
+            return [];
+
+        var all = screens.All;
+        var areas = new ScreenWorkArea[all.Count];
+        for (var i = 0; i < all.Count; i++)
+        {
+            var screen = all[i];
+            var area = screen.WorkingArea;
+            areas[i] = new ScreenWorkArea(area.X, area.Y, area.Width, area.Height, screen.Scaling, screen.IsPrimary);
+        }
+
+        return areas;
+    }
 }
 
 public readonly record struct WindowLayoutCapture(

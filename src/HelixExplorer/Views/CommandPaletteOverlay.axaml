@@ -29,10 +29,11 @@
                      Grid.Row="1"
                      ItemsSource="{Binding FilteredCommands}"
                      SelectionMode="Single"
-                     DoubleTapped="OnResultDoubleTapped">
+                     Tapped="OnResultTapped">
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="vm:CommandItem">
-                        <Grid ColumnDefinitions="*,Auto,Auto" Margin="4,2">
+                        <Grid ColumnDefinitions="*,Auto,Auto" Margin="4,2"
+                              Opacity="{Binding RowOpacity}">
                             <TextBlock Grid.Column="0" Text="{Binding Title}" FontWeight="Medium" />
                             <TextBlock Grid.Column="1"
                                        Text="{Binding Shortcut}"

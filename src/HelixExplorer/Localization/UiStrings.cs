@@ -49,9 +49,25 @@ public static class UiStrings
 
     public static string PermanentlyDeleteTitle => "Permanently delete?";
 
-    public static string PermanentlyDeleteMessage => "Selected items will be permanently deleted and cannot be restored.";
+    public static string DeletePermanentlyButton => "Delete permanently";
+
+    public static string CancelButton => "Cancel";
+
+    /// <summary>
+    /// Names the one selected file, or the count when more than one item is selected.
+    /// </summary>
+    public static string PermanentlyDeleteMessage(string? singleName, int count)
+    {
+        if (count == 1 && !string.IsNullOrWhiteSpace(singleName))
+            return $"\"{singleName}\" will be permanently deleted and cannot be restored.";
+
+        var noun = count == 1 ? "item" : "items";
+        return $"{count} {noun} will be permanently deleted and cannot be restored.";
+    }
 
     public static string EmptyRecycleBinTitle => "Empty Recycle Bin?";
+
+    public static string EmptyRecycleBinButton => "Empty Recycle Bin";
 
     public static string EmptyRecycleBinMessage => "All items in the Recycle Bin will be permanently deleted.";
 

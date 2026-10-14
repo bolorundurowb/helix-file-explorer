@@ -499,7 +499,13 @@ public class FileOperationUndoServiceTests
 
     private sealed class SilentDialogs : IUserDialogService
     {
-        public Task<bool> ConfirmAsync(string title, string message) => Task.FromResult(true);
+        public Task<bool> ConfirmAsync(
+            string title,
+            string message,
+            string? confirmLabel = null,
+            string? cancelLabel = null,
+            bool destructive = false)
+            => Task.FromResult(true);
         public Task ShowErrorAsync(string title, string message) => Task.CompletedTask;
         public Task ShowOperationSummaryAsync(FileOperationResult result, string operationName) => Task.CompletedTask;
         public Task<FileConflictResolution?> ResolveConflictAsync(FileConflictInfo conflict, bool canApplyToAll)

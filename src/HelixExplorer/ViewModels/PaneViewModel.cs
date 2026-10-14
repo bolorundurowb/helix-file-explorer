@@ -1366,9 +1366,14 @@ public sealed partial class PaneViewModel :
         if (SelectedEntries.Count == 0)
             return;
 
+        var count = SelectedEntries.Count;
+        var singleName = count == 1 ? SelectedEntries[0].Name : null;
         var confirmed = await _dialogs.ConfirmAsync(
             UiStrings.PermanentlyDeleteTitle,
-            UiStrings.PermanentlyDeleteMessage);
+            UiStrings.PermanentlyDeleteMessage(singleName, count),
+            confirmLabel: UiStrings.DeletePermanentlyButton,
+            cancelLabel: UiStrings.CancelButton,
+            destructive: true);
         if (!confirmed)
             return;
 
@@ -1970,7 +1975,10 @@ public sealed partial class PaneViewModel :
 
         var confirmed = await _dialogs.ConfirmAsync(
             UiStrings.EmptyRecycleBinTitle,
-            UiStrings.EmptyRecycleBinMessage);
+            UiStrings.EmptyRecycleBinMessage,
+            confirmLabel: UiStrings.EmptyRecycleBinButton,
+            cancelLabel: UiStrings.CancelButton,
+            destructive: true);
         if (!confirmed)
             return;
 

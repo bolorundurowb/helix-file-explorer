@@ -6,7 +6,7 @@ using HelixExplorer.Core.Theming;
 
 namespace HelixExplorer.Services;
 
-public sealed class AvaloniaAccentBrushService : IAccentBrushService
+public sealed class AvaloniaAccentBrushService(IAccentColorSource accentColors) : IAccentBrushService
 {
     public uint? CustomAccentArgb { get; private set; }
 
@@ -25,13 +25,38 @@ public sealed class AvaloniaAccentBrushService : IAccentBrushService
             return;
 
         var isDark = Application.Current.ActualThemeVariant == ThemeVariant.Dark;
-        var accent = AccentColorDefaults.Resolve(CustomAccentArgb, isDark);
+        var system = CustomAccentArgb is null ? accentColors.TryReadAccentColor() : null;
+        var accent = AccentColorDefaults.Resolve(CustomAccentArgb, system);
         var (a, r, g, b) = AccentColorDefaults.ToComponents(accent);
-        var color = Color.FromArgb(a, r, g, b);
+        var color = Color.FromArgb(a == 0 ? (byte)0xFF : a, r, g, b);
+        var accentBrush = new SolidColorBrush(color);
+        var foreground = AccentColorDefaults.ForegroundFor(accent);
+        var (_, fr, fg, fb) = AccentColorDefaults.ToComponents(foreground);
+        var tint = AccentColorDefaults.SelectionTintFor(accent, isDark);
+        Color fillColor;
+        if (tint.Neutral)
+        {
+            var channel = isDark ? (byte)255 : (byte)0;
+            fillColor = Color.FromArgb(tint.Alpha, channel, channel, channel);
+        }
+        else
+        {
+            fillColor = Color.FromArgb(tint.Alpha, r, g, b);
+        }
 
-        resources["HelixAccentBrush"] = new SolidColorBrush(color);
-        resources["HelixSelectionBarBrush"] = new SolidColorBrush(color);
-        resources["HelixFocusBorderBrush"] = new SolidColorBrush(color);
-        resources["HelixSelectionFillBrush"] = new SolidColorBrush(Color.FromArgb(32, r, g, b));
+        resources["HelixAccentBrush"] = accentBrush;
+        resources["HelixSelectionBarBrush"] = accentBrush;
+        resources["HelixFocusBorderBrush"] = accentBrush;
+        resources["HelixSettingsNavAccentBar"] = accentBrush;
+        resources["HelixToggleOnBrush"] = accentBrush;
+        resources["HelixProgressBrush"] = accentBrush;
+        resources["HelixAccentForegroundBrush"] = new SolidColorBrush(Color.FromArgb(0xFF, fr, fg, fb));
+        resources["HelixSelectionFillBrush"] = new SolidColorBrush(fillColor);
+        resources["ToggleSwitchFillOn"] = accentBrush;
+        resources["ToggleSwitchFillOnPointerOver"] = accentBrush;
+        resources["ToggleSwitchFillOnPressed"] = accentBrush;
+        resources["ToggleSwitchStrokeOn"] = accentBrush;
+        resources["ToggleSwitchStrokeOnPointerOver"] = accentBrush;
+        resources["ToggleSwitchStrokeOnPressed"] = accentBrush;
     }
 }

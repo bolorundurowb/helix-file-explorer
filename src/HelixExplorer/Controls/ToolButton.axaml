@@ -1,0 +1,8 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:HelixExplorer.Controls">
+    <!-- Chrome stays on Button.toolButton so disabled toolbar buttons share one style. -->
+    <Style Selector="controls|ToolButton">
+        <Setter Property="Focusable" Value="True" />
+    </Style>
+</Styles>

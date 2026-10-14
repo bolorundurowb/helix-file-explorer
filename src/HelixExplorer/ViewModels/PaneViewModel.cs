@@ -144,6 +144,8 @@ public sealed partial class PaneViewModel :
         }
 
         SelectedCount = _selection.SelectedCount;
+        // Same-count replacements still change the byte total, and the setter does not notify then.
+        OnPropertyChanged(nameof(SelectionSummary));
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         NotifyCommandsCanExecuteChanged();
     }
@@ -225,9 +227,15 @@ public sealed partial class PaneViewModel :
     [NotifyPropertyChangedFor(nameof(IsFilesFirst))]
     [NotifyPropertyChangedFor(nameof(IsMixedFolderSort))]
     private DirectorySortMode _directorySort = DirectorySortMode.MixedWithFiles;
-    [ObservableProperty] private int _itemCount;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ItemCountText))]
+    private int _itemCount;
+
     [ObservableProperty] private int _totalCount;
-    [ObservableProperty] private int _selectedCount;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SelectionSummary))]
+    private int _selectedCount;
     [ObservableProperty] private bool _isLoading;
     [ObservableProperty] private string _statusText = string.Empty;
     [ObservableProperty] private bool _isEditingPath;
@@ -264,6 +272,10 @@ public sealed partial class PaneViewModel :
     public bool IsFileSystem => LocationKind == PaneLocationKind.FileSystem;
     public bool IsShellNamespace => LocationKind == PaneLocationKind.ShellNamespace;
     public bool IsRecycleBin => ShellPath.IsRecycleBin(CurrentPath);
+
+    public string ItemCountText => ListingSummaryText.Items(ItemCount);
+
+    public string? SelectionSummary => ListingSummaryText.Selection(SelectedCount, SelectedEntries);
 
     /// <summary>
     /// Filter and search need a flat in-memory listing. The Recycle Bin qualifies but stays a shell

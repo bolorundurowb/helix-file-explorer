@@ -42,6 +42,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
     private readonly WindowLayoutCoordinator _windowLayout;
     private readonly NetworkLocationCoordinator _networkCoordinator;
     private readonly IMessenger _messenger;
+    private readonly IWindowHostService _windowHost;
+    private readonly ClosedTabHistory _closedTabs = new();
     private readonly string _homePath;
     private readonly List<string> _recentPaths = new();
     private bool _disposed;
@@ -71,6 +73,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
         _windowLayout = dependencies.WindowLayout;
         _networkCoordinator = dependencies.NetworkLocations;
         _messenger = dependencies.Messenger;
+        _windowHost = dependencies.WindowHost;
         _settingsPage = new SettingsPageViewModel(this, _messenger);
         _messenger.Register<MainWindowViewModel, GlobalNavigationRequestMessage>(this, static (r, m) => r.HandleGlobalNavigation(m));
         _messenger.Register<MainWindowViewModel, OpenUrlRequestMessage>(this, static (r, m) => r.OpenUrl(m.Url));
@@ -246,6 +249,9 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
 
     public void SyncSidebarWidth(double width)
     {
+        if (IsSidebarCollapsed)
+            return;
+
         var clamped = WindowLayoutCoordinator.ClampSidebarWidth(width);
         if (Math.Abs(clamped - SidebarWidth) <= double.Epsilon)
             return;
@@ -341,7 +347,36 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
     private string _title = "Helix Explorer";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SidebarColumnWidth))]
     private double _sidebarWidth = 300;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SidebarColumnWidth))]
+    [NotifyPropertyChangedFor(nameof(SidebarColumnMinWidth))]
+    [NotifyPropertyChangedFor(nameof(SidebarColumnMaxWidth))]
+    private bool _isSidebarCollapsed;
+
+    public double SidebarColumnWidth
+    {
+        get => SidebarColumnLayout.Resolve(SidebarWidth, IsSidebarCollapsed).Width;
+        set
+        {
+            if (IsSidebarCollapsed || double.IsNaN(value) || value <= 0)
+                return;
+
+            SidebarWidth = value;
+        }
+    }
+
+    public double SidebarColumnMinWidth => SidebarColumnLayout.Resolve(SidebarWidth, IsSidebarCollapsed).MinWidth;
+
+    public double SidebarColumnMaxWidth => SidebarColumnLayout.Resolve(SidebarWidth, IsSidebarCollapsed).MaxWidth;
+
+    public bool HasClosedTab => _closedTabs.Count > 0;
+
+    public event EventHandler? EditPathRequested;
+
+    public event EventHandler? WindowCloseRequested;
 
     [ObservableProperty]
     private LayoutMode _defaultViewMode = LayoutMode.Details;
@@ -458,6 +493,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
         }
 
         _settingsCoordinator.ScheduleSave(settings => settings.SidebarWidth = value);
+        OnPropertyChanged(nameof(SidebarColumnWidth));
     }
 
     partial void OnDefaultViewModeChanged(LayoutMode value)
@@ -613,6 +649,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
     private void CloseTab(TabViewModel? tab)
     {
         tab ??= SelectedTab;
+        RememberClosedTab(tab);
         SelectedTab = _tabSession.CloseTab(
             Tabs,
             tab,
@@ -621,6 +658,45 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
             CreateDefaultTab,
             AddTab);
         OnPropertyChanged(nameof(HasMultipleTabs));
+        NotifyClosedTabsChanged();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanReopenClosedTab))]
+    private void ReopenClosedTab()
+    {
+        var snapshot = _closedTabs.TryPop();
+        if (snapshot is null)
+        {
+            NotifyClosedTabsChanged();
+            return;
+        }
+
+        var tab = CreateTab();
+        tab.LeftPane.NavigateTo(snapshot.Path);
+        tab.LeftPane.SetViewMode(snapshot.ViewMode);
+        AddTab(tab);
+        SelectedTab = tab;
+        NotifyClosedTabsChanged();
+    }
+
+    private bool CanReopenClosedTab() => HasClosedTab && !TextInputFocus.IsActive();
+
+    private void RememberClosedTab(TabViewModel? tab)
+    {
+        if (tab is not { IsBrowserTab: true })
+            return;
+
+        var pane = tab.ActivePane;
+        if (pane.IsHome || string.IsNullOrWhiteSpace(pane.CurrentPath))
+            return;
+
+        _closedTabs.Push(new ClosedTabSnapshot(pane.CurrentPath, pane.ViewMode));
+    }
+
+    private void NotifyClosedTabsChanged()
+    {
+        OnPropertyChanged(nameof(HasClosedTab));
+        ReopenClosedTabCommand.NotifyCanExecuteChanged();
     }
 
     private void DetachTab(TabViewModel tab)
@@ -699,6 +775,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
 
         foreach (var tab in closing)
         {
+            RememberClosedTab(tab);
             Tabs.Remove(tab);
             DetachTab(tab);
             tab.Dispose();
@@ -708,6 +785,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
             SelectedTab = anchor;
 
         OnPropertyChanged(nameof(HasMultipleTabs));
+        NotifyClosedTabsChanged();
     }
 
     /// <summary>Reorders a tab within the strip without changing the active tab.</summary>
@@ -997,7 +1075,10 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
         OnPropertyChanged(nameof(IsGridViewActive));
         OnPropertyChanged(nameof(IsMillerViewActive));
         OnPropertyChanged(nameof(ActiveThumbnailSize));
+        OnPropertyChanged(nameof(GroupButtonToolTip));
     }
+
+    public string GroupButtonToolTip => IsGridViewActive ? "Group" : "Available in Grid view";
 
     [RelayCommand]
     private void SetSortColumn(SortColumn column)
@@ -1066,6 +1147,11 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
         RedoCommand.NotifyCanExecuteChanged();
         CopyToOtherPaneCommand.NotifyCanExecuteChanged();
         MoveToOtherPaneCommand.NotifyCanExecuteChanged();
+        GoBackCommand.NotifyCanExecuteChanged();
+        GoForwardCommand.NotifyCanExecuteChanged();
+        EditPathCommand.NotifyCanExecuteChanged();
+        ShowPropertiesCommand.NotifyCanExecuteChanged();
+        ReopenClosedTabCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand]
@@ -1075,6 +1161,68 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
         OnPropertyChanged(nameof(IsDualPaneActive));
         NotifyGlobalFileCommandsCanExecuteChanged();
     }
+
+    [RelayCommand]
+    private void ToggleSidebar() => IsSidebarCollapsed = !IsSidebarCollapsed;
+
+    private bool CanGoBack()
+        => !TextInputFocus.IsActive() && ActivePane?.GoBackCommand.CanExecute(null) == true;
+
+    private bool CanGoForward()
+        => !TextInputFocus.IsActive() && ActivePane?.GoForwardCommand.CanExecute(null) == true;
+
+    [RelayCommand(CanExecute = nameof(CanGoBack))]
+    private void GoBack()
+    {
+        if (ActivePane?.GoBackCommand.CanExecute(null) == true)
+            ActivePane.GoBackCommand.Execute(null);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanGoForward))]
+    private void GoForward()
+    {
+        if (ActivePane?.GoForwardCommand.CanExecute(null) == true)
+            ActivePane.GoForwardCommand.Execute(null);
+    }
+
+    private bool CanEditPath()
+        => !TextInputFocus.IsActive()
+           && ActivePane is { IsHome: false }
+           && !string.IsNullOrEmpty(ActivePane.CurrentPath);
+
+    [RelayCommand(CanExecute = nameof(CanEditPath))]
+    private void EditPath()
+    {
+        if (ActivePane is not { } pane)
+            return;
+
+        pane.BeginEditPath();
+        EditPathRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    [RelayCommand]
+    private async Task NewWindow()
+    {
+        var pane = ActivePane;
+        var path = pane is { IsHome: false } && !string.IsNullOrWhiteSpace(pane.CurrentPath)
+            ? pane.CurrentPath
+            : null;
+        await _windowHost.OpenWindowAsync(path, restoreSession: false).ConfigureAwait(true);
+    }
+
+    private bool CanShowProperties()
+        => !TextInputFocus.IsActive() && ActivePane?.ShowPropertiesCommand.CanExecute(null) == true;
+
+    [RelayCommand(CanExecute = nameof(CanShowProperties))]
+    private void ShowProperties()
+    {
+        var command = ActivePane?.ShowPropertiesCommand;
+        if (command?.CanExecute(null) == true)
+            command.Execute(null);
+    }
+
+    [RelayCommand]
+    private void CloseWindow() => WindowCloseRequested?.Invoke(this, EventArgs.Empty);
 
     [RelayCommand]
     private void ToggleFilter() => FocusFilter();
@@ -1293,6 +1441,24 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
         }
 
         NavigateActivePane(pane => pane.NavigateTo(item.Path));
+    }
+
+    [RelayCommand]
+    private void OpenSidebarInNewTab(SidebarItemViewModel? item)
+    {
+        if (item is null || !item.IsNavigable || string.IsNullOrEmpty(item.Path))
+            return;
+
+        if (item.Kind == SidebarItemKind.Home)
+        {
+            var tab = CreateDefaultTab();
+            AddTab(tab);
+            if (SwitchToNewTabOnOpen)
+                SelectedTab = tab;
+            return;
+        }
+
+        OnOpenInNewTabRequested(this, item.Path);
     }
 
     [RelayCommand]

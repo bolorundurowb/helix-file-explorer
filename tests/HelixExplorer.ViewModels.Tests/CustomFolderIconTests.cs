@@ -27,7 +27,7 @@ public sealed class CustomFolderIconTests
             new DirectoryInfo(custom).Attributes |= FileAttributes.ReadOnly;
             SHChangeNotify(0x00002000, 0x0005, custom, IntPtr.Zero);
 
-            var provider = new WinFileVisualProvider();
+            var provider = new WinFileVisualProvider(new StaTaskScheduler());
             var plainGlyph = await GlyphAsync(provider, plain, 96);
             var customGlyph = await GlyphAsync(provider, custom, 96);
             var customList = await GlyphAsync(provider, custom, 20);

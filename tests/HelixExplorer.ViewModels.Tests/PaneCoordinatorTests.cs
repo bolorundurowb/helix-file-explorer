@@ -612,7 +612,13 @@ public class PaneFileOperationPasteAvailabilityTests
 
     private sealed class UnusedDialogs : IUserDialogService
     {
-        public Task<bool> ConfirmAsync(string title, string message) => throw new NotSupportedException();
+        public Task<bool> ConfirmAsync(
+            string title,
+            string message,
+            string? confirmLabel = null,
+            string? cancelLabel = null,
+            bool destructive = false)
+            => throw new NotSupportedException();
         public Task ShowErrorAsync(string title, string message) => throw new NotSupportedException();
         public Task ShowOperationSummaryAsync(FileOperationResult result, string operationName) => throw new NotSupportedException();
         public Task<FileConflictResolution?> ResolveConflictAsync(FileConflictInfo conflict, bool canApplyToAll) => throw new NotSupportedException();

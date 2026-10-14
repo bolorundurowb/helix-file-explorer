@@ -105,7 +105,17 @@ public sealed record FileOperationResult(
 /// </summary>
 public interface IUserDialogService
 {
-    Task<bool> ConfirmAsync(string title, string message);
+    /// <param name="confirmLabel">Verb shown on the confirm button. Null uses "OK".</param>
+    /// <param name="cancelLabel">Label for the cancel button. Null uses "Cancel".</param>
+    /// <param name="destructive">
+    /// When true, Cancel is the default button so Enter does not confirm a permanent delete.
+    /// </param>
+    Task<bool> ConfirmAsync(
+        string title,
+        string message,
+        string? confirmLabel = null,
+        string? cancelLabel = null,
+        bool destructive = false);
 
     Task ShowErrorAsync(string title, string message);
 

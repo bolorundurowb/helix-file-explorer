@@ -1,5 +1,6 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:HelixExplorer.Controls">
 
     <Style Selector="Button.toolButton">
         <Setter Property="Background" Value="Transparent" />
@@ -12,7 +13,109 @@
         <Setter Property="Background" Value="{DynamicResource HelixHoverBrush}" />
     </Style>
     <Style Selector="Button.toolButton:disabled">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="Button.toolButton:disabled /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="Button.toolButton:disabled:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.toolButton:disabled PathIcon">
         <Setter Property="Opacity" Value="0.4" />
+    </Style>
+
+    <!-- Details and list selection live here so later chrome work does not restyle them. -->
+    <Style Selector="ListBox#ListView ListBoxItem:pointerover:not(:selected) /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource HelixHoverBrush}" />
+    </Style>
+    <Style Selector="ListBox#ListView ListBoxItem:selected /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource HelixSelectionFillBrush}" />
+    </Style>
+    <Style Selector="ListBox#ListView ListBoxItem:selected:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource HelixSelectionFillBrush}" />
+    </Style>
+    <Style Selector="ListBox#ListView ListBoxItem:selected:focus /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource HelixSelectionFillBrush}" />
+    </Style>
+    <Style Selector="ListBox#ListView ListBoxItem:selected">
+        <Setter Property="BorderBrush" Value="{DynamicResource HelixSelectionBarBrush}" />
+        <Setter Property="BorderThickness" Value="2,0,0,0" />
+    </Style>
+    <Style Selector="UserControl.inactive ListBox#ListView ListBoxItem:selected /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource HelixSelectionInactiveFillBrush}" />
+    </Style>
+    <Style Selector="UserControl.inactive ListBox#ListView ListBoxItem:selected:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource HelixSelectionInactiveFillBrush}" />
+    </Style>
+    <Style Selector="UserControl.inactive ListBox#ListView ListBoxItem:selected:focus /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource HelixSelectionInactiveFillBrush}" />
+    </Style>
+    <Style Selector="UserControl.inactive ListBox#ListView ListBoxItem:selected">
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style Selector="DataGrid#DetailsGrid DataGridRow:pointerover:not(:selected) /template/ Rectangle#BackgroundRectangle">
+        <Setter Property="Fill" Value="{DynamicResource HelixHoverBrush}" />
+        <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="DataGrid#DetailsGrid DataGridRow:selected /template/ Rectangle#BackgroundRectangle">
+        <Setter Property="Fill" Value="{DynamicResource HelixSelectionFillBrush}" />
+        <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="DataGrid#DetailsGrid DataGridRow:selected:pointerover /template/ Rectangle#BackgroundRectangle">
+        <Setter Property="Fill" Value="{DynamicResource HelixSelectionFillBrush}" />
+        <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="DataGrid#DetailsGrid DataGridRow:selected:focus /template/ Rectangle#BackgroundRectangle">
+        <Setter Property="Fill" Value="{DynamicResource HelixSelectionFillBrush}" />
+        <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="DataGrid#DetailsGrid DataGridRow:selected:pointerover:focus /template/ Rectangle#BackgroundRectangle">
+        <Setter Property="Fill" Value="{DynamicResource HelixSelectionFillBrush}" />
+        <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="DataGrid#DetailsGrid DataGridRow:selected DataGridCell:nth-child(1)">
+        <Setter Property="BorderBrush" Value="{DynamicResource HelixSelectionBarBrush}" />
+        <Setter Property="BorderThickness" Value="2,0,0,0" />
+    </Style>
+    <Style Selector="UserControl.inactive DataGrid#DetailsGrid DataGridRow:selected /template/ Rectangle#BackgroundRectangle">
+        <Setter Property="Fill" Value="{DynamicResource HelixSelectionInactiveFillBrush}" />
+        <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="UserControl.inactive DataGrid#DetailsGrid DataGridRow:selected:pointerover /template/ Rectangle#BackgroundRectangle">
+        <Setter Property="Fill" Value="{DynamicResource HelixSelectionInactiveFillBrush}" />
+        <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="UserControl.inactive DataGrid#DetailsGrid DataGridRow:selected:focus /template/ Rectangle#BackgroundRectangle">
+        <Setter Property="Fill" Value="{DynamicResource HelixSelectionInactiveFillBrush}" />
+        <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="UserControl.inactive DataGrid#DetailsGrid DataGridRow:selected:pointerover:focus /template/ Rectangle#BackgroundRectangle">
+        <Setter Property="Fill" Value="{DynamicResource HelixSelectionInactiveFillBrush}" />
+        <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="UserControl.inactive DataGrid#DetailsGrid DataGridRow:selected DataGridCell:nth-child(1)">
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <!-- Focus ring is the tile border, separate from the selection fill. -->
+    <Style Selector="UserControl:focus-within:not(.inactive) controls|VirtualizingFileGrid ListBoxItem:selected Border.fileTile">
+        <Setter Property="BorderBrush" Value="{DynamicResource HelixFocusBorderBrush}" />
+        <Setter Property="BorderThickness" Value="2" />
+    </Style>
+
+    <!-- Title colour itself meets 4.5:1; the inactive chip may keep its structural opacity. -->
+    <Style Selector="ListBox#TabStrip ListBoxItem:not(:selected) TextBlock#TabTitle">
+        <Setter Property="Foreground" Value="{DynamicResource HelixSecondaryTextBrush}" />
+        <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <Style Selector="ProgressBar">
+        <Setter Property="Foreground" Value="{DynamicResource HelixProgressBrush}" />
     </Style>
 
     <Style Selector="Border.homeCard">
@@ -277,10 +380,10 @@
         <Setter Property="Background" Value="{DynamicResource HelixAccentBrush}" />
     </Style>
     <Style Selector="Button.layoutOption.selected PathIcon">
-        <Setter Property="Foreground" Value="#000000" />
+        <Setter Property="Foreground" Value="{DynamicResource HelixAccentForegroundBrush}" />
     </Style>
     <Style Selector="Button.layoutOption.selected TextBlock">
-        <Setter Property="Foreground" Value="#000000" />
+        <Setter Property="Foreground" Value="{DynamicResource HelixAccentForegroundBrush}" />
     </Style>
 
 </Styles>

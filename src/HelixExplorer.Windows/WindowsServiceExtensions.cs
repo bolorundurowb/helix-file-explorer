@@ -1,6 +1,8 @@
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Infrastructure;
+using HelixExplorer.Core.Theming;
 using HelixExplorer.Windows.Shell;
+using HelixExplorer.Windows.Theming;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace HelixExplorer.Windows;
@@ -25,6 +27,7 @@ public static class WindowsServiceExtensions
         services.AddTransient<IFileChangeWatcher, FileSystem.FileChangeWatcherService>();
         services.AddScoped<Func<IFileChangeWatcher>>(sp => () => sp.GetRequiredService<IFileChangeWatcher>());
         services.AddSingleton<IStaTaskScheduler, Shell.StaTaskScheduler>();
+        services.AddSingleton<IAccentColorSource, WinAccentColorSource>();
         return services;
     }
 }

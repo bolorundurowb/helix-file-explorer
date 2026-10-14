@@ -14,6 +14,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="HelixExplorer.ViewModels.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\HelixExplorer.Core\HelixExplorer.Core.csproj" />
   </ItemGroup>
 </Project>

@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Windows.Shell;
 using Vanara.PInvoke;
@@ -15,11 +14,11 @@ internal static class ShellFileOperationsHelper
     /// Sends <paramref name="paths"/> to the recycle bin.
     /// </summary>
     /// <returns>
-    /// Whether the operation ran to completion, and the source paths the shell confirmed it deleted.
-    /// The caller needs the actual paths, not just a count: the shell may fail any item in the batch,
-    /// and undo has to know which items really produced a bin entry.
+    /// Whether the operation ran to completion, any shell HRESULT, and the source paths that were
+    /// actually removed. The caller needs the paths, not just a count: one protected item must not
+    /// fail siblings the shell already deleted, and undo has to know which items produced a bin entry.
     /// </returns>
-    public static Task<(bool Success, IReadOnlyList<string> DeletedPaths)> DeleteToRecycleBinAsync(
+    public static Task<ShellDeleteBatch> DeleteToRecycleBinAsync(
         IReadOnlyList<string> paths,
         IProgress<FileOperationProgress>? progress,
         CancellationToken cancellationToken)
@@ -31,8 +30,8 @@ internal static class ShellFileOperationsHelper
     /// Permanently deletes items the current token was refused access to, letting the shell raise a
     /// UAC prompt for them as Explorer does.
     /// </summary>
-    /// <returns>The paths that no longer exist afterwards.</returns>
-    public static Task<IReadOnlyList<string>> DeletePermanentlyElevatedAsync(
+    /// <returns>The paths that no longer exist afterwards, plus the shell HRESULT when the batch aborted.</returns>
+    public static Task<ShellDeleteBatch> DeletePermanentlyElevatedAsync(
         IReadOnlyList<string> paths,
         CancellationToken cancellationToken)
     {
@@ -71,10 +70,11 @@ internal static class ShellFileOperationsHelper
             if (!CanMoveToRecycleBinAsync(path, cancellationToken).GetAwaiter().GetResult())
                 return false;
 
-            var (success, deleted) = DeleteToRecycleBinAsync([path], progress: null, cancellationToken)
+            var batch = DeleteToRecycleBinAsync([path], progress: null, cancellationToken)
                 .GetAwaiter().GetResult();
 
-            return success && deleted.Count > 0;
+            // The item is in the bin even when a later sibling aborted the batch.
+            return batch.DeletedPaths.Count > 0;
         }
         catch (OperationCanceledException)
         {
@@ -86,16 +86,12 @@ internal static class ShellFileOperationsHelper
         }
     }
 
-    private static (bool Success, IReadOnlyList<string> DeletedPaths) DeleteToRecycleBin(
+    private static ShellDeleteBatch DeleteToRecycleBin(
         IReadOnlyList<string> paths,
         IProgress<FileOperationProgress>? progress,
         CancellationToken cancellationToken)
     {
-        using var op = CreateOperation();
-        // NoErrorUI otherwise suppresses the UAC prompt too, and the shell then fails the whole batch
-        // with E_UNEXPECTED ("Catastrophic failure") as soon as one item needs admin rights.
-        op.Options |= ShellFileOperations.OperationFlags.RecycleOnDelete
-                      | ShellFileOperations.OperationFlags.ShowElevationPrompt;
+        using var op = CreateOperation(DeletePromptPolicy.Silent.WithElevation(recycle: true));
 
         var total = paths.Count;
         var completed = 0;
@@ -124,25 +120,30 @@ internal static class ShellFileOperationsHelper
         {
             op.PerformOperations();
         }
-        catch (COMException)
+        catch (OperationCanceledException)
         {
-            // A declined elevation or an item the shell cannot touch aborts the batch with a failing
-            // HRESULT. The items it did process are already in `deleted`; the caller reports the rest
-            // per item instead of surfacing the raw HRESULT text.
-            return (false, deleted);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // A declined elevation aborts the batch with an HRESULT whose text is "Catastrophic failure"
+            // or a localized equivalent. Keep every path the shell already removed and let the caller
+            // describe the rest; never return ex.Message.
+            IncludeGone(paths, deleted);
+            return new ShellDeleteBatch(Completed: false, ex.HResult, deleted);
         }
 
-        return (!op.AnyOperationsAborted, deleted);
+        IncludeGone(paths, deleted);
+        return new ShellDeleteBatch(!op.AnyOperationsAborted, FailureHResult: null, deleted);
     }
 
-    private static IReadOnlyList<string> DeletePermanentlyElevated(
+    private static ShellDeleteBatch DeletePermanentlyElevated(
         IReadOnlyList<string> paths,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        using var op = CreateOperation();
-        op.Options |= ShellFileOperations.OperationFlags.ShowElevationPrompt;
+        using var op = CreateOperation(DeletePromptPolicy.Silent.WithElevation(recycle: false));
 
         foreach (var path in paths)
         {
@@ -152,18 +153,26 @@ internal static class ShellFileOperationsHelper
             op.QueueDeleteOperation(item);
         }
 
+        int? failureHResult = null;
         try
         {
             op.PerformOperations();
         }
-        catch (COMException)
+        catch (OperationCanceledException)
         {
-            // Declined UAC prompt or an item that stays locked; the existence check below decides.
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // Declined or failed UAC. Existence below decides which items were still removed.
+            failureHResult = ex.HResult;
         }
 
         // Existence is the ground truth: elevated deletes run in a broker process, so the per-item
-        // callbacks are not a reliable record of what was removed.
-        return paths.Where(p => !File.Exists(p) && !Directory.Exists(p)).ToList();
+        // callbacks are not a reliable record of what was removed. A protected sibling must not
+        // hide items this pass already deleted. Skip the abort query when the shell already threw.
+        var completed = failureHResult is null && !op.AnyOperationsAborted;
+        return new ShellDeleteBatch(completed, failureHResult, PathsThatAreGone(paths));
     }
 
     private static bool RestoreFromRecycleBin(
@@ -229,14 +238,75 @@ internal static class ShellFileOperationsHelper
     }
 
     private static ShellFileOperations CreateOperation()
+        => CreateOperation(DeletePromptPolicy.Silent);
+
+    private static ShellFileOperations CreateOperation(DeletePromptPolicy policy)
     {
         var op = new ShellFileOperations(HWND.NULL)
         {
-            Options =
-                ShellFileOperations.OperationFlags.Silent |
-                ShellFileOperations.OperationFlags.NoConfirmation |
-                ShellFileOperations.OperationFlags.NoErrorUI
+            Options = FlagsFor(policy)
         };
         return op;
     }
+
+    /// <summary>
+    /// Builds shell flags for <paramref name="policy"/>, starting from the silent baseline that
+    /// includes <see cref="ShellFileOperations.OperationFlags.NoErrorUI"/>. Elevation has to clear
+    /// that bit; OR-ing <see cref="ShellFileOperations.OperationFlags.ShowElevationPrompt"/> on top
+    /// leaves it set and the shell returns <c>E_UNEXPECTED</c> instead of showing UAC.
+    /// </summary>
+    internal static ShellFileOperations.OperationFlags FlagsFor(DeletePromptPolicy policy)
+    {
+        var options =
+            ShellFileOperations.OperationFlags.Silent |
+            ShellFileOperations.OperationFlags.NoConfirmation |
+            ShellFileOperations.OperationFlags.NoErrorUI;
+
+        if (policy.RecycleOnDelete)
+            options |= ShellFileOperations.OperationFlags.RecycleOnDelete;
+
+        if (policy.ShowElevationPrompt)
+            options |= ShellFileOperations.OperationFlags.ShowElevationPrompt;
+
+        if (!policy.SuppressErrorUi)
+            options &= ~ShellFileOperations.OperationFlags.NoErrorUI;
+
+        return options;
+    }
+
+    private static void IncludeGone(IReadOnlyList<string> paths, List<string> deleted)
+    {
+        var seen = new HashSet<string>(deleted, StringComparer.OrdinalIgnoreCase);
+        foreach (var path in paths)
+        {
+            if (seen.Contains(path) || PathStillExists(path))
+                continue;
+
+            deleted.Add(path);
+            seen.Add(path);
+        }
+    }
+
+    private static List<string> PathsThatAreGone(IReadOnlyList<string> paths)
+    {
+        var gone = new List<string>(paths.Count);
+        foreach (var path in paths)
+        {
+            if (!PathStillExists(path))
+                gone.Add(path);
+        }
+
+        return gone;
+    }
+
+    private static bool PathStillExists(string path) => File.Exists(path) || Directory.Exists(path);
 }
+
+/// <summary>
+/// Outcome of one shell delete batch. <see cref="FailureHResult"/> is the numeric code only;
+/// callers map it to user text and must not surface the exception message.
+/// </summary>
+internal readonly record struct ShellDeleteBatch(
+    bool Completed,
+    int? FailureHResult,
+    IReadOnlyList<string> DeletedPaths);

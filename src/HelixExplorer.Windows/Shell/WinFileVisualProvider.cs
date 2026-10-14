@@ -1,16 +1,20 @@
+using System.Collections.Concurrent;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
+using HelixExplorer.Core.Infrastructure;
 using static Vanara.PInvoke.ComCtl32;
 using static Vanara.PInvoke.Shell32;
 using static Vanara.PInvoke.User32;
 
 namespace HelixExplorer.Windows.Shell;
 
-public sealed class WinFileVisualProvider : IFileVisualProvider
+public sealed class WinFileVisualProvider(IStaTaskScheduler sta) : IFileVisualProvider
 {
+    private static readonly ConcurrentDictionary<string, int> GenericIconIndices = new(StringComparer.OrdinalIgnoreCase);
+
     public async ValueTask<FileVisualData?> GetAsync(FileVisualRequest request, CancellationToken cancellationToken)
     {
         if (!CanQueryShell(request.Path))
@@ -30,7 +34,7 @@ public sealed class WinFileVisualProvider : IFileVisualProvider
         return !path.StartsWith("shell:", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static FileVisualData? GetSync(FileVisualRequest request)
+    private FileVisualData? GetSync(FileVisualRequest request)
     {
         var size = Math.Clamp(request.Size, 16, 512);
 
@@ -41,8 +45,101 @@ public sealed class WinFileVisualProvider : IFileVisualProvider
                 return thumbnail;
         }
 
+        // The system image list stores one shared "application" slot for every exe. A hit there
+        // skips the embedded icon Explorer shows, so per-file types are extracted from the file.
+        if (!request.IsDirectory && FileVisualRules.HasPerFileIcon(request.Path))
+            return GetPerFileIcon(request.Path, size);
+
         return TryGetShellIconFromImageList(request.Path, request.IsDirectory, size)
-               ?? TryGetShellIcon(request.Path, request.IsDirectory, size);
+               ?? TryGetShellIcon(request.Path, request.IsDirectory, size, allowAttributes: true);
+    }
+
+    private FileVisualData? GetPerFileIcon(string path, int size)
+    {
+        var extracted = ExtractPerFileIcon(path, size);
+        if (extracted is null)
+            return null;
+
+        // SHGetFileInfo on a thread-pool thread is MTA and can hand back the shared application
+        // icon even when the file has its own. The STA worker is the shell's apartment.
+        if (!Thread.CurrentThread.IsThreadPoolThread || !IsSharedShellIcon(path))
+            return extracted;
+
+        try
+        {
+            var staResult = sta.Run(() =>
+            {
+                var retry = ExtractPerFileIcon(path, size);
+                return (Data: retry, Shared: IsSharedShellIcon(path));
+            }).GetAwaiter().GetResult();
+
+            if (staResult.Data is not null && !staResult.Shared)
+                return staResult.Data;
+        }
+        catch (Exception)
+        {
+            // Keep the thread-pool image if the STA worker fails.
+        }
+
+        return extracted;
+    }
+
+    private static FileVisualData? ExtractPerFileIcon(string path, int size)
+        => TryDefExtractIcon(path, size)
+           ?? TryGetShellIcon(path, isDirectory: false, size, allowAttributes: false);
+
+    private static FileVisualData? TryDefExtractIcon(string path, int size)
+    {
+        if (!File.Exists(path))
+            return null;
+
+        SafeHICON? large = null;
+        SafeHICON? small = null;
+        try
+        {
+            // Low word is the large-icon edge. Zero flags ask for the file's own icon resource.
+            var hr = SHDefExtractIcon(
+                path,
+                0,
+                (GetIconLocationResultFlags)0,
+                out large,
+                out small,
+                (uint)Math.Min(size, 256));
+            var handle = large is not null && !large.IsNull ? large : small;
+            if (hr.Failed || handle is null || handle.IsNull)
+                return null;
+
+            using var icon = Icon.FromHandle(handle.DangerousGetHandle());
+            using var bitmap = icon.ToBitmap();
+            using var scaled = ScaleShellIcon(bitmap, size);
+            return EncodePng(scaled);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+        finally
+        {
+            large?.Dispose();
+            small?.Dispose();
+        }
+    }
+
+    private static bool IsSharedShellIcon(string path)
+    {
+        if (!File.Exists(path))
+            return false;
+
+        if (!TryGetShellIconIndex(path, isDirectory: false, out var actual))
+            return false;
+
+        var generic = GenericIconIndices.GetOrAdd(Path.GetExtension(path), static extension =>
+        {
+            var probe = extension.Length == 0 ? "file" : "file" + extension;
+            return TryGetShellIconIndex(probe, isDirectory: false, out var index) ? index : -1;
+        });
+
+        return generic >= 0 && actual == generic;
     }
 
     private static FileVisualData? TryLoadImageThumbnail(string path, int size)
@@ -63,10 +160,10 @@ public sealed class WinFileVisualProvider : IFileVisualProvider
         }
     }
 
-    private static FileVisualData? TryGetShellIcon(string path, bool isDirectory, int size)
+    private static FileVisualData? TryGetShellIcon(string path, bool isDirectory, int size, bool allowAttributes)
     {
         var shfi = new SHFILEINFO();
-        var useAttributes = !File.Exists(path) && !Directory.Exists(path);
+        var useAttributes = allowAttributes && !File.Exists(path) && !Directory.Exists(path);
         var attributes = isDirectory
             ? FileAttributes.Directory
             : FileAttributes.Normal;

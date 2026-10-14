@@ -5,16 +5,29 @@ using HelixExplorer.Core.FileSystem;
 
 namespace HelixExplorer.Services;
 
-public sealed class FileVisualService(IFileVisualProvider provider) : IDisposable
+public sealed class FileVisualService : IDisposable
 {
     private const int MaxCacheEntries = 512;
 
+    private readonly IFileVisualProvider _provider;
+    private readonly IFileAssociationWatcher _associations;
     private readonly ConcurrentDictionary<VisualCacheKey, Task<Bitmap?>> _cache = new();
     private readonly LinkedList<VisualCacheKey> _lruOrder = new();
     private readonly Dictionary<VisualCacheKey, LinkedListNode<VisualCacheKey>> _lruNodes = new();
     private readonly object _lruLock = new();
     private readonly SemaphoreSlim _uiDecodeGate = new(1, 1);
+    private int _associationEpoch;
     private bool _disposed;
+
+    public event EventHandler? AssociationsChanged;
+
+    public FileVisualService(IFileVisualProvider provider, IFileAssociationWatcher associations)
+    {
+        _provider = provider;
+        _associations = associations;
+        _associations.AssociationsChanged += OnShellAssociationsChanged;
+        _associations.Start();
+    }
 
     public async Task<Bitmap?> GetBitmapAsync(
         string path,
@@ -30,15 +43,19 @@ public sealed class FileVisualService(IFileVisualProvider provider) : IDisposabl
         Touch(key);
 
         // Loads must not be keyed to the caller's token; a cancelled caller would poison the cache.
+        var epoch = Volatile.Read(ref _associationEpoch);
         var task = _cache.GetOrAdd(key, static (k, state) =>
-            state.self.LoadAndCacheAsync(k, state.path, state.isDirectory), (self: this, path, isDirectory));
+            state.self.LoadAndCacheAsync(k, state.path, state.isDirectory, state.epoch),
+            (self: this, path, isDirectory, epoch));
 
         if (task.IsCanceled || task.IsFaulted)
         {
             _cache.TryRemove(key, out _);
             RemoveFromLru(key);
+            epoch = Volatile.Read(ref _associationEpoch);
             task = _cache.GetOrAdd(key, static (k, state) =>
-                state.self.LoadAndCacheAsync(k, state.path, state.isDirectory), (self: this, path, isDirectory));
+                state.self.LoadAndCacheAsync(k, state.path, state.isDirectory, state.epoch),
+                (self: this, path, isDirectory, epoch));
             Touch(key);
         }
 
@@ -55,7 +72,11 @@ public sealed class FileVisualService(IFileVisualProvider provider) : IDisposabl
         return Path.GetExtension(path).ToUpperInvariant();
     }
 
-    private async Task<Bitmap?> LoadAndCacheAsync(VisualCacheKey key, string requestPath, bool isDirectory)
+    private async Task<Bitmap?> LoadAndCacheAsync(
+        VisualCacheKey key,
+        string requestPath,
+        bool isDirectory,
+        int epoch)
     {
         if (_disposed)
             return null;
@@ -63,7 +84,7 @@ public sealed class FileVisualService(IFileVisualProvider provider) : IDisposabl
         try
         {
             var request = new FileVisualRequest(requestPath, isDirectory, key.Size, key.PreferThumbnail);
-            var data = await provider.GetAsync(request, CancellationToken.None).ConfigureAwait(false);
+            var data = await _provider.GetAsync(request, CancellationToken.None).ConfigureAwait(false);
             if (data is null || data.Png.Length == 0)
             {
                 _cache.TryRemove(key, out _);
@@ -91,6 +112,7 @@ public sealed class FileVisualService(IFileVisualProvider provider) : IDisposabl
             }
 
             EvictIfNeeded();
+            DropIfAssociationChanged(key, epoch);
             return bitmap;
         }
         catch (Exception)
@@ -142,11 +164,53 @@ public sealed class FileVisualService(IFileVisualProvider provider) : IDisposabl
         }
     }
 
+    private void OnShellAssociationsChanged(object? sender, EventArgs e)
+    {
+        if (_disposed)
+            return;
+
+        InvalidateExtensionCache();
+        if (Dispatcher.UIThread.CheckAccess())
+            AssociationsChanged?.Invoke(this, EventArgs.Empty);
+        else
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_disposed)
+                    AssociationsChanged?.Invoke(this, EventArgs.Empty);
+            });
+    }
+
+    private void InvalidateExtensionCache()
+    {
+        Interlocked.Increment(ref _associationEpoch);
+
+        VisualCacheKey[] keys;
+        lock (_lruLock)
+            keys = _lruOrder.Where(key => FileVisualRules.IsExtensionCacheKey(key.Path)).ToArray();
+
+        foreach (var key in keys)
+        {
+            _cache.TryRemove(key, out _);
+            RemoveFromLru(key);
+        }
+    }
+
+    private void DropIfAssociationChanged(VisualCacheKey key, int epoch)
+    {
+        if (epoch == Volatile.Read(ref _associationEpoch) || !FileVisualRules.IsExtensionCacheKey(key.Path))
+            return;
+
+        _cache.TryRemove(key, out _);
+        RemoveFromLru(key);
+    }
+
     public void Dispose()
     {
         if (_disposed)
             return;
         _disposed = true;
+
+        _associations.AssociationsChanged -= OnShellAssociationsChanged;
 
         foreach (var kvp in _cache)
         {

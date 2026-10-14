@@ -11,57 +11,10 @@
             <Setter Property="Margin" Value="0" />
         </Style>
     </UserControl.Styles>
-    <Grid>
-        <StackPanel IsVisible="{Binding IsHomeMode}"
-                    Orientation="Horizontal"
-                    Spacing="8"
-                    VerticalAlignment="Center"
-                    Margin="4,0">
-            <PathIcon Data="{DynamicResource HelixHomeIconGeometry}"
-                      Width="16" Height="16"
-                      Foreground="{DynamicResource HelixAccentBrush}" />
-            <TextBlock Text="Home"
-                       FontSize="14"
-                       VerticalAlignment="Center" />
-        </StackPanel>
-
-        <Grid IsVisible="{Binding IsFilterMode}" ColumnDefinitions="Auto,*">
-            <PathIcon Grid.Column="0"
-                      Data="{DynamicResource HelixIconSearchGeometry}"
-                      Width="16" Height="16"
-                      Margin="4,0,8,0"
-                      VerticalAlignment="Center"
-                      Opacity="0.6" />
-            <TextBox x:Name="FilterBox"
-                     Grid.Column="1"
-                     Text="{Binding FilterText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                     PlaceholderText="{Binding OmnibarQueryPlaceholder}"
-                     BorderThickness="0"
-                     Background="Transparent"
-                     Padding="0"
-                     KeyDown="OnSearchBoxKeyDown"
-                     LostFocus="OnSearchBoxLostFocus" />
-        </Grid>
-
-        <Grid IsVisible="{Binding IsSearchMode}" ColumnDefinitions="Auto,*">
-            <PathIcon Grid.Column="0"
-                      Data="{DynamicResource HelixIconSearchGeometry}"
-                      Width="16" Height="16"
-                      Margin="4,0,8,0"
-                      VerticalAlignment="Center"
-                      Opacity="0.6" />
-            <TextBox x:Name="SearchBox"
-                     Grid.Column="1"
-                     Text="{Binding FilterText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                     PlaceholderText="{Binding OmnibarQueryPlaceholder}"
-                     BorderThickness="0"
-                     Background="Transparent"
-                     Padding="0"
-                     KeyDown="OnSearchBoxKeyDown"
-                     LostFocus="OnSearchBoxLostFocus" />
-        </Grid>
-
-        <Grid IsVisible="{Binding IsPathMode}">
+    <!-- Filter and search stay to the right so the path remains visible in those modes. -->
+    <Panel>
+    <Grid ColumnDefinitions="*,Auto">
+        <Panel Grid.Column="0" MinWidth="80">
             <ScrollViewer x:Name="BreadcrumbScroll"
                           IsVisible="{Binding !IsEditingPath}"
                           Background="Transparent"
@@ -71,12 +24,102 @@
                 <StackPanel x:Name="BreadcrumbHost" Orientation="Horizontal" Spacing="0" />
             </ScrollViewer>
 
+            <StackPanel IsVisible="{Binding IsHomeMode}"
+                        Orientation="Horizontal"
+                        Spacing="8"
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Stretch"
+                        Background="{DynamicResource HelixContentCardBrush}"
+                        Margin="4,0">
+                <PathIcon Data="{DynamicResource HelixHomeIconGeometry}"
+                          Width="16" Height="16"
+                          Foreground="{DynamicResource HelixAccentBrush}" />
+                <TextBlock Text="Home"
+                           FontSize="14"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+
             <TextBox x:Name="PathBox"
                      IsVisible="{Binding IsEditingPath}"
                      Text="{Binding EditablePath}"
-                     KeyDown="OnPathBoxKeyDown"
+                     VerticalAlignment="Stretch"
+                     BorderThickness="0"
+                     Background="{DynamicResource HelixContentCardBrush}"
+                     Padding="4,0"
                      LostFocus="OnPathBoxLostFocus"
+                     TextChanged="OnPathBoxTextChanged"
                      PlaceholderText="Type a path and press Enter…" />
-        </Grid>
+        </Panel>
+
+        <Border Grid.Column="1"
+                IsVisible="{Binding IsFilterMode}"
+                Width="220"
+                BorderBrush="{DynamicResource HelixBorderColor}"
+                BorderThickness="1,0,0,0"
+                Padding="8,0,0,0"
+                Margin="4,0,0,0">
+            <Grid ColumnDefinitions="Auto,*">
+                <PathIcon Grid.Column="0"
+                          Data="{DynamicResource HelixIconSearchGeometry}"
+                          Width="16" Height="16"
+                          Margin="0,0,8,0"
+                          VerticalAlignment="Center"
+                          Opacity="0.6" />
+                <TextBox x:Name="FilterBox"
+                         Grid.Column="1"
+                         Text="{Binding FilterText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         PlaceholderText="{Binding OmnibarQueryPlaceholder}"
+                         BorderThickness="0"
+                         Background="Transparent"
+                         Padding="0"
+                         VerticalAlignment="Center"
+                         KeyDown="OnSearchBoxKeyDown"
+                         LostFocus="OnSearchBoxLostFocus" />
+            </Grid>
+        </Border>
+
+        <Border Grid.Column="1"
+                IsVisible="{Binding IsSearchMode}"
+                Width="220"
+                BorderBrush="{DynamicResource HelixBorderColor}"
+                BorderThickness="1,0,0,0"
+                Padding="8,0,0,0"
+                Margin="4,0,0,0">
+            <Grid ColumnDefinitions="Auto,*">
+                <PathIcon Grid.Column="0"
+                          Data="{DynamicResource HelixIconSearchGeometry}"
+                          Width="16" Height="16"
+                          Margin="0,0,8,0"
+                          VerticalAlignment="Center"
+                          Opacity="0.6" />
+                <TextBox x:Name="SearchBox"
+                         Grid.Column="1"
+                         Text="{Binding FilterText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         PlaceholderText="{Binding OmnibarQueryPlaceholder}"
+                         BorderThickness="0"
+                         Background="Transparent"
+                         Padding="0"
+                         VerticalAlignment="Center"
+                         KeyDown="OnSearchBoxKeyDown"
+                         LostFocus="OnSearchBoxLostFocus" />
+            </Grid>
+        </Border>
     </Grid>
+        <Popup x:Name="SuggestionPopup"
+               Placement="BottomEdgeAlignedLeft"
+               IsLightDismissEnabled="True"
+               WindowManagerAddShadowHint="False">
+            <Border Background="{DynamicResource HelixContentCardBrush}"
+                    BorderBrush="{DynamicResource HelixBorderColor}"
+                    BorderThickness="1"
+                    MinWidth="180"
+                    MaxHeight="240">
+                <ListBox x:Name="SuggestionList"
+                         MaxHeight="240"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         PointerPressed="OnSuggestionPressed" />
+            </Border>
+        </Popup>
+    </Panel>
 </UserControl>

@@ -70,6 +70,7 @@ public sealed class PaneRecycleBinQueryTests : IDisposable
         _pane.FilterText = "report";
 
         _pane.IsFilterMode.Must().BeTrue();
+        _pane.IsQueryMode.Must().BeTrue();
         Names().Must().BeSequenceEqual(new[] { "report.docx" });
     });
 
@@ -93,12 +94,14 @@ public sealed class PaneRecycleBinQueryTests : IDisposable
         _pane.FilterText = "invoices";
 
         _pane.IsSearchMode.Must().BeTrue();
+        _pane.IsQueryMode.Must().BeTrue();
         Names().Must().BeSequenceEqual(new[] { "march.pdf" });
 
         _pane.FilterText = "report";
         Names().Must().BeSequenceEqual(new[] { "report.docx" });
 
         _pane.ExitSearchMode();
+        _pane.IsQueryMode.Must().BeFalse();
         Names().Count.Must().Be(3);
     });
 

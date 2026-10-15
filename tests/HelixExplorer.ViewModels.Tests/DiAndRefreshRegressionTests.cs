@@ -38,6 +38,9 @@ public class ScopedDiWiringTests
         Descriptor<PaneThumbnailCoordinator>(services).Lifetime.Must().Be(ServiceLifetime.Transient);
         Descriptor<PaneInlineRenameCoordinator>(services).Lifetime.Must().Be(ServiceLifetime.Transient);
         Descriptor<FileOperationUndoService>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
+        // Taskbar progress and toasts target one window's handle, so a singleton would light up
+        // whichever window resolved it first.
+        Descriptor<IAttentionService>(services).Lifetime.Must().Be(ServiceLifetime.Scoped);
 
         // Undo must be process-wide: a scoped history would give each window its own stack, so an
         // operation run in one window would be invisible to Ctrl+Z in another.

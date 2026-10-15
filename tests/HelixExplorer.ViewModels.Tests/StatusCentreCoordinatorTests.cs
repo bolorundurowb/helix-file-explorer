@@ -1,4 +1,5 @@
 using HelixExplorer.Core.FileSystem;
+using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Services;
 using HelixExplorer.ViewModels;
 
@@ -139,13 +140,118 @@ public class StatusCentreCoordinatorTests
         scheduler.Callback.Must().BeNull();
     }
 
+    [Fact]
+    public void FailWithoutBegin_SetsUnreadFailureBadgeAndStaysInList()
+    {
+        var reporter = new FileOperationReporter();
+        var scheduler = new ManualStatusCentreScheduler();
+        using var centre = new StatusCentreCoordinator(reporter, () => false, scheduler);
+
+        reporter.Fail("Could not open terminal");
+
+        centre.IsOpen.Must().BeFalse();
+        centre.HasUnreadFailure.Must().BeTrue();
+        reporter.Completed.Count.Must().Be(1);
+        scheduler.Callback.Must().BeNull();
+    }
+
+    [Fact]
+    public void Note_ShowsBesideChipAndClearsWhenTimerFires()
+    {
+        var reporter = new FileOperationReporter();
+        var scheduler = new ManualStatusCentreScheduler();
+        using var centre = new StatusCentreCoordinator(reporter, () => false, scheduler);
+
+        reporter.Note("Path copied");
+
+        centre.Note.Must().Be("Path copied");
+        centre.HasNote.Must().BeTrue();
+        scheduler.LastDelay.Must().Be(StatusCentreCoordinator.NoteDuration);
+        centre.IsOpen.Must().BeFalse();
+        reporter.Completed.Count.Must().Be(0);
+
+        scheduler.Run();
+
+        centre.HasNote.Must().BeFalse();
+    }
+
+    [Fact]
+    public void Attention_TracksProgressAndClearsOnSuccess()
+    {
+        var reporter = new FileOperationReporter();
+        var attention = new RecordingAttention();
+        using var centre = new StatusCentreCoordinator(reporter, () => false, new ManualStatusCentreScheduler(), attention);
+
+        reporter.Begin(FileOperationKind.Copy, 0, "Copying");
+        attention.Calls.Must().Contain("progress:null");
+
+        reporter.Report(new FileOperationProgress(1, 2, @"C:\a.txt", FileOperationKind.Copy));
+        attention.Calls.Must().Contain("progress:0.5");
+
+        reporter.Complete(FileOperationKind.Copy, 2, "Copied 2 items");
+        attention.Calls[^2].Must().Be("clear");
+        attention.Calls[^1].Must().Be("notify:Copied 2 items:False");
+    }
+
+    [Fact]
+    public void Attention_FailureShowsErrorUntilCardIsOpened()
+    {
+        var reporter = new FileOperationReporter();
+        var attention = new RecordingAttention();
+        using var centre = new StatusCentreCoordinator(reporter, () => false, new ManualStatusCentreScheduler(), attention);
+        reporter.Begin(FileOperationKind.Delete, 1, "Deleting");
+        centre.Close();
+
+        reporter.Fail("Delete failed");
+
+        attention.Calls.Must().Contain("error");
+        attention.Calls[^1].Must().Be("notify:Delete failed:True");
+
+        centre.Toggle();
+
+        attention.Calls[^1].Must().Be("clear");
+    }
+
+    [Fact]
+    public void Attention_CancelClearsWithoutToast()
+    {
+        var reporter = new FileOperationReporter();
+        var attention = new RecordingAttention();
+        using var centre = new StatusCentreCoordinator(reporter, () => false, new ManualStatusCentreScheduler(), attention);
+        reporter.Begin(FileOperationKind.Copy, 1, "Copying");
+
+        reporter.Cancelled("Operation cancelled");
+
+        attention.Calls[^1].Must().Be("clear");
+        attention.Calls.Any(c => c.StartsWith("notify:", StringComparison.Ordinal)).Must().BeFalse();
+    }
+
+    private sealed class RecordingAttention : IAttentionService
+    {
+        public List<string> Calls { get; } = [];
+
+        public void ShowProgress(double? fraction)
+            => Calls.Add(fraction is { } f ? $"progress:{f.ToString(System.Globalization.CultureInfo.InvariantCulture)}" : "progress:null");
+
+        public void ShowError() => Calls.Add("error");
+
+        public void ClearProgress() => Calls.Add("clear");
+
+        public void NotifyIfInactive(string title, string message, bool isError) => Calls.Add($"notify:{message}:{isError}");
+
+        public void FlashIfInactive() => Calls.Add("flash");
+    }
+
     private sealed class ManualStatusCentreScheduler : IStatusCentreScheduler
     {
         public Action? Callback { get; private set; }
 
+        public TimeSpan LastDelay { get; private set; }
+
         public IDisposable Schedule(TimeSpan delay, Action callback)
         {
             Callback = callback;
+            LastDelay = delay;
             return new Disposer(() => Callback = null);
         }
 

@@ -29,4 +29,5 @@ public sealed record MainWindowViewModelDependencies(
     WindowLayoutCoordinator WindowLayout,
     NetworkLocationCoordinator NetworkLocations,
     IMessenger Messenger,
-    IWindowHostService WindowHost);
+    IWindowHostService WindowHost,
+    IAttentionService Attention);

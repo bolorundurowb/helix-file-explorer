@@ -9,7 +9,9 @@ using HelixExplorer.Core.Infrastructure;
 
 namespace HelixExplorer.Services;
 
-public sealed class AvaloniaUserDialogService(IWindowOwnerContext ownerContext) : IUserDialogService
+public sealed class AvaloniaUserDialogService(
+    IWindowOwnerContext ownerContext,
+    IAttentionService? attention = null) : IUserDialogService
 {
     public Task<bool> ConfirmAsync(
         string title,
@@ -163,6 +165,8 @@ public sealed class AvaloniaUserDialogService(IWindowOwnerContext ownerContext) 
         var owner = GetOwnerWindow();
         var result = new TaskCompletionSource<FileConflictResolution?>();
         var dialog = CreateConflictWindow(conflict, canApplyToAll, result, owner);
+        // A long copy is often left in the background; the batch is stalled until this is answered.
+        attention?.FlashIfInactive();
         await dialog.ShowDialog(owner!).ConfigureAwait(true);
         return await result.Task.ConfigureAwait(true);
     }

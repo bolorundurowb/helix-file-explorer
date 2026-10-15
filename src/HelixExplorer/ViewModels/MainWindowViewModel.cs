@@ -67,7 +67,10 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
         _undo = dependencies.Undo;
         _dialogs = dependencies.Dialogs;
         OperationReporter = dependencies.OperationReporter;
-        _statusCentre = new StatusCentreCoordinator(_operationReporter, () => IsCommandPaletteOpen);
+        _statusCentre = new StatusCentreCoordinator(
+            _operationReporter,
+            () => IsCommandPaletteOpen,
+            attention: dependencies.Attention);
         _statusCentre.PropertyChanged += OnStatusCentrePropertyChanged;
         _homePage = dependencies.HomePage;
         _windowLayout = dependencies.WindowLayout;

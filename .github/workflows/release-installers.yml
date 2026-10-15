@@ -51,23 +51,34 @@ jobs:
         shell: pwsh
         run: |
           $buildSha = "${{ inputs.ref }}"
-          $existing = git rev-parse "$env:HELIX_TAG^{commit}" 2>$null
-          if ($LASTEXITCODE -eq 0 -and $existing -and $existing.Trim() -ne $buildSha) {
+          # --verify --quiet: a missing tag exits 1 with no stdout. Plain rev-parse
+          # also prints the unresolved name on stdout, which is not a commit.
+          $existing = git rev-parse --verify --quiet "$env:HELIX_TAG^{commit}" 2>$null
+          $revParseExit = $LASTEXITCODE
+          if ($revParseExit -eq 0 -and $existing -and $existing.Trim() -ne $buildSha) {
             # A leftover tag on a different commit would otherwise make
             # action-gh-release attach these binaries to that other commit.
             throw "$env:HELIX_TAG already points at $($existing.Trim()), not the build commit $buildSha. Refusing to attach these binaries to a different commit."
           }
+          # A missing tag is the normal first publish. actions/runner appends
+          # `exit $LASTEXITCODE` to every pwsh step, so leaving git's 1 here
+          # fails the step even though this script did not throw.
+          exit 0
 
       - name: Refuse to republish a live release
         shell: pwsh
         run: |
           $json = gh release view $env:HELIX_TAG --json isDraft 2>$null
-          if ($LASTEXITCODE -eq 0) {
+          $ghExit = $LASTEXITCODE
+          if ($ghExit -eq 0) {
             $isDraft = ($json | ConvertFrom-Json).isDraft
             if (-not $isDraft) {
               throw "$env:HELIX_TAG is already a published (non-draft) release. Refusing to publish it again."
             }
           }
+          # No release yet is success. exit 0 so the runner's appended
+          # `exit $LASTEXITCODE` does not fail the step on gh's 404.
+          exit 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4

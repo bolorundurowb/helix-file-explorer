@@ -854,8 +854,14 @@ public partial class MainWindow : Window
 
     private void OnTabContextMenuOpening(object? sender, CancelEventArgs e)
     {
-        if (sender is ContextMenu { PlacementTarget: Control { DataContext: TabViewModel tab } } menu)
-            CommandMenuBuilder.FillColorSubmenus(menu.Items, tab.SetTintCommand);
+        if (sender is not ContextMenu menu)
+            return;
+
+        // Opening fires before the menu is parented to the tab the first time, so DataContext is only
+        // reliable once an item is clicked.
+        CommandMenuBuilder.FillColorSubmenus(
+            menu.Items,
+            new RelayCommand<string>(hex => (menu.DataContext as TabViewModel)?.SetTintCommand.Execute(hex)));
     }
 
     private void OnSidebarClearColorClick(object? sender, RoutedEventArgs e)

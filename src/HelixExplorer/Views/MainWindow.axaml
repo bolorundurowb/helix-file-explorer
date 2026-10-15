@@ -357,15 +357,16 @@
                                     PointerReleased="OnTabPointerReleased"
                                     PointerCaptureLost="OnTabPointerCaptureLost"
                                     WindowDecorationProperties.ElementRole="User">
-                                <!-- Fixed-height top bar so titles stay aligned whether tinted or not. -->
-                                <Grid RowDefinitions="4,*,Auto">
+                                <!-- Fixed-height top bar so titles stay aligned whether tinted or not. The active bar
+                                     overlays the content row so selection never grows the chip past the title bar. -->
+                                <Grid RowDefinitions="4,*">
                                     <Border Grid.Row="0"
                                             Background="{Binding TintBrush}"
                                             IsVisible="{DynamicResource HelixTabTintVisible}"
                                             CornerRadius="8,8,0,0"
                                             IsHitTestVisible="False" />
                                     <Grid Grid.Row="1"
-                                          Margin="12,5,12,10"
+                                          Margin="12,3,12,7"
                                           ColumnDefinitions="Auto,*,Auto">
                                         <PathIcon Grid.Column="0"
                                                   Data="{DynamicResource HelixIconSettingsGeometry}"
@@ -412,10 +413,12 @@
                                         </controls:ToolButton>
                                     </Grid>
                                     <Border x:Name="TabActiveBar"
-                                            Grid.Row="2"
+                                            Grid.Row="1"
                                             Height="2"
                                             CornerRadius="1"
-                                            Margin="10,4,10,4"
+                                            Margin="10,0,10,3"
+                                            VerticalAlignment="Bottom"
+                                            IsHitTestVisible="False"
                                             Background="{DynamicResource HelixAccentBrush}"
                                             IsVisible="False" />
                                 </Grid>

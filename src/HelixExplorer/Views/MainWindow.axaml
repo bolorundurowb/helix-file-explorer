@@ -531,14 +531,17 @@
                 </Border>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
-                    <Button Classes="toolButton"
-                            Command="{Binding FocusFilterCommand}"
-                            ToolTip.Tip="Filter (Ctrl+F) · Search (Ctrl+Shift+F)"
-                            IsVisible="{Binding IsBrowserTab}"
-                            Padding="8,4"
-                            Cursor="Hand">
-                        <PathIcon Data="{DynamicResource HelixIconSearchGeometry}" Width="16" Height="16" Opacity="0.7" />
-                    </Button>
+                    <!-- The omnibar query field carries its own magnifier, so this entry point hides while it is open. -->
+                    <Panel IsVisible="{Binding IsBrowserTab}">
+                        <Button Classes="toolButton"
+                                Command="{Binding FocusFilterCommand}"
+                                ToolTip.Tip="Filter (Ctrl+F) · Search (Ctrl+Shift+F)"
+                                IsVisible="{Binding !SelectedTab.ActivePane.IsQueryMode, FallbackValue=True}"
+                                Padding="8,4"
+                                Cursor="Hand">
+                            <PathIcon Data="{DynamicResource HelixIconSearchGeometry}" Width="16" Height="16" Opacity="0.7" />
+                        </Button>
+                    </Panel>
                     <Button ToolTip.Tip="Toggle theme (Ctrl+Shift+T)"
                             Command="{Binding ToggleThemeCommand}"
                             Padding="6" Background="Transparent" BorderThickness="0" Cursor="Hand">

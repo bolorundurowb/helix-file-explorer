@@ -194,6 +194,7 @@ public sealed partial class PaneViewModel :
     [NotifyPropertyChangedFor(nameof(IsFilterMode))]
     [NotifyPropertyChangedFor(nameof(IsSearchMode))]
     [NotifyPropertyChangedFor(nameof(IsHomeMode))]
+    [NotifyPropertyChangedFor(nameof(IsQueryMode))]
     [NotifyPropertyChangedFor(nameof(IsFilterActive))]
     [NotifyPropertyChangedFor(nameof(OmnibarQueryPlaceholder))]
     private OmnibarMode _omnibarMode = OmnibarMode.Path;
@@ -201,6 +202,7 @@ public sealed partial class PaneViewModel :
     public bool IsPathMode => OmnibarMode == OmnibarMode.Path && (IsFileSystem || IsShellNamespace);
     public bool IsFilterMode => OmnibarMode == OmnibarMode.Filter;
     public bool IsSearchMode => OmnibarMode == OmnibarMode.Search;
+    public bool IsQueryMode => OmnibarMode is OmnibarMode.Filter or OmnibarMode.Search;
     public bool IsHomeMode => OmnibarMode == OmnibarMode.Home || IsHome;
 
     public string OmnibarQueryPlaceholder => OmnibarMode switch

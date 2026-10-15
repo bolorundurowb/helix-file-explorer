@@ -55,10 +55,22 @@ public sealed class AppSettings
     /// </summary>
     public string OpenInTerminalGesture { get; set; } = "Ctrl+OemTilde";
     public bool AutoCheckForUpdates { get; set; } = true;
+
+    /// <summary>
+    /// New installs default to <see cref="Settings.UpdateChannel.Stable"/> so update checks
+    /// never surface a prerelease unless the user opts in.
+    /// </summary>
+    public UpdateChannel UpdateChannel { get; set; } = UpdateChannel.Stable;
 }
 
 public enum SizeDisplayMode
 {
     Binary,
     Decimal
+}
+
+public enum UpdateChannel
+{
+    Stable,
+    Preview
 }

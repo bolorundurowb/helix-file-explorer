@@ -33,6 +33,7 @@ public class AppSettingsTests
         settings.PinnedPaths.Must().BeEmpty();
         settings.OpenInTerminalGesture.Must().Be("Ctrl+OemTilde");
         settings.AutoCheckForUpdates.Must().BeTrue();
+        settings.UpdateChannel.Must().Be(UpdateChannel.Stable);
         settings.SwitchToNewTabOnOpen.Must().BeTrue();
         settings.RestoreSessionOnStartup.Must().BeTrue();
     }
@@ -60,6 +61,7 @@ public class AppSettingsTests
             WindowMaximized = true,
             OpenInTerminalGesture = "Ctrl+Shift+T",
             AutoCheckForUpdates = false,
+            UpdateChannel = UpdateChannel.Preview,
             SwitchToNewTabOnOpen = false,
             RestoreSessionOnStartup = false
         };
@@ -86,6 +88,7 @@ public class AppSettingsTests
         loaded!.WindowMaximized.Must().BeTrue();
         loaded!.OpenInTerminalGesture.Must().Be("Ctrl+Shift+T");
         loaded!.AutoCheckForUpdates.Must().BeFalse();
+        loaded!.UpdateChannel.Must().Be(UpdateChannel.Preview);
         loaded!.SwitchToNewTabOnOpen.Must().BeFalse();
         loaded!.RestoreSessionOnStartup.Must().BeFalse();
     }
@@ -97,6 +100,31 @@ public class AppSettingsTests
 
         loaded!.Theme.Must().Be(ThemeMode.Light);
         loaded.DirectorySort.Must().Be(DirectorySortMode.FoldersFirst);
+    }
+
+    [Fact]
+    public void Json_MissingUpdateChannel_DefaultsToStable()
+    {
+        var loaded = JsonSerializer.Deserialize<AppSettings>("{\"Theme\":\"Light\"}", Options);
+
+        loaded!.Theme.Must().Be(ThemeMode.Light);
+        loaded.UpdateChannel.Must().Be(UpdateChannel.Stable);
+    }
+
+    [Fact]
+    public void Json_StoredPreviewUpdateChannel_StaysPreview()
+    {
+        const string json = """
+            {
+              "Theme": "Dark",
+              "UpdateChannel": "Preview"
+            }
+            """;
+
+        var loaded = JsonSerializer.Deserialize<AppSettings>(json, Options);
+
+        loaded!.Theme.Must().Be(ThemeMode.Dark);
+        loaded.UpdateChannel.Must().Be(UpdateChannel.Preview);
     }
 
     [Fact]

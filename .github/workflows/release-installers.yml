@@ -1,95 +1,112 @@
-name: Release
+name: Release (publish)
 
+# Called only by release-on-master.yml and release-on-tag.yml, which already
+# decided the version, its channel, and whether it should be latest. This
+# workflow has no `push`/`workflow_dispatch` triggers of its own: those moved
+# to the callers so a manual bump cannot publish twice (once from this file's
+# old push trigger, once from the caller that now owns that decision).
 on:
-  workflow_dispatch:
-  push:
-    branches: [master]
-    # A version bump lands in Directory.Build.props. Trigger on any change to it; the
-    # tag-existence check below skips non-version edits and unchanged versions so a
-    # release only publishes when the version actually moves.
-    paths:
-      - 'Directory.Build.props'
+  workflow_call:
+    inputs:
+      version:
+        description: "Version to publish, without the leading v (e.g. 1.4.4-preview.1)."
+        required: true
+        type: string
+      prerelease:
+        description: "Whether this is a GitHub prerelease."
+        required: true
+        type: boolean
+      make_latest:
+        description: "GitHub release make_latest value: 'true' or 'false'."
+        required: true
+        type: string
+      ref:
+        description: "Full commit SHA to build, and the target_commitish pinned for the release's tag."
+        required: true
+        type: string
 
 jobs:
-  build-and-release:
+  publish:
     runs-on: windows-latest
     permissions:
       contents: write
+    concurrency:
+      group: release-publish-${{ inputs.version }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      HELIX_TAG: v${{ inputs.version }}
 
     steps:
-      - name: Checkout
+      - name: Checkout build commit
         uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
 
-      - name: Read version from Directory.Build.props
-        id: version
-        shell: pwsh
-        run: |
-          [xml]$props = Get-Content Directory.Build.props
-          $version = $props.SelectSingleNode('/Project/PropertyGroup/Version')?.InnerText
-          if ([string]::IsNullOrWhiteSpace($version)) {
-            throw "Directory.Build.props must define Project/PropertyGroup/Version."
-          }
-          "version=$version" >> $env:GITHUB_OUTPUT
+      - name: Fetch tags
+        run: git fetch origin --tags --force
 
-      - name: Check if tag already exists
-        id: check
+      - name: Pre-publish tag/commit check
         shell: pwsh
         run: |
-          $tag = "v${{ steps.version.outputs.version }}"
-          if (git tag -l $tag) {
-            Write-Host "Tag $tag already exists, skipping release."
-            "skip=true" >> $env:GITHUB_OUTPUT
-          } else {
-            "skip=false" >> $env:GITHUB_OUTPUT
+          $buildSha = "${{ inputs.ref }}"
+          $existing = git rev-parse "$env:HELIX_TAG^{commit}" 2>$null
+          if ($LASTEXITCODE -eq 0 -and $existing -and $existing.Trim() -ne $buildSha) {
+            # A leftover tag on a different commit would otherwise make
+            # action-gh-release attach these binaries to that other commit.
+            throw "$env:HELIX_TAG already points at $($existing.Trim()), not the build commit $buildSha. Refusing to attach these binaries to a different commit."
+          }
+
+      - name: Refuse to republish a live release
+        shell: pwsh
+        run: |
+          $json = gh release view $env:HELIX_TAG --json isDraft 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            $isDraft = ($json | ConvertFrom-Json).isDraft
+            if (-not $isDraft) {
+              throw "$env:HELIX_TAG is already a published (non-draft) release. Refusing to publish it again."
+            }
           }
 
       - name: Setup .NET
-        if: steps.check.outputs.skip != 'true'
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
 
       - name: Restore dependencies
-        if: steps.check.outputs.skip != 'true'
         run: dotnet restore HelixExplorer.slnx
 
       - name: Publish application
-        if: steps.check.outputs.skip != 'true'
         run: >-
           dotnet publish src/HelixExplorer/HelixExplorer.csproj
           -c Release
           -r win-x64
           --self-contained true
-          -p:Version=${{ steps.version.outputs.version }}
+          -p:Version=${{ inputs.version }}
           -p:DebugType=none
           -p:DebugSymbols=false
           -o publish/win-x64
 
       - name: Setup PolyInstall
-        if: steps.check.outputs.skip != 'true'
         uses: bolorundurowb/PolyInstall/.github/actions/setup-polyinstall@v2.0.1
         with:
           version: v2.2.0
           rid: win-x64
 
       - name: Validate manifest
-        if: steps.check.outputs.skip != 'true'
         env:
-          HELIX_VERSION: ${{ steps.version.outputs.version }}
+          HELIX_VERSION: ${{ inputs.version }}
           POLYINSTALL_TARGET: windows-x64
         run: polyinstall validate installer/helix-explorer.install.yaml --base .
 
       - name: Build installer
-        if: steps.check.outputs.skip != 'true'
         env:
-          HELIX_VERSION: ${{ steps.version.outputs.version }}
+          HELIX_VERSION: ${{ inputs.version }}
           POLYINSTALL_TARGET: windows-x64
         run: polyinstall build installer/helix-explorer.install.yaml --base .
 
       - name: Verify installer artifacts
-        if: steps.check.outputs.skip != 'true'
         shell: pwsh
         run: |
           $artifacts = Get-ChildItem -Path dist -File -Recurse -ErrorAction SilentlyContinue
@@ -98,11 +115,51 @@ jobs:
           }
           $artifacts | ForEach-Object { Write-Host "Installer artifact: $($_.FullName)" }
 
-      - name: Create release
-        if: steps.check.outputs.skip != 'true'
+      - name: Delete leftover draft
+        shell: pwsh
+        run: |
+          # GitHub's look-up-by-tag API does not return drafts, so action-gh-release
+          # below may not find a leftover draft from an interrupted run and could
+          # create a second, duplicate draft next to it. Deleting unconditionally
+          # first and recreating is simpler and costs only a re-upload.
+          gh release delete $env:HELIX_TAG --yes
+          Write-Host "Checked for a leftover draft/release at $env:HELIX_TAG (deleted if present)."
+          exit 0
+
+      - name: Create draft release with assets
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.version.outputs.version }}
+          tag_name: ${{ env.HELIX_TAG }}
+          # Drafts have no tag until published, and the tag is then cut from
+          # whatever target_commitish holds at that moment. Leaving it unset
+          # would default to master's current head, which may have moved on
+          # during this build - pinning it to the build SHA is what keeps the
+          # eventual tag on the commit these binaries actually came from.
+          target_commitish: ${{ inputs.ref }}
+          draft: true
+          prerelease: ${{ inputs.prerelease }}
           files: dist/**
           fail_on_unmatched_files: true
           generate_release_notes: true
+
+      - name: Publish release
+        shell: pwsh
+        run: |
+          $releaseId = gh release view $env:HELIX_TAG --json databaseId --jq .databaseId
+          # make_latest is a tri-state string field on the REST API (true/false/legacy),
+          # not a boolean, so it is passed with -f (raw string) rather than -F.
+          gh api --method PATCH "repos/${{ github.repository }}/releases/$releaseId" `
+            -F draft=false `
+            -f make_latest="${{ inputs.make_latest }}"
+
+      - name: Final tag/commit assertion
+        shell: pwsh
+        run: |
+          # The tag only exists on the server from this point on, so it must be
+          # re-fetched before it can be checked locally.
+          git fetch origin --tags --force
+          $buildSha = "${{ inputs.ref }}"
+          $actual = (git rev-parse "$env:HELIX_TAG^{commit}").Trim()
+          if ($actual -ne $buildSha) {
+            throw "After publishing, $env:HELIX_TAG points at $actual instead of the build commit $buildSha."
+          }

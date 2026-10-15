@@ -373,6 +373,11 @@
                         <Style Selector="ListBoxItem:not(:selected) TextBlock#TabTitle">
                             <Setter Property="Opacity" Value="0.75" />
                         </Style>
+                        <!-- Hidden state stays in a style. A local Opacity would outrank this reveal. -->
+                        <Style Selector="Button#TabClose">
+                            <Setter Property="Opacity" Value="0" />
+                            <Setter Property="IsHitTestVisible" Value="False" />
+                        </Style>
                         <Style Selector="ListBoxItem:selected Button#TabClose, ListBoxItem:pointerover Button#TabClose">
                             <Setter Property="Opacity" Value="1" />
                             <Setter Property="IsHitTestVisible" Value="True" />
@@ -441,8 +446,6 @@
                                                              MinWidth="24"
                                                              MinHeight="24"
                                                              Padding="0"
-                                                             Opacity="0"
-                                                             IsHitTestVisible="False"
                                                              VerticalAlignment="Center"
                                                              HorizontalAlignment="Right"
                                                              WindowDecorationProperties.ElementRole="User">

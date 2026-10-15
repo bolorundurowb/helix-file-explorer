@@ -582,13 +582,16 @@
                 </Border>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
-                    <controls:ToolButton Label="Filter"
-                                         Gesture="Ctrl+F"
-                                         Command="{Binding FocusFilterCommand}"
-                                         IsVisible="{Binding IsBrowserTab}"
-                                         Padding="8,4">
-                        <PathIcon Data="{DynamicResource HelixIconSearchGeometry}" Width="16" Height="16" Opacity="0.7" />
-                    </controls:ToolButton>
+                    <!-- The omnibar query field carries its own magnifier, so this entry point hides while it is open. -->
+                    <Panel IsVisible="{Binding IsBrowserTab}">
+                        <controls:ToolButton Label="Filter"
+                                             Gesture="Ctrl+F"
+                                             Command="{Binding FocusFilterCommand}"
+                                             IsVisible="{Binding !SelectedTab.ActivePane.IsQueryMode, FallbackValue=True}"
+                                             Padding="8,4">
+                            <PathIcon Data="{DynamicResource HelixIconSearchGeometry}" Width="16" Height="16" Opacity="0.7" />
+                        </controls:ToolButton>
+                    </Panel>
                 </StackPanel>
             </Grid>
         </Border>

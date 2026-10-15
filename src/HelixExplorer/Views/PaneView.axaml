@@ -4,6 +4,7 @@
              xmlns:vm="using:HelixExplorer.ViewModels"
              xmlns:models="using:HelixExplorer.Core.Models"
              xmlns:controls="using:HelixExplorer.Controls"
+             xmlns:conv="using:HelixExplorer.Converters"
              xmlns:services="using:HelixExplorer.Services"
              x:Class="HelixExplorer.Views.PaneView"
              x:DataType="vm:PaneViewModel"
@@ -93,6 +94,12 @@
     </UserControl.Styles>
 
     <UserControl.Resources>
+        <conv:ModifiedDateConverter x:Key="ModifiedDateConverter" />
+        <conv:ModifiedDateTooltipConverter x:Key="ModifiedDateTooltipConverter" />
+        <conv:GitStatusLetterConverter x:Key="GitStatusLetterConverter" />
+        <conv:GitStatusBadgeVisibleConverter x:Key="GitStatusBadgeVisibleConverter" />
+        <conv:GitStatusTooltipConverter x:Key="GitStatusTooltipConverter" />
+        <conv:EntryAutomationNameConverter x:Key="EntryAutomationNameConverter" />
         <ContextMenu x:Key="EntryContextMenu"
                      x:DataType="vm:PaneViewModel"
                      Opening="OnEntryContextMenuOpening">
@@ -139,7 +146,7 @@
                     <PathIcon Data="{DynamicResource HelixIconTabAddGeometry}" />
                 </MenuItem.Icon>
             </MenuItem>
-            <MenuItem Header="Open in new Helix window" Command="{Binding OpenInNewWindowCommand}">
+            <MenuItem Header="Open in new window" Command="{Binding OpenInNewWindowCommand}">
                 <MenuItem.Icon>
                     <PathIcon Data="{DynamicResource HelixIconWindowNewGeometry}" />
                 </MenuItem.Icon>
@@ -228,7 +235,10 @@
                           Command="{Binding SetDirectorySortCommand}"
                           CommandParameter="{x:Static models:DirectorySortMode.MixedWithFiles}" />
             </MenuItem>
-            <MenuItem Header="Group by" IsVisible="{Binding IsGridView}">
+            <MenuItem Header="Group by"
+                      IsEnabled="{Binding IsGridView}"
+                      ToolTip.Tip="Available in Grid view"
+                      ToolTip.ShowOnDisabled="True">
                 <MenuItem.Icon>
                     <PathIcon Data="{DynamicResource HelixIconGroupGeometry}" />
                 </MenuItem.Icon>
@@ -313,7 +323,7 @@
                     </MenuItem.Icon>
                 </MenuItem>
             </MenuItem>
-            <MenuItem Header="Folder color">
+            <MenuItem Header="Folder colour">
                 <MenuItem.Icon>
                     <PathIcon Data="{DynamicResource HelixIconColorGeometry}" />
                 </MenuItem.Icon>
@@ -324,7 +334,7 @@
                 <MenuItem Header="Purple" Command="{Binding SetFolderColorCommand}" CommandParameter="#8764B8" />
                 <MenuItem Header="Teal" Command="{Binding SetFolderColorCommand}" CommandParameter="#00B294" />
                 <MenuItem Header="Pink" Command="{Binding SetFolderColorCommand}" CommandParameter="#E3008C" />
-                <MenuItem Header="Clear color" Command="{Binding ClearFolderColorCommand}" />
+                <MenuItem Header="Clear colour" Command="{Binding ClearFolderColorCommand}" />
             </MenuItem>
             <Separator />
             <MenuItem Header="Show more options" Command="{Binding ShowMoreOptionsCommand}">
@@ -435,7 +445,10 @@
                           Command="{Binding SetDirectorySortCommand}"
                           CommandParameter="{x:Static models:DirectorySortMode.MixedWithFiles}" />
             </MenuItem>
-            <MenuItem Header="Group by" IsVisible="{Binding IsGridView}">
+            <MenuItem Header="Group by"
+                      IsEnabled="{Binding IsGridView}"
+                      ToolTip.Tip="Available in Grid view"
+                      ToolTip.ShowOnDisabled="True">
                 <MenuItem.Icon>
                     <PathIcon Data="{DynamicResource HelixIconGroupGeometry}" />
                 </MenuItem.Icon>
@@ -552,19 +565,36 @@
                                         Grid.ColumnSpan="2" />
                                 <controls:EntryVisualView Grid.Column="0"
                                                           Width="16" Height="16" Margin="0,0,6,0" />
-                                <TextBlock Grid.Column="1"
-                                           Text="{Binding DisplayName}"
-                                           FontSize="{DynamicResource HelixEntryFontSize}"
-                                           TextTrimming="CharacterEllipsis"
-                                           VerticalAlignment="Center"
-                                           IsVisible="{Binding IsNotRenaming}">
-                                    <TextBlock.Foreground>
-                                        <MultiBinding Converter="{StaticResource GitFileStatusBrushConverter}">
-                                            <Binding Path="GitStatus" />
-                                            <DynamicResource ResourceKey="{x:Static services:AvaloniaThemeService.ThemeRevisionResourceKey}" />
-                                        </MultiBinding>
-                                    </TextBlock.Foreground>
-                                </TextBlock>
+                                <StackPanel Grid.Column="1"
+                                            Orientation="Horizontal"
+                                            Spacing="6"
+                                            VerticalAlignment="Center"
+                                            IsVisible="{Binding IsNotRenaming}">
+                                    <TextBlock Text="{Binding GitStatus, Converter={StaticResource GitStatusLetterConverter}}"
+                                               IsVisible="{Binding GitStatus, Converter={StaticResource GitStatusBadgeVisibleConverter}}"
+                                               ToolTip.Tip="{Binding GitStatus, Converter={StaticResource GitStatusTooltipConverter}}"
+                                               FontWeight="SemiBold"
+                                               FontSize="{DynamicResource HelixEntryFontSize}"
+                                               VerticalAlignment="Center">
+                                        <TextBlock.Foreground>
+                                            <MultiBinding Converter="{StaticResource GitFileStatusBrushConverter}">
+                                                <Binding Path="GitStatus" />
+                                                <DynamicResource ResourceKey="{x:Static services:AvaloniaThemeService.ThemeRevisionResourceKey}" />
+                                            </MultiBinding>
+                                        </TextBlock.Foreground>
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding DisplayName}"
+                                               FontSize="{DynamicResource HelixEntryFontSize}"
+                                               TextTrimming="CharacterEllipsis"
+                                               VerticalAlignment="Center">
+                                        <TextBlock.Foreground>
+                                            <MultiBinding Converter="{StaticResource GitFileStatusBrushConverter}">
+                                                <Binding Path="GitStatus" />
+                                                <DynamicResource ResourceKey="{x:Static services:AvaloniaThemeService.ThemeRevisionResourceKey}" />
+                                            </MultiBinding>
+                                        </TextBlock.Foreground>
+                                    </TextBlock>
+                                </StackPanel>
                                 <TextBox Grid.Column="1"
                                          Text="{Binding RenameText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                          FontSize="{DynamicResource HelixEntryFontSize}"
@@ -580,12 +610,10 @@
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTextColumn Binding="{Binding ModifiedUtc, Converter={StaticResource RelativeTimeConverter}}"
-                                    Width="140"
-                                    Tag="Modified"
-                                    SortMemberPath="ModifiedUtc"
-                                    FontSize="{DynamicResource HelixEntryFontSize}">
-                    <DataGridTextColumn.HeaderTemplate>
+                <DataGridTemplateColumn Width="168"
+                                        Tag="Modified"
+                                        SortMemberPath="ModifiedUtc">
+                    <DataGridTemplateColumn.HeaderTemplate>
                         <DataTemplate>
                             <Grid HorizontalAlignment="Stretch">
                                 <controls:SortColumnHeader Title="Date modified"
@@ -594,8 +622,16 @@
                                                            DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=DataGrid}}" />
                             </Grid>
                         </DataTemplate>
-                    </DataGridTextColumn.HeaderTemplate>
-                </DataGridTextColumn>
+                    </DataGridTemplateColumn.HeaderTemplate>
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate x:DataType="vm:EntryItemViewModel">
+                            <TextBlock Text="{Binding ModifiedUtc, Converter={StaticResource ModifiedDateConverter}}"
+                                       ToolTip.Tip="{Binding ModifiedUtc, Converter={StaticResource ModifiedDateTooltipConverter}}"
+                                       FontSize="{DynamicResource HelixEntryFontSize}"
+                                       VerticalAlignment="Center" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
                 <DataGridTextColumn Binding="{Binding TypeLabel}"
                                     Width="100"
                                     Tag="Type"
@@ -671,19 +707,36 @@
                                 Grid.ColumnSpan="2" />
                         <controls:EntryVisualView Grid.Column="0"
                                                   Width="16" Height="16" Margin="0,0,6,0" />
-                        <TextBlock Grid.Column="1"
-                                   Text="{Binding DisplayName}"
-                                   FontSize="{DynamicResource HelixEntryFontSize}"
-                                   TextTrimming="CharacterEllipsis"
-                                   VerticalAlignment="Center"
-                                   IsVisible="{Binding IsNotRenaming}">
-                            <TextBlock.Foreground>
-                                <MultiBinding Converter="{StaticResource GitFileStatusBrushConverter}">
-                                    <Binding Path="GitStatus" />
-                                    <DynamicResource ResourceKey="{x:Static services:AvaloniaThemeService.ThemeRevisionResourceKey}" />
-                                </MultiBinding>
-                            </TextBlock.Foreground>
-                        </TextBlock>
+                        <StackPanel Grid.Column="1"
+                                    Orientation="Horizontal"
+                                    Spacing="6"
+                                    VerticalAlignment="Center"
+                                    IsVisible="{Binding IsNotRenaming}">
+                            <TextBlock Text="{Binding GitStatus, Converter={StaticResource GitStatusLetterConverter}}"
+                                       IsVisible="{Binding GitStatus, Converter={StaticResource GitStatusBadgeVisibleConverter}}"
+                                       ToolTip.Tip="{Binding GitStatus, Converter={StaticResource GitStatusTooltipConverter}}"
+                                       FontWeight="SemiBold"
+                                       FontSize="{DynamicResource HelixEntryFontSize}"
+                                       VerticalAlignment="Center">
+                                <TextBlock.Foreground>
+                                    <MultiBinding Converter="{StaticResource GitFileStatusBrushConverter}">
+                                        <Binding Path="GitStatus" />
+                                        <DynamicResource ResourceKey="{x:Static services:AvaloniaThemeService.ThemeRevisionResourceKey}" />
+                                    </MultiBinding>
+                                </TextBlock.Foreground>
+                            </TextBlock>
+                            <TextBlock Text="{Binding DisplayName}"
+                                       FontSize="{DynamicResource HelixEntryFontSize}"
+                                       TextTrimming="CharacterEllipsis"
+                                       VerticalAlignment="Center">
+                                <TextBlock.Foreground>
+                                    <MultiBinding Converter="{StaticResource GitFileStatusBrushConverter}">
+                                        <Binding Path="GitStatus" />
+                                        <DynamicResource ResourceKey="{x:Static services:AvaloniaThemeService.ThemeRevisionResourceKey}" />
+                                    </MultiBinding>
+                                </TextBlock.Foreground>
+                            </TextBlock>
+                        </StackPanel>
                         <TextBox Grid.Column="1"
                                  Text="{Binding RenameText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                  FontSize="{DynamicResource HelixEntryFontSize}"
@@ -770,6 +823,12 @@
                                 ZIndex="{Binding TileZIndex}"
                                 PointerPressed="OnGridItemPointerPressed"
                                 DoubleTapped="OnGridItemDoubleTapped">
+                            <AutomationProperties.Name>
+                                <MultiBinding Converter="{StaticResource EntryAutomationNameConverter}">
+                                    <Binding Path="DisplayName" />
+                                    <Binding Path="TypeLabel" />
+                                </MultiBinding>
+                            </AutomationProperties.Name>
                              <Panel>
                                 <Border CornerRadius="6"
                                         Background="{Binding FullPath, Converter={StaticResource FolderColorConverter}}" />
@@ -813,21 +872,38 @@
                                 <controls:EntryVisualView Width="{Binding ItemSize, RelativeSource={RelativeSource AncestorType=controls:VirtualizingFileGrid}}"
                                                           Height="{Binding ItemSize, RelativeSource={RelativeSource AncestorType=controls:VirtualizingFileGrid}}"
                                                           HorizontalAlignment="Center" />
-                                <TextBlock Text="{Binding DisplayName}"
-                                           FontSize="{DynamicResource HelixEntryFontSize}"
-                                           TextAlignment="Center"
-                                           TextWrapping="Wrap"
-                                           MaxLines="2"
-                                           TextTrimming="CharacterEllipsis"
-                                           HorizontalAlignment="Stretch"
-                                           IsVisible="{Binding IsNotRenaming}">
-                                    <TextBlock.Foreground>
-                                        <MultiBinding Converter="{StaticResource GitFileStatusBrushConverter}">
-                                            <Binding Path="GitStatus" />
-                                            <DynamicResource ResourceKey="{x:Static services:AvaloniaThemeService.ThemeRevisionResourceKey}" />
-                                        </MultiBinding>
-                                    </TextBlock.Foreground>
-                                </TextBlock>
+                                <StackPanel Orientation="Horizontal"
+                                            HorizontalAlignment="Center"
+                                            Spacing="4"
+                                            IsVisible="{Binding IsNotRenaming}">
+                                    <TextBlock Text="{Binding GitStatus, Converter={StaticResource GitStatusLetterConverter}}"
+                                               IsVisible="{Binding GitStatus, Converter={StaticResource GitStatusBadgeVisibleConverter}}"
+                                               ToolTip.Tip="{Binding GitStatus, Converter={StaticResource GitStatusTooltipConverter}}"
+                                               FontWeight="SemiBold"
+                                               FontSize="{DynamicResource HelixEntryFontSize}"
+                                               VerticalAlignment="Center">
+                                        <TextBlock.Foreground>
+                                            <MultiBinding Converter="{StaticResource GitFileStatusBrushConverter}">
+                                                <Binding Path="GitStatus" />
+                                                <DynamicResource ResourceKey="{x:Static services:AvaloniaThemeService.ThemeRevisionResourceKey}" />
+                                            </MultiBinding>
+                                        </TextBlock.Foreground>
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding DisplayName}"
+                                               FontSize="{DynamicResource HelixEntryFontSize}"
+                                               TextAlignment="Center"
+                                               TextWrapping="Wrap"
+                                               MaxLines="2"
+                                               TextTrimming="CharacterEllipsis"
+                                               HorizontalAlignment="Stretch">
+                                        <TextBlock.Foreground>
+                                            <MultiBinding Converter="{StaticResource GitFileStatusBrushConverter}">
+                                                <Binding Path="GitStatus" />
+                                                <DynamicResource ResourceKey="{x:Static services:AvaloniaThemeService.ThemeRevisionResourceKey}" />
+                                            </MultiBinding>
+                                        </TextBlock.Foreground>
+                                    </TextBlock>
+                                </StackPanel>
                                 <!-- Fixed tile width, wrap downward (Explorer/Files-style) — do not grow sideways. -->
                                 <TextBox Classes="gridRenameEditor"
                                          Text="{Binding RenameText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -862,19 +938,84 @@
                                         ColumnActivated="OnMillerColumnActivated" />
         </ScrollViewer>
 
+        <StackPanel IsVisible="{Binding IsContentPlaceholderVisible}"
+                    IsHitTestVisible="False"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Spacing="8"
+                    MaxWidth="420"
+                    ZIndex="40">
+            <PathIcon Data="{DynamicResource HelixIconDocumentGeometry}"
+                      Width="32" Height="32"
+                      HorizontalAlignment="Center"
+                      Foreground="{DynamicResource HelixSecondaryTextBrush}"
+                      IsVisible="{Binding IsEmptyState}" />
+            <PathIcon Data="{DynamicResource HelixIconSearchGeometry}"
+                      Width="32" Height="32"
+                      HorizontalAlignment="Center"
+                      Foreground="{DynamicResource HelixSecondaryTextBrush}"
+                      IsVisible="{Binding IsNoMatchesState}" />
+            <PathIcon Data="{DynamicResource HelixIconErrorGeometry}"
+                      Width="32" Height="32"
+                      HorizontalAlignment="Center"
+                      Foreground="{DynamicResource HelixSecondaryTextBrush}"
+                      IsVisible="{Binding IsAccessDeniedState}" />
+            <PathIcon Data="{DynamicResource HelixIconInfoGeometry}"
+                      Width="32" Height="32"
+                      HorizontalAlignment="Center"
+                      Foreground="{DynamicResource HelixSecondaryTextBrush}"
+                      IsVisible="{Binding IsUnavailableState}" />
+            <TextBlock Text="{Binding ContentTitle}"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       FontSize="16" />
+            <TextBlock Text="{Binding ContentDetail}"
+                       IsVisible="{Binding HasContentDetail}"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource HelixSecondaryTextBrush}" />
+        </StackPanel>
+        <StackPanel IsVisible="{Binding IsContentPlaceholderVisible}"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Margin="0,148,0,0"
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    ZIndex="41">
+            <Button Content="Clear filter"
+                    IsVisible="{Binding ShowClearFilterAction}"
+                    Command="{Binding ClearActiveFilterCommand}"
+                    Padding="12,6" />
+            <Button Content="Try again"
+                    IsVisible="{Binding ShowRetryAction}"
+                    Command="{Binding RefreshCommand}"
+                    Padding="12,6" />
+        </StackPanel>
+
         <controls:SelectionMarquee x:Name="SelectionMarquee"
                                    HorizontalAlignment="Stretch"
                                    VerticalAlignment="Stretch"
                                    IsHitTestVisible="False"
                                    ZIndex="50" />
 
-        <Border IsVisible="{Binding IsLoading}"
-                Background="#20000000"
-                IsHitTestVisible="False">
-            <TextBlock Text="Loading…"
-                       HorizontalAlignment="Center"
-                       VerticalAlignment="Center"
-                       Opacity="0.7" />
-        </Border>
+        <ProgressBar IsVisible="{Binding IsLoading}"
+                     IsIndeterminate="True"
+                     IsHitTestVisible="False"
+                     Height="3"
+                     HorizontalAlignment="Stretch"
+                     VerticalAlignment="Top"
+                     Minimum="0"
+                     Maximum="100"
+                     ZIndex="80" />
+        <Button Content="Stop"
+                Command="{Binding StopLoadingCommand}"
+                IsVisible="{Binding ShowStopLoading}"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                Margin="0,12,0,0"
+                Padding="14,4"
+                ZIndex="81" />
     </Grid>
 </UserControl>

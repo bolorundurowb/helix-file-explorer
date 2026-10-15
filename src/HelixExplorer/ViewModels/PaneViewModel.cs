@@ -82,6 +82,9 @@ public sealed partial class PaneViewModel :
     /// started must not turn it back on: <c>showLoading: false</c> never clears the flag.
     /// </summary>
     private bool _archiveOverlayHeld;
+    private bool _hasFreshListing;
+    private string? _refreshFaultMessage;
+    private bool _refreshFaultAccessDenied;
     private CancellationTokenSource? _folderPrefPersistCts;
 
     private readonly HashSet<string> _collapsedGroupKeys = new(StringComparer.Ordinal);
@@ -144,8 +147,7 @@ public sealed partial class PaneViewModel :
         }
 
         SelectedCount = _selection.SelectedCount;
-        // Same-count replacements still change the byte total, and the setter does not notify then.
-        OnPropertyChanged(nameof(SelectionSummary));
+        UpdateSelectionSummary();
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         NotifyCommandsCanExecuteChanged();
     }
@@ -196,6 +198,7 @@ public sealed partial class PaneViewModel :
     [NotifyPropertyChangedFor(nameof(IsFilterMode))]
     [NotifyPropertyChangedFor(nameof(IsSearchMode))]
     [NotifyPropertyChangedFor(nameof(IsHomeMode))]
+    [NotifyPropertyChangedFor(nameof(IsQueryMode))]
     [NotifyPropertyChangedFor(nameof(IsFilterActive))]
     [NotifyPropertyChangedFor(nameof(OmnibarQueryPlaceholder))]
     private OmnibarMode _omnibarMode = OmnibarMode.Path;
@@ -203,6 +206,7 @@ public sealed partial class PaneViewModel :
     public bool IsPathMode => OmnibarMode == OmnibarMode.Path && (IsFileSystem || IsShellNamespace);
     public bool IsFilterMode => OmnibarMode == OmnibarMode.Filter;
     public bool IsSearchMode => OmnibarMode == OmnibarMode.Search;
+    public bool IsQueryMode => OmnibarMode is OmnibarMode.Filter or OmnibarMode.Search;
     public bool IsHomeMode => OmnibarMode == OmnibarMode.Home || IsHome;
 
     public string OmnibarQueryPlaceholder => OmnibarMode switch
@@ -227,16 +231,18 @@ public sealed partial class PaneViewModel :
     [NotifyPropertyChangedFor(nameof(IsFilesFirst))]
     [NotifyPropertyChangedFor(nameof(IsMixedFolderSort))]
     private DirectorySortMode _directorySort = DirectorySortMode.MixedWithFiles;
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ItemCountText))]
-    private int _itemCount;
-
+    [ObservableProperty] private int _itemCount;
     [ObservableProperty] private int _totalCount;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SelectionSummary))]
-    private int _selectedCount;
+    [ObservableProperty] private int _selectedCount;
     [ObservableProperty] private bool _isLoading;
+    [ObservableProperty] private bool _isListingRefreshActive;
+    [ObservableProperty] private string? _selectionSummary;
+    [ObservableProperty] private PaneContentState _contentState = PaneContentState.Ready;
+    [ObservableProperty] private string _contentTitle = string.Empty;
+    [ObservableProperty] private string _contentDetail = string.Empty;
+    [ObservableProperty] private bool _hasContentDetail;
+    [ObservableProperty] private bool _showClearFilterAction;
+    [ObservableProperty] private bool _showRetryAction;
     [ObservableProperty] private string _statusText = string.Empty;
     [ObservableProperty] private bool _isEditingPath;
     [ObservableProperty] private string _editablePath = string.Empty;
@@ -263,6 +269,42 @@ public sealed partial class PaneViewModel :
     /// <summary>True when Search mode has a query (recursive results published into the pane).</summary>
     public bool IsSearchActive => IsSearchMode && !string.IsNullOrWhiteSpace(FilterText);
 
+    public string ItemCountText => PanePresentation.ItemCountText(ItemCount);
+
+    public bool IsContentPlaceholderVisible => ContentState != PaneContentState.Ready;
+
+    public bool IsEmptyState => ContentState == PaneContentState.Empty;
+
+    public bool IsNoMatchesState => ContentState == PaneContentState.NoMatches;
+
+    public bool IsAccessDeniedState => ContentState == PaneContentState.AccessDenied;
+
+    public bool IsUnavailableState => ContentState == PaneContentState.Unavailable;
+
+    /// <summary>Esc can cancel a listing that has not raised the bar yet. Extract keeps the overlay.</summary>
+    public bool CanStopLoading => IsListingRefreshActive && !_archiveOverlayHeld;
+
+    public bool ShowStopLoading => IsLoading && CanStopLoading;
+
+    partial void OnItemCountChanged(int value) => OnPropertyChanged(nameof(ItemCountText));
+
+    partial void OnContentStateChanged(PaneContentState value)
+    {
+        OnPropertyChanged(nameof(IsContentPlaceholderVisible));
+        OnPropertyChanged(nameof(IsEmptyState));
+        OnPropertyChanged(nameof(IsNoMatchesState));
+        OnPropertyChanged(nameof(IsAccessDeniedState));
+        OnPropertyChanged(nameof(IsUnavailableState));
+    }
+
+    partial void OnIsLoadingChanged(bool value) => OnPropertyChanged(nameof(ShowStopLoading));
+
+    partial void OnIsListingRefreshActiveChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanStopLoading));
+        OnPropertyChanged(nameof(ShowStopLoading));
+    }
+
     public bool IsDetailsView => ViewMode == LayoutMode.Details;
     public bool IsListView => ViewMode == LayoutMode.List;
     public bool IsGridView => ViewMode == LayoutMode.Grid;
@@ -272,10 +314,6 @@ public sealed partial class PaneViewModel :
     public bool IsFileSystem => LocationKind == PaneLocationKind.FileSystem;
     public bool IsShellNamespace => LocationKind == PaneLocationKind.ShellNamespace;
     public bool IsRecycleBin => ShellPath.IsRecycleBin(CurrentPath);
-
-    public string ItemCountText => ListingSummaryText.Items(ItemCount);
-
-    public string? SelectionSummary => ListingSummaryText.Selection(SelectedCount, SelectedEntries);
 
     /// <summary>
     /// Filter and search need a flat in-memory listing. The Recycle Bin qualifies but stays a shell
@@ -384,9 +422,13 @@ public sealed partial class PaneViewModel :
         // Clear through the model so the range anchor is dropped too: it used to survive a folder
         // change, letting the first Shift+Click in the new listing extend from a stale origin.
         _selection.Clear();
+        _refreshFaultMessage = null;
+        _refreshFaultAccessDenied = false;
+        _hasFreshListing = false;
         ItemCount = 0;
         TotalCount = 0;
         ListingSizeBytes = 0;
+        UpdateContentPresentation();
     }
 
     private void UpdateRecycleBinWatcher()
@@ -984,6 +1026,17 @@ public sealed partial class PaneViewModel :
     [RelayCommand]
     private Task Refresh() => RefreshAsync(showLoading: true);
 
+    [RelayCommand]
+    private void StopLoading()
+    {
+        // Extract and compress own IsLoading. Stop only cancels a directory listing.
+        if (_archiveOverlayHeld)
+            return;
+
+        _refreshCoordinator.CancelRefresh();
+        IsLoading = false;
+    }
+
     public Task RefreshAsync() => RefreshAsync(showLoading: true);
 
     public Task RefreshAsync(bool showLoading)
@@ -1045,8 +1098,47 @@ public sealed partial class PaneViewModel :
         RestoreSelection(result.Entries, previouslySelected, previousSelectedEntryPath);
         ApplyPendingFocus(result.Entries);
         UpdateStatusText();
+        _hasFreshListing = _refreshFaultMessage is null;
+        UpdateSelectionSummary();
+        UpdateContentPresentation();
         _thumbnails.RequestEntryVisuals(this, result.VisualTargets);
         return result;
+    }
+
+    private void UpdateSelectionSummary()
+    {
+        if (SelectedEntries.Count == 0)
+        {
+            SelectionSummary = null;
+            return;
+        }
+
+        var parts = new SelectionSizePart[SelectedEntries.Count];
+        for (var i = 0; i < SelectedEntries.Count; i++)
+        {
+            var entry = SelectedEntries[i];
+            parts[i] = new SelectionSizePart(entry.IsDirectory, entry.SizeBytes);
+        }
+
+        SelectionSummary = PanePresentation.SelectionSummary(parts);
+    }
+
+    private void UpdateContentPresentation()
+    {
+        var state = PanePresentation.ResolveContentState(
+            IsHome,
+            _hasFreshListing,
+            _refreshFaultMessage is not null,
+            _refreshFaultAccessDenied,
+            ItemCount,
+            IsFilterActive || IsSearchActive);
+        var copy = PanePresentation.DescribeContent(state, FilterText, _refreshFaultMessage);
+        ContentState = state;
+        ContentTitle = copy.Title;
+        ContentDetail = copy.Detail ?? string.Empty;
+        HasContentDetail = copy.Detail is not null;
+        ShowClearFilterAction = copy.ShowClearFilter;
+        ShowRetryAction = copy.ShowRetry;
     }
 
     private void RestoreSelection(
@@ -1268,6 +1360,9 @@ public sealed partial class PaneViewModel :
 
     [RelayCommand]
     public void ExitSearchMode() => ClearFilter();
+
+    [RelayCommand]
+    private void ClearActiveFilter() => ClearFilter();
 
     public void ClearFilter()
     {
@@ -2166,6 +2261,14 @@ public sealed partial class PaneViewModel :
             return;
 
         IsLoading = loading;
+    }
+
+    void IPaneRefreshHost.SetRefreshActive(bool active) => IsListingRefreshActive = active;
+
+    void IPaneRefreshHost.SetRefreshFault(string? message, bool accessDenied)
+    {
+        _refreshFaultMessage = string.IsNullOrWhiteSpace(message) ? null : message;
+        _refreshFaultAccessDenied = accessDenied && _refreshFaultMessage is not null;
     }
 
     void IPaneRefreshHost.SetStatusText(string text) => StatusText = text;

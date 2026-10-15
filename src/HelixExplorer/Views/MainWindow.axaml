@@ -4,6 +4,7 @@
         xmlns:views="using:HelixExplorer.Views"
         xmlns:controls="using:HelixExplorer.Controls"
         xmlns:models="using:HelixExplorer.Core.Models"
+        xmlns:settings="using:HelixExplorer.Core.Settings"
         x:Class="HelixExplorer.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="{Binding Title}"
@@ -169,15 +170,7 @@
                                                 <MenuItem Header="Pin to sidebar" Click="OnSidebarPinClick" />
                                                 <MenuItem Header="Unpin from sidebar" Click="OnSidebarUnpinClick" />
                                                 <Separator />
-                                                <MenuItem Header="Color">
-                                                    <MenuItem Header="Red" Tag="#E81123" Click="OnSidebarSetColorClick" />
-                                                    <MenuItem Header="Orange" Tag="#F7630C" Click="OnSidebarSetColorClick" />
-                                                    <MenuItem Header="Green" Tag="#107C10" Click="OnSidebarSetColorClick" />
-                                                    <MenuItem Header="Blue" Tag="#0078D4" Click="OnSidebarSetColorClick" />
-                                                    <MenuItem Header="Purple" Tag="#8764B8" Click="OnSidebarSetColorClick" />
-                                                    <MenuItem Header="Teal" Tag="#00B294" Click="OnSidebarSetColorClick" />
-                                                    <MenuItem Header="Pink" Tag="#E3008C" Click="OnSidebarSetColorClick" />
-                                                </MenuItem>
+                                                <MenuItem Header="Color" Tag="{x:Static settings:FolderColorPalette.All}" />
                                                 <MenuItem Header="Clear color" Click="OnSidebarClearColorClick" />
                                             </ContextMenu>
                                         </Border.ContextMenu>
@@ -426,59 +419,8 @@
                                             IsVisible="False" />
                                 </Grid>
                                 <Border.ContextMenu>
-                                    <ContextMenu>
-                                        <MenuItem Header="Tint">
-                                            <MenuItem Header="Red" Command="{Binding SetTintCommand}" CommandParameter="#E81123">
-                                                <MenuItem.Icon>
-                                                    <Ellipse Width="12" Height="12" Fill="#E81123" />
-                                                </MenuItem.Icon>
-                                            </MenuItem>
-                                            <MenuItem Header="Orange" Command="{Binding SetTintCommand}" CommandParameter="#F7630C">
-                                                <MenuItem.Icon>
-                                                    <Ellipse Width="12" Height="12" Fill="#F7630C" />
-                                                </MenuItem.Icon>
-                                            </MenuItem>
-                                            <MenuItem Header="Yellow" Command="{Binding SetTintCommand}" CommandParameter="#FCE100">
-                                                <MenuItem.Icon>
-                                                    <Ellipse Width="12" Height="12" Fill="#FCE100" Stroke="#C2A800" StrokeThickness="1" />
-                                                </MenuItem.Icon>
-                                            </MenuItem>
-                                            <MenuItem Header="Green" Command="{Binding SetTintCommand}" CommandParameter="#107C10">
-                                                <MenuItem.Icon>
-                                                    <Ellipse Width="12" Height="12" Fill="#107C10" />
-                                                </MenuItem.Icon>
-                                            </MenuItem>
-                                            <MenuItem Header="Teal" Command="{Binding SetTintCommand}" CommandParameter="#038387">
-                                                <MenuItem.Icon>
-                                                    <Ellipse Width="12" Height="12" Fill="#038387" />
-                                                </MenuItem.Icon>
-                                            </MenuItem>
-                                            <MenuItem Header="Blue" Command="{Binding SetTintCommand}" CommandParameter="#0078D4">
-                                                <MenuItem.Icon>
-                                                    <Ellipse Width="12" Height="12" Fill="#0078D4" />
-                                                </MenuItem.Icon>
-                                            </MenuItem>
-                                            <MenuItem Header="Purple" Command="{Binding SetTintCommand}" CommandParameter="#8764B8">
-                                                <MenuItem.Icon>
-                                                    <Ellipse Width="12" Height="12" Fill="#8764B8" />
-                                                </MenuItem.Icon>
-                                            </MenuItem>
-                                            <MenuItem Header="Pink" Command="{Binding SetTintCommand}" CommandParameter="#E3008C">
-                                                <MenuItem.Icon>
-                                                    <Ellipse Width="12" Height="12" Fill="#E3008C" />
-                                                </MenuItem.Icon>
-                                            </MenuItem>
-                                            <MenuItem Header="Brown" Command="{Binding SetTintCommand}" CommandParameter="#8E562E">
-                                                <MenuItem.Icon>
-                                                    <Ellipse Width="12" Height="12" Fill="#8E562E" />
-                                                </MenuItem.Icon>
-                                            </MenuItem>
-                                            <MenuItem Header="Gray" Command="{Binding SetTintCommand}" CommandParameter="#7A7574">
-                                                <MenuItem.Icon>
-                                                    <Ellipse Width="12" Height="12" Fill="#7A7574" />
-                                                </MenuItem.Icon>
-                                            </MenuItem>
-                                        </MenuItem>
+                                    <ContextMenu Opening="OnTabContextMenuOpening">
+                                        <MenuItem Header="Tint" Tag="{x:Static settings:FolderColorPalette.All}" />
                                         <MenuItem Header="Clear tint" Command="{Binding ClearTintCommand}" />
                                         <Separator />
                                         <MenuItem Header="Close tabs to the right" Command="{Binding CloseTabsToRightCommand}" />
@@ -666,91 +608,19 @@
                         </controls:ToolButton>
                     </StackPanel>
                     <Border Width="1" Background="{DynamicResource HelixBorderColor}" Margin="4,4" />
-                    <controls:ToolButton Label="Sort">
+                    <controls:ToolButton Label="Sort" Tag="{x:Static vm:CommandRegistry.SortMenu}">
                         <PathIcon Data="{DynamicResource HelixIconArrowSortGeometry}" Width="14" Height="14" />
                         <Button.Flyout>
-                            <MenuFlyout>
-                                <MenuItem Header="Name"
-                                          ToggleType="Radio"
-                                          IsChecked="{Binding IsSortByName}"
-                                          Command="{Binding SetSortColumnCommand}"
-                                          CommandParameter="{x:Static models:SortColumn.Name}" />
-                                <MenuItem Header="Date"
-                                          ToggleType="Radio"
-                                          IsChecked="{Binding IsSortByDate}"
-                                          Command="{Binding SetSortColumnCommand}"
-                                          CommandParameter="{x:Static models:SortColumn.Modified}" />
-                                <MenuItem Header="Type"
-                                          ToggleType="Radio"
-                                          IsChecked="{Binding IsSortByType}"
-                                          Command="{Binding SetSortColumnCommand}"
-                                          CommandParameter="{x:Static models:SortColumn.Type}" />
-                                <MenuItem Header="Size"
-                                          ToggleType="Radio"
-                                          IsChecked="{Binding IsSortBySize}"
-                                          Command="{Binding SetSortColumnCommand}"
-                                          CommandParameter="{x:Static models:SortColumn.Size}" />
-                                <Separator />
-                                <MenuItem Header="Ascending"
-                                          ToggleType="Radio"
-                                          IsChecked="{Binding IsSortAscending}"
-                                          Command="{Binding SetSortAscendingCommand}" />
-                                <MenuItem Header="Descending"
-                                          ToggleType="Radio"
-                                          IsChecked="{Binding IsSortDescending}"
-                                          Command="{Binding SetSortDescendingCommand}" />
-                                <Separator />
-                                <MenuItem Header="Sort folders first"
-                                          ToggleType="Radio"
-                                          IsChecked="{Binding IsFoldersFirst}"
-                                          Command="{Binding SetDirectorySortCommand}"
-                                          CommandParameter="{x:Static models:DirectorySortMode.FoldersFirst}" />
-                                <MenuItem Header="Sort files first"
-                                          ToggleType="Radio"
-                                          IsChecked="{Binding IsFilesFirst}"
-                                          Command="{Binding SetDirectorySortCommand}"
-                                          CommandParameter="{x:Static models:DirectorySortMode.FilesFirst}" />
-                                <MenuItem Header="Sort files and folders together"
-                                          ToggleType="Radio"
-                                          IsChecked="{Binding IsMixedFolderSort}"
-                                          Command="{Binding SetDirectorySortCommand}"
-                                          CommandParameter="{x:Static models:DirectorySortMode.MixedWithFiles}" />
-                            </MenuFlyout>
+                            <MenuFlyout Opening="OnPaneCommandFlyoutOpening" />
                         </Button.Flyout>
                     </controls:ToolButton>
                     <controls:ToolButton AutomationProperties.Name="Group"
+                                         Tag="{x:Static vm:CommandRegistry.GroupByMenu}"
                                          IsEnabled="{Binding IsGridViewActive}"
                                          ToolTip.Tip="{Binding GroupButtonToolTip}">
                         <PathIcon Data="{DynamicResource HelixIconGroupGeometry}" Width="14" Height="14" />
                         <Button.Flyout>
-                            <MenuFlyout>
-                                <MenuItem Header="None"
-                                          ToggleType="Radio"
-                                          IsChecked="{Binding IsGroupByNone}"
-                                          Command="{Binding SetGroupByCommand}"
-                                          CommandParameter="{x:Static models:GroupByMode.None}" />
-                                <Separator />
-                                <MenuItem Header="Name"
-                                          ToggleType="Radio"
-                                          IsChecked="{Binding IsGroupByName}"
-                                          Command="{Binding SetGroupByCommand}"
-                                          CommandParameter="{x:Static models:GroupByMode.Name}" />
-                                <MenuItem Header="Date modified"
-                                          ToggleType="Radio"
-                                          IsChecked="{Binding IsGroupByDate}"
-                                          Command="{Binding SetGroupByCommand}"
-                                          CommandParameter="{x:Static models:GroupByMode.Modified}" />
-                                <MenuItem Header="Type"
-                                          ToggleType="Radio"
-                                          IsChecked="{Binding IsGroupByType}"
-                                          Command="{Binding SetGroupByCommand}"
-                                          CommandParameter="{x:Static models:GroupByMode.Type}" />
-                                <MenuItem Header="Size"
-                                          ToggleType="Radio"
-                                          IsChecked="{Binding IsGroupBySize}"
-                                          Command="{Binding SetGroupByCommand}"
-                                          CommandParameter="{x:Static models:GroupByMode.Size}" />
-                            </MenuFlyout>
+                            <MenuFlyout Opening="OnPaneCommandFlyoutOpening" />
                         </Button.Flyout>
                     </controls:ToolButton>
                     <controls:ToolButton Label="Copy path"

@@ -579,7 +579,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
         tab.CloseTabsToRightRequested += OnCloseTabsToRightRequested;
         tab.CloseTabsToLeftRequested += OnCloseTabsToLeftRequested;
         tab.CloseOtherTabsRequested += OnCloseOtherTabsRequested;
-        tab.SortChanged += OnTabSortChanged;
         tab.LayoutChanged += OnTabLayoutChanged;
         tab.Navigated += OnTabNavigated;
         tab.OpenInNewTabRequested += OnOpenInNewTabRequested;
@@ -705,7 +704,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
         tab.CloseTabsToRightRequested -= OnCloseTabsToRightRequested;
         tab.CloseTabsToLeftRequested -= OnCloseTabsToLeftRequested;
         tab.CloseOtherTabsRequested -= OnCloseOtherTabsRequested;
-        tab.SortChanged -= OnTabSortChanged;
         tab.LayoutChanged -= OnTabLayoutChanged;
         tab.Navigated -= OnTabNavigated;
         tab.OpenInNewTabRequested -= OnOpenInNewTabRequested;
@@ -812,8 +810,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
             tab.HasOtherTabs = Tabs.Count > 1;
         }
     }
-
-    private void OnTabSortChanged(object? sender, EventArgs e) => NotifySortChrome();
 
     private void OnTabLayoutChanged(object? sender, EventArgs e) => NotifyLayoutChrome();
 
@@ -1010,7 +1006,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
         OnPropertyChanged(nameof(ShowBrowserChrome));
         OnPropertyChanged(nameof(IsRecycleBinActive));
         NotifyGlobalFileCommandsCanExecuteChanged();
-        NotifySortChrome();
         NotifyLayoutChrome();
     }
 
@@ -1034,40 +1029,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
         }
     }
 
-    public bool IsSortByName => ActivePane?.IsSortByName == true;
-    public bool IsSortByDate => ActivePane?.IsSortByDate == true;
-    public bool IsSortByType => ActivePane?.IsSortByType == true;
-    public bool IsSortBySize => ActivePane?.IsSortBySize == true;
-    public bool IsSortAscending => ActivePane?.IsSortAscending == true;
-    public bool IsSortDescending => ActivePane?.IsSortDescendingActive == true;
-    public bool IsFoldersFirst => ActivePane?.IsFoldersFirst == true;
-    public bool IsFilesFirst => ActivePane?.IsFilesFirst == true;
-    public bool IsMixedFolderSort => ActivePane?.IsMixedFolderSort == true;
-
-    public bool IsGroupByNone => ActivePane?.IsGroupByNone != false;
-    public bool IsGroupByName => ActivePane?.IsGroupByName == true;
-    public bool IsGroupByDate => ActivePane?.IsGroupByDate == true;
-    public bool IsGroupByType => ActivePane?.IsGroupByType == true;
-    public bool IsGroupBySize => ActivePane?.IsGroupBySize == true;
-
-    private void NotifySortChrome()
-    {
-        OnPropertyChanged(nameof(IsGroupByNone));
-        OnPropertyChanged(nameof(IsGroupByName));
-        OnPropertyChanged(nameof(IsGroupByDate));
-        OnPropertyChanged(nameof(IsGroupByType));
-        OnPropertyChanged(nameof(IsGroupBySize));
-        OnPropertyChanged(nameof(IsSortByName));
-        OnPropertyChanged(nameof(IsSortByDate));
-        OnPropertyChanged(nameof(IsSortByType));
-        OnPropertyChanged(nameof(IsSortBySize));
-        OnPropertyChanged(nameof(IsSortAscending));
-        OnPropertyChanged(nameof(IsSortDescending));
-        OnPropertyChanged(nameof(IsFoldersFirst));
-        OnPropertyChanged(nameof(IsFilesFirst));
-        OnPropertyChanged(nameof(IsMixedFolderSort));
-    }
-
     private void NotifyLayoutChrome()
     {
         OnPropertyChanged(nameof(IsDetailsViewActive));
@@ -1079,26 +1040,6 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
     }
 
     public string GroupButtonToolTip => IsGridViewActive ? "Group" : "Available in Grid view";
-
-    [RelayCommand]
-    private void SetSortColumn(SortColumn column)
-        => ActivePane?.SetSortColumnCommand.Execute(column);
-
-    [RelayCommand]
-    private void SetSortAscending()
-        => ActivePane?.SetSortAscendingCommand.Execute(null);
-
-    [RelayCommand]
-    private void SetSortDescending()
-        => ActivePane?.SetSortDescendingCommand.Execute(null);
-
-    [RelayCommand]
-    private void SetDirectorySort(DirectorySortMode mode)
-        => ActivePane?.SetDirectorySortCommand.Execute(mode);
-
-    [RelayCommand]
-    private void SetGroupBy(GroupByMode mode)
-        => ActivePane?.SetGroupByCommand.Execute(mode);
 
     private void RefreshHomeDashboard()
         => RefreshHomeDashboard(_networkCoordinator.Locations);

@@ -9,11 +9,13 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using CommunityToolkit.Mvvm.Input;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Input;
 using HelixExplorer.ViewModels;
@@ -841,18 +843,19 @@ public partial class MainWindow : Window
         return ReferenceEquals(tab.ActivePane, tab.LeftPane) ? tab.RightPane : tab.LeftPane;
     }
 
-    private void OnSidebarSetColorClick(object? sender, RoutedEventArgs e)
+    private void OnPaneCommandFlyoutOpening(object? sender, EventArgs e)
     {
-        if (sender is not MenuItem { Tag: string hex })
+        if (sender is not MenuFlyout { Target: Control { Tag: IReadOnlyList<IReadOnlyList<CommandDefinition<PaneViewModel>>> groups } } flyout)
             return;
 
-        if (DataContext is not MainWindowViewModel vm)
-            return;
+        if (DataContext is MainWindowViewModel { ActivePane: { } pane })
+            CommandMenuBuilder.Fill(flyout.Items, groups, pane);
+    }
 
-        if (GetSidebarItemFromMenu(sender) is not SidebarItemViewModel item)
-            return;
-
-        vm.SetSidebarFolderColor(item, hex);
+    private void OnTabContextMenuOpening(object? sender, CancelEventArgs e)
+    {
+        if (sender is ContextMenu { PlacementTarget: Control { DataContext: TabViewModel tab } } menu)
+            CommandMenuBuilder.FillColorSubmenus(menu.Items, tab.SetTintCommand);
     }
 
     private void OnSidebarClearColorClick(object? sender, RoutedEventArgs e)
@@ -906,11 +909,24 @@ public partial class MainWindow : Window
                     break;
             }
         }
+
+        if (item is not null)
+        {
+            CommandMenuBuilder.FillColorSubmenus(
+                menu.Items,
+                new RelayCommand<string>(hex =>
+                {
+                    if (hex is not null)
+                        vm.SetSidebarFolderColor(item, hex);
+                }));
+        }
     }
 
     private static SidebarItemViewModel? GetSidebarItemFromMenu(object? sender)
     {
-        if (sender is not ContextMenu menu)
+        // Menu item Click handlers pass the item, not the menu that knows which sidebar row was right-clicked.
+        var menu = sender as ContextMenu ?? (sender as MenuItem)?.FindLogicalAncestorOfType<ContextMenu>();
+        if (menu is null)
             return null;
 
         if (menu.Tag is SidebarItemViewModel tagItem)

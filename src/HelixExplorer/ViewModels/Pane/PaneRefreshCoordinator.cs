@@ -31,6 +31,14 @@ public interface IPaneRefreshHost
     GroupByMode GroupBy { get; }
     void SetLoading(bool loading);
     void SetStatusText(string text);
+
+    /// <summary>True while this generation's refresh has not finished. Esc and Stop use it.</summary>
+    void SetRefreshActive(bool active);
+
+    /// <summary>
+    /// Stores the listing fault for the content panel. Null clears it. Applied on the next publish.
+    /// </summary>
+    void SetRefreshFault(string? message, bool accessDenied);
     ListingPublishResult ApplySortAndPublish(ListingPublishRequest request);
     void OnNavigated();
     void ApplyGitSnapshot(GitStatusSnapshot snapshot, GitStatus status);
@@ -58,6 +66,12 @@ public sealed class PaneRefreshCoordinator(
     private bool _refreshInFlight;
     private bool _disposed;
 
+    /// <summary>
+    /// How long a refresh runs before the pane shows the loading bar. Fast listings never flash it.
+    /// Tests shorten this; production stays at 300ms.
+    /// </summary>
+    internal TimeSpan LoadingIndicatorDelay { get; set; } = TimeSpan.FromMilliseconds(300);
+
     public async Task RefreshAsync(IPaneRefreshHost host, bool showLoading)
     {
         if (host.IsDisposed)
@@ -78,18 +92,20 @@ public sealed class PaneRefreshCoordinator(
         var token = cts.Token;
         _refreshInFlight = true;
         var loadingCleared = !showLoading;
+        var accessDenied = false;
+        LoadingSignal? loadingSignal = showLoading ? new LoadingSignal(token) : null;
+        var loadingTask = loadingSignal is null
+            ? Task.CompletedTask
+            : ShowLoadingIfStillRunningAsync(host, generation, loadingSignal);
         host.StopWatcher();
 
         try
         {
-            if (showLoading)
+            await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                await Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    if (generation == _refreshGeneration && !host.IsDisposed)
-                        host.SetLoading(true);
-                });
-            }
+                if (generation == _refreshGeneration && !host.IsDisposed)
+                    host.SetRefreshActive(true);
+            });
 
             var sw = Stopwatch.StartNew();
             DirectoryListing listing;
@@ -114,6 +130,7 @@ public sealed class PaneRefreshCoordinator(
             catch (Exception ex)
             {
                 errorMessage = FileSystemErrorMessages.Describe(ex, path);
+                accessDenied = FileSystemErrorClassifier.FromException(ex, path) == FileSystemError.AccessDenied;
                 logger.LogError(ex, "Pane refresh failed for '{Path}'", path);
                 listing = DirectoryListing.Empty;
             }
@@ -132,6 +149,10 @@ public sealed class PaneRefreshCoordinator(
                 // Path must still match: generation alone is not enough if cancel/generation and path diverge.
                 if (!PathsEqual(path, host.CurrentPath))
                     return;
+
+                host.SetRefreshFault(
+                    string.IsNullOrEmpty(errorMessage) ? null : errorMessage,
+                    accessDenied);
 
                 var result = host.ApplySortAndPublish(new ListingPublishRequest
                 {
@@ -153,9 +174,12 @@ public sealed class PaneRefreshCoordinator(
 
                 host.OnNavigated();
 
+                // Cancel the delay before it can raise the bar, then drop the bar if it already did.
+                loadingSignal?.Suppress();
                 if (showLoading)
                 {
-                    host.SetLoading(false);
+                    if (loadingSignal is { WasShown: true })
+                        host.SetLoading(false);
                     loadingCleared = true;
                 }
 
@@ -171,14 +195,26 @@ public sealed class PaneRefreshCoordinator(
         }
         finally
         {
+            // Stop the delay from firing after this generation has already decided. Cancelling makes
+            // the wait return immediately, so a fast listing does not sit out the 300ms.
+            loadingSignal?.Suppress();
+            try
+            {
+                await loadingTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+
             if (generation == _refreshGeneration)
             {
                 _refreshCts = null;
                 _refreshInFlight = false;
 
+                var shown = loadingSignal is { WasShown: true };
                 // Cancel and path-mismatch exits skip the publish; with no newer refresh to take over
-                // the overlay, it would otherwise stay on "Loading…" forever.
-                if (!loadingCleared && !host.IsDisposed)
+                // the overlay, it would otherwise stay up.
+                if (shown && !loadingCleared && !host.IsDisposed)
                 {
                     Dispatcher.UIThread.Post(() =>
                     {
@@ -188,7 +224,14 @@ public sealed class PaneRefreshCoordinator(
                 }
 
                 if (!host.IsDisposed)
+                {
                     host.RestartWatcher();
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        if (generation == _refreshGeneration && !host.IsDisposed)
+                            host.SetRefreshActive(false);
+                    });
+                }
 
                 if (_watcherRefreshPending && !host.IsDisposed)
                 {
@@ -197,8 +240,70 @@ public sealed class PaneRefreshCoordinator(
                 }
             }
 
+            loadingSignal?.Dispose();
             cts.Dispose();
         }
+    }
+
+    private async Task ShowLoadingIfStillRunningAsync(IPaneRefreshHost host, int generation, LoadingSignal signal)
+    {
+        try
+        {
+            await Task.Delay(LoadingIndicatorDelay, signal.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        if (signal.IsSuppressed || host.IsDisposed || generation != _refreshGeneration)
+            return;
+
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            if (signal.IsSuppressed || host.IsDisposed || generation != _refreshGeneration)
+                return;
+
+            host.SetLoading(true);
+            signal.MarkShown();
+        });
+    }
+
+    /// <summary>
+    /// Gates the delayed loading bar. Suppress cancels the wait so a finished refresh cannot flash it.
+    /// </summary>
+    private sealed class LoadingSignal : IDisposable
+    {
+        private readonly CancellationTokenSource _delayCts;
+        private int _shown;
+
+        public LoadingSignal(CancellationToken refreshToken)
+        {
+            _delayCts = CancellationTokenSource.CreateLinkedTokenSource(refreshToken);
+        }
+
+        public CancellationToken Token => _delayCts.Token;
+
+        public bool IsSuppressed
+        {
+            get
+            {
+                try { return _delayCts.IsCancellationRequested; }
+                catch (ObjectDisposedException) { return true; }
+            }
+        }
+
+        public bool WasShown => Volatile.Read(ref _shown) != 0;
+
+        public void MarkShown() => Volatile.Write(ref _shown, 1);
+
+        public void Suppress()
+        {
+            try { _delayCts.Cancel(); }
+            catch (ObjectDisposedException) { }
+        }
+
+        public void Dispose() => _delayCts.Dispose();
     }
 
     /// <summary>

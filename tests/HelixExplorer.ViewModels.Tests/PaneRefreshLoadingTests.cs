@@ -29,7 +29,7 @@ public sealed class PaneRefreshLoadingTests
         });
         coordinator = CreateCoordinator(fileSystem);
 
-        RunRefresh(coordinator, host).Must().BeSequenceEqual(new[] { true, false });
+        RunRefresh(coordinator, host).Must().BeEmpty();
     }
 
     [Fact]
@@ -43,7 +43,7 @@ public sealed class PaneRefreshLoadingTests
         });
         var coordinator = CreateCoordinator(fileSystem);
 
-        RunRefresh(coordinator, host).Must().BeSequenceEqual(new[] { true, false });
+        RunRefresh(coordinator, host).Must().BeEmpty();
         host.PublishCount.Must().Be(0);
     }
 
@@ -54,8 +54,51 @@ public sealed class PaneRefreshLoadingTests
         var fileSystem = new FakeFileSystem((path, _) => new DirectoryListing(path, Array.Empty<FileSystemEntry>()));
         var coordinator = CreateCoordinator(fileSystem);
 
-        RunRefresh(coordinator, host).Must().BeSequenceEqual(new[] { true, false });
+        RunRefresh(coordinator, host).Must().BeEmpty();
         host.PublishCount.Must().Be(1);
+    }
+
+    [Fact]
+    public void DelayedRefresh_ShowsLoadingThenClears()
+    {
+        var host = new FakeHost(FolderPath);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var fileSystem = new AsyncFileSystem(async (_, token) =>
+        {
+            await release.Task.WaitAsync(token);
+            return new DirectoryListing(FolderPath, Array.Empty<FileSystemEntry>());
+        });
+        var coordinator = CreateCoordinator(fileSystem);
+        coordinator.LoadingIndicatorDelay = TimeSpan.FromMilliseconds(30);
+
+        var history = HeadlessSession.RunOnUiThread(async () =>
+        {
+            var refresh = coordinator.RefreshAsync(host, showLoading: true);
+            var showed = await WaitUntilAsync(() => host.LoadingHistory.Contains(true), TimeSpan.FromSeconds(2));
+            showed.Must().BeTrue();
+            release.TrySetResult();
+            await refresh;
+            await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Background);
+            return host.LoadingHistory.ToList();
+        });
+
+        history.Must().Contain(true);
+        history[^1].Must().BeFalse();
+        host.PublishCount.Must().Be(1);
+    }
+
+    private static async Task<bool> WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (condition())
+                return true;
+
+            await Task.Delay(15);
+        }
+
+        return condition();
     }
 
     private static List<bool> RunRefresh(PaneRefreshCoordinator coordinator, FakeHost host)
@@ -91,6 +134,8 @@ public sealed class PaneRefreshLoadingTests
 
         public void SetLoading(bool loading) => LoadingHistory.Add(loading);
         public void SetStatusText(string text) { }
+        public void SetRefreshActive(bool active) { }
+        public void SetRefreshFault(string? message, bool accessDenied) { }
 
         public ListingPublishResult ApplySortAndPublish(ListingPublishRequest request)
         {
@@ -103,6 +148,19 @@ public sealed class PaneRefreshLoadingTests
         public void StopWatcher() { }
         public void RestartWatcher() { }
         public void RequestRefresh() { }
+    }
+
+    private sealed class AsyncFileSystem(Func<string, CancellationToken, Task<DirectoryListing>> list) : IFileSystemProvider
+    {
+        public async ValueTask<DirectoryListing> GetDirectoryContentsAsync(string path, CancellationToken cancellationToken = default)
+            => await list(path, cancellationToken);
+
+        public ValueTask<SearchResult> SearchRecursiveAsync(string path, string query, SearchOptions options, CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(SearchResult.Empty);
+
+        public string ResolvePath(string path) => path;
+        public bool DirectoryExists(string path) => true;
+        public bool FileExists(string path) => false;
     }
 
     private sealed class FakeFileSystem(Func<string, CancellationToken, DirectoryListing> list) : IFileSystemProvider

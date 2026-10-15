@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
@@ -20,6 +21,7 @@ using HelixExplorer.Core.Sorting;
 using HelixExplorer.Input;
 using HelixExplorer.Services;
 using HelixExplorer.ViewModels;
+using HelixExplorer.ViewModels.Pane;
 
 namespace HelixExplorer.Views;
 
@@ -33,6 +35,12 @@ public sealed partial class PaneView : UserControl
     /// Longer than a typical double-click so open still wins on DoubleTapped.
     /// </summary>
     private static readonly TimeSpan RenameClickDelay = TimeSpan.FromMilliseconds(750);
+
+    /// <summary>
+    /// Miller opens the next column only after the selection rests, so holding Down does not
+    /// enumerate every folder the highlight passes through.
+    /// </summary>
+    private static readonly TimeSpan MillerActivateDelay = TimeSpan.FromMilliseconds(250);
 
     private enum PointerInteractionMode
     {
@@ -60,6 +68,11 @@ public sealed partial class PaneView : UserControl
     private readonly List<Control> _millerColumns = new();
     private readonly Dictionary<Control, List<Control>> _headerAndScrollbarCache = new();
     private int _millerRequestVersion;
+    private DispatcherTimer? _millerActivateTimer;
+    private ListBox? _millerActivateList;
+    private EntryItemViewModel? _millerActivateEntry;
+    private bool _millerSuppressColumnOpen;
+    private bool _millerFocusNewColumn;
     private readonly FuncDataTemplate<EntryItemViewModel> _millerItemTemplate = new(CreateMillerItem);
 
     private static Control CreateMillerItem(EntryItemViewModel? item, INameScope _)
@@ -71,6 +84,26 @@ public sealed partial class PaneView : UserControl
             DataContext = item,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
         };
+        var letter = new TextBlock
+        {
+            DataContext = item,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            FontWeight = Avalonia.Media.FontWeight.SemiBold,
+            Margin = new Thickness(0, 0, 6, 0),
+            [!TextBlock.TextProperty] = new Binding(nameof(EntryItemViewModel.GitStatus))
+            {
+                Converter = GitStatusLetterConverter.Instance
+            },
+            [!TextBlock.IsVisibleProperty] = new Binding(nameof(EntryItemViewModel.GitStatus))
+            {
+                Converter = GitStatusBadgeVisibleConverter.Instance
+            },
+            [!ToolTip.TipProperty] = new Binding(nameof(EntryItemViewModel.GitStatus))
+            {
+                Converter = GitStatusTooltipConverter.Instance
+            },
+            [!TextBlock.ForegroundProperty] = CreateNameForegroundBinding(),
+        };
         var name = new TextBlock
         {
             DataContext = item,
@@ -79,10 +112,12 @@ public sealed partial class PaneView : UserControl
             [!TextBlock.TextProperty] = new Binding(nameof(EntryItemViewModel.DisplayName)),
             [!TextBlock.ForegroundProperty] = CreateNameForegroundBinding(),
         };
-        Grid.SetColumn(name, 1);
+        Grid.SetColumn(letter, 1);
+        Grid.SetColumn(name, 2);
 
-        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("28,*") };
+        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("28,Auto,*") };
         row.Children.Add(icon);
+        row.Children.Add(letter);
         row.Children.Add(name);
         return row;
     }
@@ -104,6 +139,8 @@ public sealed partial class PaneView : UserControl
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
         DetailsGrid.ContextRequested += OnDetailsContextRequested;
+        DetailsGrid.LoadingRow += OnDetailsLoadingRow;
+        ListView.ContainerPrepared += OnListContainerPrepared;
 
         // The DataGrid and ListBox mark PointerPressed/PointerMoved handled for their own selection
         // before the event bubbles to the normally-attached handlers, so the drag-out gesture never
@@ -475,6 +512,11 @@ public sealed partial class PaneView : UserControl
         else if (e.Key == Key.F5)
         {
             Pane.RefreshCommand.Execute(null);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape && Pane.CanStopLoading)
+        {
+            Pane.StopLoadingCommand.Execute(null);
             e.Handled = true;
         }
         else if (e.Key == Key.Escape && (Pane.IsFilterMode || Pane.IsSearchMode))
@@ -981,6 +1023,7 @@ public sealed partial class PaneView : UserControl
         if (Pane is null)
             return;
 
+        CancelMillerActivation();
         MillerPanel.Children.Clear();
         _millerColumns.Clear();
         _millerRequestVersion++;
@@ -989,6 +1032,7 @@ public sealed partial class PaneView : UserControl
         var column = BuildMillerColumn(entries, columnIndex: 0);
         MillerPanel.Children.Add(column);
         _millerColumns.Add(column);
+        RefreshMillerSelectionModes();
     }
 
     private const int MaxMillerColumns = 8;
@@ -1006,28 +1050,229 @@ public sealed partial class PaneView : UserControl
         };
         list.ItemsPanel = new FuncTemplate<Panel?>(() => new VirtualizingStackPanel());
         MillerColumnPanel.SetColumnIndex(list, columnIndex);
-        list.SelectionChanged += (_, _) =>
-        {
-            if (list.SelectedItem is EntryItemViewModel entry)
-            {
-                Pane?.SelectEntry(entry, KeyModifiers.None);
-                if (entry.IsDirectory || ArchivePath.IsArchiveFile(entry.FullPath))
-                    MillerPanel.RaiseActivated(columnIndex, entry);
-            }
-        };
-        list.DoubleTapped += (_, e) =>
-        {
-            if (ShouldSuppressActivation(e.Source))
-            {
-                e.Handled = true;
-                return;
-            }
-
-            if (list.SelectedItem is EntryItemViewModel { IsDirectory: false } entry
-                && !ArchivePath.IsArchiveFile(entry.FullPath))
-                Pane?.ActivateEntry(entry);
-        };
+        list.SelectionChanged += OnMillerSelectionChanged;
+        list.DoubleTapped += OnMillerDoubleTapped;
+        list.ContextRequested += OnMillerContextRequested;
+        list.AddHandler(PointerPressedEvent, OnMillerPointerPressed, RoutingStrategies.Tunnel, handledEventsToo: true);
+        list.AddHandler(KeyDownEvent, OnMillerKeyDown, RoutingStrategies.Tunnel);
         return list;
+    }
+
+    private void OnMillerSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not ListBox list || Pane is null || _syncingSelectionToView)
+            return;
+
+        var selected = ExtractSelectedItems(list);
+        if (selected.Count == 0)
+            return;
+
+        if (IsLastMillerColumn(list))
+            Pane.UpdateSelection(selected);
+        else if (list.SelectedItem is EntryItemViewModel single)
+            Pane.SelectEntry(single, KeyModifiers.None);
+
+        if (_millerSuppressColumnOpen)
+            return;
+
+        if (list.SelectedItem is EntryItemViewModel active)
+            ScheduleMillerActivation(list, active);
+    }
+
+    private void OnMillerDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is not ListBox list)
+            return;
+
+        if (ShouldSuppressActivation(e.Source))
+        {
+            e.Handled = true;
+            return;
+        }
+
+        CancelMillerActivation();
+        if (list.SelectedItem is not EntryItemViewModel entry)
+            return;
+
+        if (IsMillerContainer(entry))
+            OpenMillerColumn(list, entry);
+        else
+            Pane?.ActivateEntry(entry);
+    }
+
+    private void OnMillerPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not ListBox list || Pane is null)
+            return;
+        if (!e.GetCurrentPoint(list).Properties.IsRightButtonPressed)
+            return;
+        if (TryGetEntryFromSource(e.Source) is not { } entry)
+            return;
+
+        // Extended selection on the last column keeps a right-click inside the selection.
+        if (IsLastMillerColumn(list) && list.SelectedItems?.Contains(entry) == true)
+            return;
+
+        _millerSuppressColumnOpen = true;
+        try
+        {
+            list.SelectedItem = entry;
+        }
+        finally
+        {
+            _millerSuppressColumnOpen = false;
+        }
+    }
+
+    private void OnMillerContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (sender is not ListBox list || Pane is null)
+            return;
+
+        if (TryGetEntryFromSource(e.Source) is { } entry
+            && !(IsLastMillerColumn(list) && list.SelectedItems?.Contains(entry) == true))
+        {
+            _millerSuppressColumnOpen = true;
+            try
+            {
+                list.SelectedItem = entry;
+            }
+            finally
+            {
+                _millerSuppressColumnOpen = false;
+            }
+        }
+
+        if (this.FindResource("EntryContextMenu") is not ContextMenu menu)
+            return;
+
+        menu.DataContext = Pane;
+        menu.PlacementTarget = list;
+        list.ContextMenu = menu;
+    }
+
+    private void OnMillerKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (sender is not ListBox list || Pane is null || Pane.IsRenaming || IsTextEditorFocused())
+            return;
+
+        if (e.Key == Key.Enter && e.KeyModifiers == KeyModifiers.None)
+        {
+            ActivateMillerNow(list);
+            e.Handled = true;
+            return;
+        }
+
+        if (e.KeyModifiers != KeyModifiers.None || e.Key is not (Key.Left or Key.Right))
+            return;
+
+        var index = _millerColumns.IndexOf(list);
+        if (index < 0)
+            return;
+
+        var nextIndex = e.Key == Key.Right ? index + 1 : index - 1;
+        if ((uint)nextIndex < (uint)_millerColumns.Count && _millerColumns[nextIndex] is ListBox next)
+        {
+            next.Focus();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Right
+            && list.SelectedItem is EntryItemViewModel entry
+            && IsMillerContainer(entry))
+        {
+            _millerFocusNewColumn = true;
+            OpenMillerColumn(list, entry);
+            e.Handled = true;
+        }
+    }
+
+    private void ActivateMillerNow(ListBox list)
+    {
+        CancelMillerActivation();
+        if (list.SelectedItem is not EntryItemViewModel entry)
+            return;
+
+        if (IsMillerContainer(entry))
+            OpenMillerColumn(list, entry);
+        else
+            Pane?.ActivateEntry(entry);
+    }
+
+    private void ScheduleMillerActivation(ListBox list, EntryItemViewModel entry)
+    {
+        if (!IsMillerContainer(entry))
+        {
+            CancelMillerActivation();
+            return;
+        }
+
+        _millerActivateList = list;
+        _millerActivateEntry = entry;
+        _millerActivateTimer ??= new DispatcherTimer { Interval = MillerActivateDelay };
+        _millerActivateTimer.Tick -= OnMillerActivateTick;
+        _millerActivateTimer.Tick += OnMillerActivateTick;
+        _millerActivateTimer.Stop();
+        _millerActivateTimer.Start();
+    }
+
+    private void OnMillerActivateTick(object? sender, EventArgs e)
+    {
+        var list = _millerActivateList;
+        var entry = _millerActivateEntry;
+        CancelMillerActivation();
+        if (list is null || entry is null || !ReferenceEquals(list.SelectedItem, entry))
+            return;
+        if (!_millerColumns.Contains(list))
+            return;
+
+        OpenMillerColumn(list, entry);
+    }
+
+    private void CancelMillerActivation()
+    {
+        if (_millerActivateTimer is not null)
+        {
+            _millerActivateTimer.Stop();
+            _millerActivateTimer.Tick -= OnMillerActivateTick;
+        }
+
+        _millerActivateList = null;
+        _millerActivateEntry = null;
+    }
+
+    private void OpenMillerColumn(ListBox list, EntryItemViewModel entry)
+    {
+        var columnIndex = list.GetValue(MillerColumnPanel.ColumnIndexProperty);
+        MillerPanel.RaiseActivated(columnIndex, entry);
+    }
+
+    private static bool IsMillerContainer(EntryItemViewModel entry)
+        => entry.IsDirectory || ArchivePath.IsArchiveFile(entry.FullPath);
+
+    private bool IsLastMillerColumn(Control list)
+        => _millerColumns.Count > 0 && ReferenceEquals(_millerColumns[^1], list);
+
+    private void RefreshMillerSelectionModes()
+    {
+        _millerSuppressColumnOpen = true;
+        try
+        {
+            for (var i = 0; i < _millerColumns.Count; i++)
+            {
+                if (_millerColumns[i] is not ListBox list)
+                    continue;
+
+                var mode = i == _millerColumns.Count - 1 ? SelectionMode.Multiple : SelectionMode.Single;
+                if (list.SelectionMode != mode)
+                    list.SelectionMode = mode;
+            }
+        }
+        finally
+        {
+            _millerSuppressColumnOpen = false;
+        }
     }
 
     private async void OnMillerColumnActivated(object? sender, MillerColumnActivatedEventArgs e)
@@ -1057,12 +1302,23 @@ public sealed partial class PaneView : UserControl
                 MillerColumnPanel.SetColumnIndex(_millerColumns[i], i);
         }
 
+        RefreshMillerSelectionModes();
+
         var children = await Pane.EnumerateMillerChildrenAsync(entry.FullPath).ConfigureAwait(true);
         if (requestVersion != _millerRequestVersion || Pane is null)
+        {
+            _millerFocusNewColumn = false;
             return;
+        }
         var column = BuildMillerColumn(children, keep);
         MillerPanel.Children.Add(column);
         _millerColumns.Add(column);
+        RefreshMillerSelectionModes();
+        if (_millerFocusNewColumn)
+        {
+            _millerFocusNewColumn = false;
+            column.Focus();
+        }
 
         Dispatcher.UIThread.Post(() =>
         {
@@ -1564,9 +1820,7 @@ public sealed partial class PaneView : UserControl
 
         UpdateDropTarget(targetEntry);
 
-        e.DragEffects = e.KeyModifiers.HasFlag(KeyModifiers.Control)
-            ? DragDropEffects.Copy
-            : DragDropEffects.Move;
+        e.DragEffects = ResolvePaneDropEffect(e, destinationPath);
         e.Handled = true;
     }
 
@@ -1610,6 +1864,15 @@ public sealed partial class PaneView : UserControl
             return HitTestEntry(ListView, e.GetPosition(ListView));
         if (Pane.IsGridView)
             return HitTestEntry(GridView, e.GetPosition(GridView));
+        if (Pane.IsMillerView)
+        {
+            foreach (var column in _millerColumns)
+            {
+                var hit = HitTestEntry(column, e.GetPosition(column));
+                if (hit is not null)
+                    return hit;
+            }
+        }
 
         return null;
     }
@@ -1678,11 +1941,82 @@ public sealed partial class PaneView : UserControl
         if (paths.Count == 0)
             return;
 
-        var isCopy = e.KeyModifiers.HasFlag(KeyModifiers.Control)
-                     || e.DragEffects == DragDropEffects.Copy;
-        await Pane.HandleDropAsync(paths, destinationPath, isCopy);
-
+        var effect = ResolvePaneDropEffect(e, destinationPath);
         e.Handled = true;
+        if (effect is DragDropEffects.None or DragDropEffects.Link)
+            return;
+
+        await Pane.HandleDropAsync(paths, destinationPath, effect == DragDropEffects.Copy);
+    }
+
+    private static DragDropEffects ResolvePaneDropEffect(DragEventArgs e, string destination)
+    {
+        var effect = DropEffectPolicy.Resolve(
+            FirstLocalDropPath(e),
+            destination,
+            e.KeyModifiers.HasFlag(KeyModifiers.Control),
+            e.KeyModifiers.HasFlag(KeyModifiers.Shift),
+            e.KeyModifiers.HasFlag(KeyModifiers.Alt));
+
+        return effect switch
+        {
+            HelixExplorer.Core.Infrastructure.DragDropEffects.Move => DragDropEffects.Move,
+            HelixExplorer.Core.Infrastructure.DragDropEffects.Link => DragDropEffects.Link,
+            HelixExplorer.Core.Infrastructure.DragDropEffects.Copy => DragDropEffects.Copy,
+            _ => DragDropEffects.None
+        };
+    }
+
+    private static string? FirstLocalDropPath(DragEventArgs e)
+    {
+        var files = e.DataTransfer.TryGetFiles();
+        if (files is null)
+            return null;
+
+        foreach (var file in files)
+        {
+            var local = file.TryGetLocalPath();
+            if (!string.IsNullOrEmpty(local))
+                return local;
+        }
+
+        return null;
+    }
+
+    private void OnDetailsLoadingRow(object? sender, DataGridRowEventArgs e)
+    {
+        e.Row.DataContextChanged -= OnAutomationContainerDataContextChanged;
+        e.Row.DataContextChanged += OnAutomationContainerDataContextChanged;
+        ApplyEntryAutomationName(e.Row);
+    }
+
+    private void OnListContainerPrepared(object? sender, ContainerPreparedEventArgs e)
+    {
+        if (e.Container is not Control container)
+            return;
+
+        container.DataContextChanged -= OnAutomationContainerDataContextChanged;
+        container.DataContextChanged += OnAutomationContainerDataContextChanged;
+        ApplyEntryAutomationName(container);
+    }
+
+    private static void OnAutomationContainerDataContextChanged(object? sender, EventArgs e)
+    {
+        if (sender is Control container)
+            ApplyEntryAutomationName(container);
+    }
+
+    private static void ApplyEntryAutomationName(Control container)
+    {
+        if (container.DataContext is EntryItemViewModel entry)
+        {
+            AutomationProperties.SetName(
+                container,
+                PanePresentation.FormatAutomationName(entry.DisplayName, entry.TypeLabel));
+            return;
+        }
+
+        AutomationProperties.SetName(container, string.Empty);
     }
 
 }

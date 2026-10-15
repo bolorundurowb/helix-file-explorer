@@ -22,7 +22,7 @@ Release installer publish (matches CI):
 dotnet publish src/HelixExplorer/HelixExplorer.csproj -c Release -r win-x64 --self-contained true -p:DebugType=none -p:DebugSymbols=false -o publish/win-x64
 ```
 
-Bump product version only in `Directory.Build.props` (release workflow reads it for tags/`HELIX_VERSION`).
+Bump product version only in `Directory.Build.props` (release workflow reads it for tags/`HELIX_VERSION`). A deliberate bump to a stable version (e.g. `1.4.3` → `1.4.4`) publishes that version as-is on the next push to `master`. Pushing `master` without bumping `Directory.Build.props` — or re-pushing a version that is already released — does not no-op: `release-on-master.yml` auto-commits the next `preview.N` on top of whatever is already released and publishes that as a prerelease. See "Releases" below.
 
 ## Architecture (keep boundaries)
 
@@ -61,6 +61,13 @@ Bump product version only in `Directory.Build.props` (release workflow reads it 
 Debug builds (F5 / `dotnet run`) and any process with `HELIX_DEV_PROFILE=1` use the sibling `HelixExplorer.Dev` folder for AppData, logs, and archive temp so they cannot overwrite an installed Release profile. Installed Release builds keep `%AppData%\HelixExplorer\`.
 
 Use `AppPaths` / `AppVersion` instead of hard-coding paths.
+
+## Releases
+
+- `.github/workflows/release-on-master.yml` and `release-on-tag.yml` decide *what* to publish (stable vs. the next `preview.N`, `make_latest`); `release-installers.yml` is a `workflow_call`-only publisher that *builds and ships* a version it is told to. Both callers share `scripts/Resolve-ReleaseVersion.ps1` for parsing, preview-increment, and `make_latest` logic — do not duplicate that logic inline in a workflow.
+- The decision is derived from already-published GitHub releases (ancestor-of-a-non-draft-release check), never from a commit diff, so a re-run or a stale queued run is a safe no-op and a failed run is retried rather than silently skipped.
+- Changes that only touch `**/*.md`, `.github/ISSUE_TEMPLATE/**`, `.github/workflows/**`, or `LICENSE` do not trigger a build or release. **Workflow-only changes are never exercised by pushing to `master` in this repo** — test them on a scratch fork, or with `workflow_dispatch` against a branch that has already shipped its current version (a deliberate no-op dispatch still runs the whole decision path).
+- To force a republish of a commit that already has a release (e.g. a bad asset slipped through): delete the GitHub release for that version — the tag can stay, since it already points at the right commit — then re-run or re-dispatch. Re-running without deleting the release is a no-op by design.
 
 ## Installer
 

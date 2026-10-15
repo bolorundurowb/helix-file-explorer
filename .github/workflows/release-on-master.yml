@@ -1,0 +1,126 @@
+name: Release (master)
+
+on:
+  push:
+    branches: [master]
+    # Previews publish a full installer on every qualifying push, so docs-only
+    # and workflow-only changes are excluded here. Test workflow-only changes
+    # on a scratch fork or via workflow_dispatch instead (see AGENTS.md).
+    paths-ignore:
+      - '**/*.md'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/workflows/**'
+      - 'LICENSE'
+  workflow_dispatch:
+
+# Shared with release-on-tag.yml: that workflow also pushes to master (the
+# stable-tag props sync), so a tag push and a merge must not race on
+# Directory.Build.props. GitHub keeps only one pending run per group and
+# cancels older pending ones; with three rapid merges the middle run is
+# cancelled, which is harmless since the surviving run includes all earlier
+# commits.
+concurrency:
+  group: release-master
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  decide:
+    # GITHUB_TOKEN pushes do not trigger new workflow runs, so this should
+    # never actually match on a push event; kept as defence in depth.
+    if: github.actor != 'github-actions[bot]'
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    outputs:
+      noop: ${{ steps.resolve.outputs.noop }}
+      version: ${{ steps.resolve.outputs.version }}
+      prerelease: ${{ steps.resolve.outputs.prerelease }}
+      make_latest: ${{ steps.resolve.outputs.make_latest }}
+      ref: ${{ steps.resolve.outputs.ref }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure bot identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Resolve version and push a preview bump if needed
+        id: resolve
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $maxAttempts = 5
+          $decision = $null
+
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            # The only local change here is an uncommitted bump from a prior
+            # attempt, so resetting to origin/master and recomputing is
+            # clearer than rebasing it.
+            git fetch origin master --tags --force
+            git reset --hard origin/master
+            $sha = (git rev-parse HEAD).Trim()
+
+            $json = ./scripts/Resolve-ReleaseVersion.ps1 -Mode Master -Repo "${{ github.repository }}" -Sha $sha
+            $decision = $json | ConvertFrom-Json
+
+            if ($decision.noop) {
+              Write-Host "No-op: $sha is already covered by a published release."
+              break
+            }
+
+            if (-not $decision.needsBump) {
+              Write-Host "No release yet for the current Directory.Build.props version ($($decision.version)); publishing it as-is."
+              break
+            }
+
+            Write-Host "Bumping Directory.Build.props to $($decision.version)."
+            $propsPath = "Directory.Build.props"
+            $content = Get-Content $propsPath -Raw
+            $updated = $content -replace '<Version>[^<]*</Version>', "<Version>$($decision.version)</Version>"
+            if ($updated -eq $content) {
+              throw "Could not find a <Version> element to update in $propsPath."
+            }
+            Set-Content -Path $propsPath -Value $updated -NoNewline
+
+            git add $propsPath
+            git commit -m "ch: bump version to $($decision.version) [skip ci]"
+
+            git push origin HEAD:master
+            if ($LASTEXITCODE -eq 0) {
+              break
+            }
+
+            Write-Host "Push rejected (attempt $attempt/$maxAttempts); master moved, resyncing and recomputing."
+            if ($attempt -eq $maxAttempts) {
+              throw "Could not push the version bump after $maxAttempts attempts; master kept moving underneath this run."
+            }
+          }
+
+          $finalSha = (git rev-parse HEAD).Trim()
+          "noop=$($decision.noop.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          if (-not $decision.noop) {
+            "version=$($decision.version)" >> $env:GITHUB_OUTPUT
+            "prerelease=$($decision.prerelease.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+            "make_latest=$($decision.makeLatest.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+            "ref=$finalSha" >> $env:GITHUB_OUTPUT
+          }
+
+  release:
+    needs: decide
+    if: needs.decide.outputs.noop != 'true'
+    uses: ./.github/workflows/release-installers.yml
+    with:
+      version: ${{ needs.decide.outputs.version }}
+      prerelease: ${{ needs.decide.outputs.prerelease == 'true' }}
+      make_latest: ${{ needs.decide.outputs.make_latest }}
+      ref: ${{ needs.decide.outputs.ref }}
+    permissions:
+      contents: write

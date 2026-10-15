@@ -470,6 +470,21 @@
                                 <ToggleSwitch Grid.Column="1"
                                               IsChecked="{Binding Main.AutoCheckForUpdates, Mode=TwoWay}" />
                             </Grid>
+                            <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">
+                                <TextBlock Grid.Column="0"
+                                           Text="Update channel"
+                                           FontSize="13"
+                                           VerticalAlignment="Center" />
+                                <ComboBox Grid.Column="1" MinWidth="150"
+                                          SelectedItem="{Binding Main.UpdateChannel, Mode=TwoWay}">
+                                    <settings:UpdateChannel>Stable</settings:UpdateChannel>
+                                    <settings:UpdateChannel>Preview</settings:UpdateChannel>
+                                </ComboBox>
+                            </Grid>
+                            <TextBlock Text="Stable only offers a newer stable release, so a preview install stays quiet until the next stable ships."
+                                       FontSize="12"
+                                       Opacity="0.6"
+                                       TextWrapping="Wrap" />
                             <Button Content="Download Update"
                                     Command="{Binding OpenReleaseUrlCommand}"
                                     HorizontalAlignment="Left"

@@ -1,0 +1,128 @@
+name: Release (tag)
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Shared with release-on-master.yml: this workflow also writes to master (the
+# post-release stable-tag props sync), so a tag push and a merge must not
+# race on Directory.Build.props.
+concurrency:
+  group: release-master
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  decide:
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    outputs:
+      noop: ${{ steps.resolve.outputs.noop }}
+      version: ${{ steps.resolve.outputs.version }}
+      prerelease: ${{ steps.resolve.outputs.prerelease }}
+      make_latest: ${{ steps.resolve.outputs.make_latest }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch tags
+        run: git fetch origin --tags --force
+
+      - name: Resolve tag decision
+        id: resolve
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Invalid tag syntax fails here, loudly, rather than guessing or rewriting it.
+          $json = ./scripts/Resolve-ReleaseVersion.ps1 -Mode Tag -Repo "${{ github.repository }}" -TagName "${{ github.ref_name }}"
+          $decision = $json | ConvertFrom-Json
+
+          "noop=$($decision.noop.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          if (-not $decision.noop) {
+            "version=$($decision.version)" >> $env:GITHUB_OUTPUT
+            "prerelease=$($decision.prerelease.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+            "make_latest=$($decision.makeLatest.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          }
+
+  release:
+    needs: decide
+    if: needs.decide.outputs.noop != 'true'
+    uses: ./.github/workflows/release-installers.yml
+    with:
+      version: ${{ needs.decide.outputs.version }}
+      prerelease: ${{ needs.decide.outputs.prerelease == 'true' }}
+      make_latest: ${{ needs.decide.outputs.make_latest }}
+      # A tag push's github.sha is already the commit the tag points at, so
+      # there is no ambiguity to resolve the way the master caller has to.
+      ref: ${{ github.sha }}
+    permissions:
+      contents: write
+
+  sync-props:
+    needs: [decide, release]
+    # Only a stable tag's props get synced onto master: a preview tag would
+    # point master's Directory.Build.props at a preview, which the master
+    # caller would then treat as "already released" and immediately mint yet
+    # another preview from it.
+    if: needs.decide.outputs.noop != 'true' && needs.decide.outputs.prerelease != 'true'
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Configure bot identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync Directory.Build.props if the tag is ahead
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $maxAttempts = 5
+
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            git fetch origin master --force
+            git reset --hard origin/master
+
+            $json = ./scripts/Resolve-ReleaseVersion.ps1 -Mode TagPropsSync -TagName "${{ github.ref_name }}"
+            $decision = $json | ConvertFrom-Json
+
+            if (-not $decision.needsSync) {
+              Write-Host "master's Directory.Build.props is already at or ahead of $($decision.version); nothing to sync."
+              break
+            }
+
+            $propsPath = "Directory.Build.props"
+            $content = Get-Content $propsPath -Raw
+            $updated = $content -replace '<Version>[^<]*</Version>', "<Version>$($decision.version)</Version>"
+            if ($updated -eq $content) {
+              throw "Could not find a <Version> element to update in $propsPath."
+            }
+            Set-Content -Path $propsPath -Value $updated -NoNewline
+
+            git add $propsPath
+            git commit -m "ch: sync version to $($decision.version) from tag ${{ github.ref_name }} [skip ci]"
+
+            git push origin HEAD:master
+            if ($LASTEXITCODE -eq 0) {
+              break
+            }
+
+            Write-Host "Push rejected (attempt $attempt/$maxAttempts); master moved, resyncing and recomputing."
+            if ($attempt -eq $maxAttempts) {
+              throw "Could not push the props sync after $maxAttempts attempts; master kept moving underneath this run."
+            }
+          }

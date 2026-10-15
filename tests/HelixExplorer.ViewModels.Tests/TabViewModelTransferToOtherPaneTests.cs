@@ -195,4 +195,27 @@ public class TabViewModelTransferToOtherPaneTests : IDisposable
         target.Any(c => c.Title == "Copy to Other Pane" && c.Shortcut == "Alt+F5").Must().BeTrue();
         target.Any(c => c.Title == "Move to Other Pane" && c.Shortcut == "Alt+F6").Must().BeTrue();
     }
+
+    [Fact]
+    public void CommandPalette_Titles_UseTitleCase()
+    {
+        var palette = new CommandPaletteService();
+        var target = new System.Collections.ObjectModel.ObservableCollection<CommandItem>();
+        palette.FilterInto(target, string.Empty, []);
+
+        // Short prepositions stay lowercase in the middle of a title ("Copy to Other Pane").
+        var smallWords = new HashSet<string>(StringComparer.Ordinal) { "a", "an", "and", "for", "in", "of", "or", "the", "to" };
+        foreach (var command in target)
+        {
+            var words = command.Title.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            for (var i = 0; i < words.Length; i++)
+            {
+                var word = words[i].TrimEnd(':');
+                if (i > 0 && i < words.Length - 1 && smallWords.Contains(word))
+                    continue;
+
+                char.IsUpper(word[0]).Must().BeTrue();
+            }
+        }
+    }
 }

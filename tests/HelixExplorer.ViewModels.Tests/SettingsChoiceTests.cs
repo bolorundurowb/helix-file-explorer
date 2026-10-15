@@ -206,6 +206,7 @@ public sealed class SettingsChoiceTests
 
                 var text = page.GetVisualDescendants().OfType<TextBlock>().Select(block => block.Text).ToList();
                 text.Must().Contain("Accent colour");
+                text.Must().Contain("Burnt orange");
                 text.Contains("Background colour").Must().BeFalse();
 
                 var capture = page.GetVisualDescendants().OfType<Border>().Single(border => border.Name == "TerminalGestureCapture");

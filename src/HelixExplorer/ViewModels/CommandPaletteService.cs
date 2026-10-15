@@ -23,9 +23,9 @@ public sealed class CommandPaletteService
         Add("New Tab", "File", vm => vm.NewTabCommand.Execute(null), "Ctrl+T");
         Add("Close Tab", "File", vm => vm.CloseSelectedTabCommand.Execute(null), "Ctrl+W");
         Add("Toggle Theme", "Appearance", vm => vm.ToggleThemeCommand.Execute(null));
-        Add("New window", "File", vm => vm.NewWindowCommand.Execute(null), "Ctrl+N");
-        Add("Reopen closed tab", "File", vm => vm.ReopenClosedTabCommand.Execute(null), "Ctrl+Shift+T", CanReopenClosedTab);
-        Add("Toggle sidebar", "View", vm => vm.ToggleSidebarCommand.Execute(null));
+        Add("New Window", "File", vm => vm.NewWindowCommand.Execute(null), "Ctrl+N");
+        Add("Reopen Closed Tab", "File", vm => vm.ReopenClosedTabCommand.Execute(null), "Ctrl+Shift+T", CanReopenClosedTab);
+        Add("Toggle Sidebar", "View", vm => vm.ToggleSidebarCommand.Execute(null));
         Add("Toggle Dual Pane", "View", vm => vm.ToggleDualPaneCommand.Execute(null), "Ctrl+D");
         Add("Filter", "View", vm => vm.FocusFilterCommand.Execute(null), "Ctrl+F");
         Add("Search", "View", vm => vm.FocusSearchCommand.Execute(null), "Ctrl+Shift+F");

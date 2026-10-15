@@ -335,6 +335,26 @@
                                         </Grid>
                                     </Border>
                                 </Button>
+                                <Button Classes="settingsNavItem accentSwatch" Width="88" Height="64" Margin="0,0,10,10"
+                                        Padding="0" Click="OnAccentClick" Tag="#CC5500"
+                                        Classes.selected="{Binding Main.AccentColorArgb, Converter={StaticResource AccentSwatchSelectedConverter}, ConverterParameter=#CC5500, TargetNullValue=False}">
+                                    <Border Classes="accentRing" BorderThickness="2" CornerRadius="6" Padding="2">
+                                        <Grid>
+                                            <StackPanel VerticalAlignment="Center">
+                                                <PathIcon Data="{DynamicResource HelixFolderIconGeometry}"
+                                                          Width="28" Height="28" HorizontalAlignment="Center"
+                                                          Foreground="#CC5500" />
+                                                <TextBlock Text="Burnt orange" FontSize="11" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                            <PathIcon Classes="accentCheck"
+                                                      Data="{DynamicResource HelixIconCheckmarkGeometry}"
+                                                      Width="14" Height="14"
+                                                      HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                      Margin="0,1,1,0"
+                                                      Foreground="{DynamicResource HelixEntryForegroundBrush}" />
+                                        </Grid>
+                                    </Border>
+                                </Button>
                             </WrapPanel>
                         </StackPanel>
                     </Border>

@@ -218,4 +218,15 @@ public class TabViewModelTransferToOtherPaneTests : IDisposable
             }
         }
     }
+
+    [Fact]
+    public void CommandPalette_ColumnsLayout_IsNotCalledMiller()
+    {
+        var palette = new CommandPaletteService();
+        var target = new System.Collections.ObjectModel.ObservableCollection<CommandItem>();
+        palette.FilterInto(target, string.Empty, []);
+
+        target.Any(c => c.Title == "Columns View").Must().BeTrue();
+        target.Any(c => c.Title.Contains("Miller", StringComparison.OrdinalIgnoreCase)).Must().BeFalse();
+    }
 }

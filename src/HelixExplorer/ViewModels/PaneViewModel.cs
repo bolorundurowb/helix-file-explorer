@@ -227,9 +227,6 @@ public sealed partial class PaneViewModel :
     [ObservableProperty] private SortColumn _sortColumn = SortColumn.Name;
     [ObservableProperty] private bool _sortDescending;
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsFoldersFirst))]
-    [NotifyPropertyChangedFor(nameof(IsFilesFirst))]
-    [NotifyPropertyChangedFor(nameof(IsMixedFolderSort))]
     private DirectorySortMode _directorySort = DirectorySortMode.MixedWithFiles;
     [ObservableProperty] private int _itemCount;
     [ObservableProperty] private int _totalCount;
@@ -470,7 +467,6 @@ public sealed partial class PaneViewModel :
     partial void OnSortColumnChanged(SortColumn value)
     {
         ApplySortAndPublish();
-        NotifySortOptionProperties();
         SortChanged?.Invoke(this, EventArgs.Empty);
         SchedulePersistFolderViewPreferences();
     }
@@ -478,7 +474,6 @@ public sealed partial class PaneViewModel :
     partial void OnSortDescendingChanged(bool value)
     {
         ApplySortAndPublish();
-        NotifySortOptionProperties();
         SortChanged?.Invoke(this, EventArgs.Empty);
         SchedulePersistFolderViewPreferences();
     }
@@ -486,40 +481,11 @@ public sealed partial class PaneViewModel :
     partial void OnDirectorySortChanged(DirectorySortMode value)
     {
         ApplySortAndPublish();
-        NotifySortOptionProperties();
         SortChanged?.Invoke(this, EventArgs.Empty);
         SchedulePersistFolderViewPreferences();
     }
 
-    public bool IsSortByName => SortColumn == SortColumn.Name;
-    public bool IsSortByDate => SortColumn == SortColumn.Modified;
-    public bool IsSortByType => SortColumn == SortColumn.Type;
-    public bool IsSortBySize => SortColumn == SortColumn.Size;
-    public bool IsSortAscending => !SortDescending;
-    public bool IsSortDescendingActive => SortDescending;
-    public bool IsFoldersFirst => DirectorySort == DirectorySortMode.FoldersFirst;
-    public bool IsFilesFirst => DirectorySort == DirectorySortMode.FilesFirst;
-    public bool IsMixedFolderSort => DirectorySort == DirectorySortMode.MixedWithFiles;
-
-    [RelayCommand]
-    private void SetSortColumn(SortColumn column) => SortColumn = column;
-
-    [RelayCommand]
-    private void SetSortAscending() => SortDescending = false;
-
-    [RelayCommand]
-    private void SetSortDescending() => SortDescending = true;
-
-    [RelayCommand]
-    private void SetDirectorySort(DirectorySortMode mode) => DirectorySort = mode;
-
     [ObservableProperty] private GroupByMode _groupBy = GroupByMode.None;
-
-    public bool IsGroupByNone => GroupBy == GroupByMode.None;
-    public bool IsGroupByName => GroupBy == GroupByMode.Name;
-    public bool IsGroupByDate => GroupBy == GroupByMode.Modified;
-    public bool IsGroupByType => GroupBy == GroupByMode.Type;
-    public bool IsGroupBySize => GroupBy == GroupByMode.Size;
 
     /// <summary>Grouping is a Grid-only feature; menus bind to this to stay hidden elsewhere.</summary>
     public bool IsGroupingActive => IsGridView && GroupBy != GroupByMode.None;
@@ -535,9 +501,6 @@ public sealed partial class PaneViewModel :
     }
 
     [RelayCommand]
-    private void SetGroupBy(GroupByMode mode) => GroupBy = mode;
-
-    [RelayCommand]
     private void ToggleGroupCollapsed(string? key)
     {
         if (string.IsNullOrEmpty(key))
@@ -551,14 +514,7 @@ public sealed partial class PaneViewModel :
     }
 
     private void NotifyGroupOptionProperties()
-    {
-        OnPropertyChanged(nameof(IsGroupByNone));
-        OnPropertyChanged(nameof(IsGroupByName));
-        OnPropertyChanged(nameof(IsGroupByDate));
-        OnPropertyChanged(nameof(IsGroupByType));
-        OnPropertyChanged(nameof(IsGroupBySize));
-        OnPropertyChanged(nameof(IsGroupingActive));
-    }
+        => OnPropertyChanged(nameof(IsGroupingActive));
 
     private void RebuildGridItems()
     {
@@ -573,19 +529,6 @@ public sealed partial class PaneViewModel :
         ObservableCollectionDiff.Apply(
             GridItems,
             _gridPresenter.Build(Entries, GroupBy, _groupingUtcNow, _collapsedGroupKeys));
-    }
-
-    private void NotifySortOptionProperties()
-    {
-        OnPropertyChanged(nameof(IsSortByName));
-        OnPropertyChanged(nameof(IsSortByDate));
-        OnPropertyChanged(nameof(IsSortByType));
-        OnPropertyChanged(nameof(IsSortBySize));
-        OnPropertyChanged(nameof(IsSortAscending));
-        OnPropertyChanged(nameof(IsSortDescendingActive));
-        OnPropertyChanged(nameof(IsFoldersFirst));
-        OnPropertyChanged(nameof(IsFilesFirst));
-        OnPropertyChanged(nameof(IsMixedFolderSort));
     }
 
     partial void OnFilterTextChanged(string value)

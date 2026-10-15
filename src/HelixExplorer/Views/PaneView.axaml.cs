@@ -296,6 +296,7 @@ public sealed partial class PaneView : UserControl
             return;
 
         menu.DataContext = pane;
+        CommandMenuBuilder.FillTaggedSubmenus(menu.Items, pane);
         // Resolve clipboard validity before command state is applied so Paste enablement matches
         // the current internal/OS payload (including external Explorer copies).
         await pane.RefreshPasteAvailabilityAsync().ConfigureAwait(true);

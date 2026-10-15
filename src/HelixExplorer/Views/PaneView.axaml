@@ -6,6 +6,7 @@
              xmlns:controls="using:HelixExplorer.Controls"
              xmlns:conv="using:HelixExplorer.Converters"
              xmlns:services="using:HelixExplorer.Services"
+             xmlns:settings="using:HelixExplorer.Core.Settings"
              x:Class="HelixExplorer.Views.PaneView"
              x:DataType="vm:PaneViewModel"
              Focusable="True"
@@ -177,97 +178,19 @@
                 </MenuItem.Icon>
             </MenuItem>
             <Separator />
-            <MenuItem Header="Sort by">
+            <MenuItem Header="Sort by" Tag="{x:Static vm:CommandRegistry.SortMenu}">
                 <MenuItem.Icon>
                     <PathIcon Data="{DynamicResource HelixIconArrowSortGeometry}" />
                 </MenuItem.Icon>
-                <MenuItem Header="Name"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsSortByName}"
-                          Command="{Binding SetSortColumnCommand}"
-                          CommandParameter="{x:Static models:SortColumn.Name}" />
-                <MenuItem Header="Date"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsSortByDate}"
-                          Command="{Binding SetSortColumnCommand}"
-                          CommandParameter="{x:Static models:SortColumn.Modified}" />
-                <MenuItem Header="Type"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsSortByType}"
-                          Command="{Binding SetSortColumnCommand}"
-                          CommandParameter="{x:Static models:SortColumn.Type}" />
-                <MenuItem Header="Size"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsSortBySize}"
-                          Command="{Binding SetSortColumnCommand}"
-                          CommandParameter="{x:Static models:SortColumn.Size}" />
-                <Separator />
-                <MenuItem Header="Ascending"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsSortAscending}"
-                          Command="{Binding SetSortAscendingCommand}">
-                    <MenuItem.Icon>
-                        <PathIcon Data="{DynamicResource HelixSortAscendingGeometry}" />
-                    </MenuItem.Icon>
-                </MenuItem>
-                <MenuItem Header="Descending"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsSortDescendingActive}"
-                          Command="{Binding SetSortDescendingCommand}">
-                    <MenuItem.Icon>
-                        <PathIcon Data="{DynamicResource HelixSortDescendingGeometry}" />
-                    </MenuItem.Icon>
-                </MenuItem>
-                <Separator />
-                <MenuItem Header="Sort folders first"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsFoldersFirst}"
-                          Command="{Binding SetDirectorySortCommand}"
-                          CommandParameter="{x:Static models:DirectorySortMode.FoldersFirst}" />
-                <MenuItem Header="Sort files first"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsFilesFirst}"
-                          Command="{Binding SetDirectorySortCommand}"
-                          CommandParameter="{x:Static models:DirectorySortMode.FilesFirst}" />
-                <MenuItem Header="Sort files and folders together"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsMixedFolderSort}"
-                          Command="{Binding SetDirectorySortCommand}"
-                          CommandParameter="{x:Static models:DirectorySortMode.MixedWithFiles}" />
             </MenuItem>
             <MenuItem Header="Group by"
+                      Tag="{x:Static vm:CommandRegistry.GroupByMenu}"
                       IsEnabled="{Binding IsGridView}"
                       ToolTip.Tip="Available in Grid view"
                       ToolTip.ShowOnDisabled="True">
                 <MenuItem.Icon>
                     <PathIcon Data="{DynamicResource HelixIconGroupGeometry}" />
                 </MenuItem.Icon>
-                <MenuItem Header="None"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsGroupByNone}"
-                          Command="{Binding SetGroupByCommand}"
-                          CommandParameter="{x:Static models:GroupByMode.None}" />
-                <Separator />
-                <MenuItem Header="Name"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsGroupByName}"
-                          Command="{Binding SetGroupByCommand}"
-                          CommandParameter="{x:Static models:GroupByMode.Name}" />
-                <MenuItem Header="Date modified"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsGroupByDate}"
-                          Command="{Binding SetGroupByCommand}"
-                          CommandParameter="{x:Static models:GroupByMode.Modified}" />
-                <MenuItem Header="Type"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsGroupByType}"
-                          Command="{Binding SetGroupByCommand}"
-                          CommandParameter="{x:Static models:GroupByMode.Type}" />
-                <MenuItem Header="Size"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsGroupBySize}"
-                          Command="{Binding SetGroupByCommand}"
-                          CommandParameter="{x:Static models:GroupByMode.Size}" />
             </MenuItem>
             <Separator />
             <MenuItem Header="Restore" Command="{Binding RestoreFromRecycleBinCommand}">
@@ -298,42 +221,15 @@
                 </MenuItem.Icon>
             </MenuItem>
             <Separator />
-            <MenuItem Header="Layout">
+            <MenuItem Header="Layout" Tag="{x:Static vm:CommandRegistry.LayoutMenu}">
                 <MenuItem.Icon>
                     <PathIcon Data="{DynamicResource HelixIconGridGeometry}" />
                 </MenuItem.Icon>
-                <MenuItem Header="Details" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.Details}">
-                    <MenuItem.Icon>
-                        <PathIcon Data="{DynamicResource HelixIconTableGeometry}" />
-                    </MenuItem.Icon>
-                </MenuItem>
-                <MenuItem Header="List" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.List}">
-                    <MenuItem.Icon>
-                        <PathIcon Data="{DynamicResource HelixIconListGeometry}" />
-                    </MenuItem.Icon>
-                </MenuItem>
-                <MenuItem Header="Grid" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.Grid}">
-                    <MenuItem.Icon>
-                        <PathIcon Data="{DynamicResource HelixIconGridGeometry}" />
-                    </MenuItem.Icon>
-                </MenuItem>
-                <MenuItem Header="Columns" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.Miller}">
-                    <MenuItem.Icon>
-                        <PathIcon Data="{DynamicResource HelixIconLayoutColumnThreeGeometry}" />
-                    </MenuItem.Icon>
-                </MenuItem>
             </MenuItem>
-            <MenuItem Header="Folder colour">
+            <MenuItem Header="Folder colour" Tag="{x:Static settings:FolderColorPalette.All}">
                 <MenuItem.Icon>
                     <PathIcon Data="{DynamicResource HelixIconColorGeometry}" />
                 </MenuItem.Icon>
-                <MenuItem Header="Red" Command="{Binding SetFolderColorCommand}" CommandParameter="#E81123" />
-                <MenuItem Header="Orange" Command="{Binding SetFolderColorCommand}" CommandParameter="#F7630C" />
-                <MenuItem Header="Green" Command="{Binding SetFolderColorCommand}" CommandParameter="#107C10" />
-                <MenuItem Header="Blue" Command="{Binding SetFolderColorCommand}" CommandParameter="#0078D4" />
-                <MenuItem Header="Purple" Command="{Binding SetFolderColorCommand}" CommandParameter="#8764B8" />
-                <MenuItem Header="Teal" Command="{Binding SetFolderColorCommand}" CommandParameter="#00B294" />
-                <MenuItem Header="Pink" Command="{Binding SetFolderColorCommand}" CommandParameter="#E3008C" />
                 <MenuItem Header="Clear colour" Command="{Binding ClearFolderColorCommand}" />
             </MenuItem>
             <Separator />
@@ -387,123 +283,25 @@
                 </MenuItem.Icon>
             </MenuItem>
             <Separator />
-            <MenuItem Header="Sort by">
+            <MenuItem Header="Sort by" Tag="{x:Static vm:CommandRegistry.SortMenu}">
                 <MenuItem.Icon>
                     <PathIcon Data="{DynamicResource HelixIconArrowSortGeometry}" />
                 </MenuItem.Icon>
-                <MenuItem Header="Name"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsSortByName}"
-                          Command="{Binding SetSortColumnCommand}"
-                          CommandParameter="{x:Static models:SortColumn.Name}" />
-                <MenuItem Header="Date"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsSortByDate}"
-                          Command="{Binding SetSortColumnCommand}"
-                          CommandParameter="{x:Static models:SortColumn.Modified}" />
-                <MenuItem Header="Type"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsSortByType}"
-                          Command="{Binding SetSortColumnCommand}"
-                          CommandParameter="{x:Static models:SortColumn.Type}" />
-                <MenuItem Header="Size"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsSortBySize}"
-                          Command="{Binding SetSortColumnCommand}"
-                          CommandParameter="{x:Static models:SortColumn.Size}" />
-                <Separator />
-                <MenuItem Header="Ascending"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsSortAscending}"
-                          Command="{Binding SetSortAscendingCommand}">
-                    <MenuItem.Icon>
-                        <PathIcon Data="{DynamicResource HelixSortAscendingGeometry}" />
-                    </MenuItem.Icon>
-                </MenuItem>
-                <MenuItem Header="Descending"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsSortDescendingActive}"
-                          Command="{Binding SetSortDescendingCommand}">
-                    <MenuItem.Icon>
-                        <PathIcon Data="{DynamicResource HelixSortDescendingGeometry}" />
-                    </MenuItem.Icon>
-                </MenuItem>
-                <Separator />
-                <MenuItem Header="Sort folders first"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsFoldersFirst}"
-                          Command="{Binding SetDirectorySortCommand}"
-                          CommandParameter="{x:Static models:DirectorySortMode.FoldersFirst}" />
-                <MenuItem Header="Sort files first"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsFilesFirst}"
-                          Command="{Binding SetDirectorySortCommand}"
-                          CommandParameter="{x:Static models:DirectorySortMode.FilesFirst}" />
-                <MenuItem Header="Sort files and folders together"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsMixedFolderSort}"
-                          Command="{Binding SetDirectorySortCommand}"
-                          CommandParameter="{x:Static models:DirectorySortMode.MixedWithFiles}" />
             </MenuItem>
             <MenuItem Header="Group by"
+                      Tag="{x:Static vm:CommandRegistry.GroupByMenu}"
                       IsEnabled="{Binding IsGridView}"
                       ToolTip.Tip="Available in Grid view"
                       ToolTip.ShowOnDisabled="True">
                 <MenuItem.Icon>
                     <PathIcon Data="{DynamicResource HelixIconGroupGeometry}" />
                 </MenuItem.Icon>
-                <MenuItem Header="None"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsGroupByNone}"
-                          Command="{Binding SetGroupByCommand}"
-                          CommandParameter="{x:Static models:GroupByMode.None}" />
-                <Separator />
-                <MenuItem Header="Name"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsGroupByName}"
-                          Command="{Binding SetGroupByCommand}"
-                          CommandParameter="{x:Static models:GroupByMode.Name}" />
-                <MenuItem Header="Date modified"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsGroupByDate}"
-                          Command="{Binding SetGroupByCommand}"
-                          CommandParameter="{x:Static models:GroupByMode.Modified}" />
-                <MenuItem Header="Type"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsGroupByType}"
-                          Command="{Binding SetGroupByCommand}"
-                          CommandParameter="{x:Static models:GroupByMode.Type}" />
-                <MenuItem Header="Size"
-                          ToggleType="Radio"
-                          IsChecked="{Binding IsGroupBySize}"
-                          Command="{Binding SetGroupByCommand}"
-                          CommandParameter="{x:Static models:GroupByMode.Size}" />
             </MenuItem>
             <Separator />
-            <MenuItem Header="Layout">
+            <MenuItem Header="Layout" Tag="{x:Static vm:CommandRegistry.LayoutMenu}">
                 <MenuItem.Icon>
                     <PathIcon Data="{DynamicResource HelixIconGridGeometry}" />
                 </MenuItem.Icon>
-                <MenuItem Header="Details" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.Details}">
-                    <MenuItem.Icon>
-                        <PathIcon Data="{DynamicResource HelixIconTableGeometry}" />
-                    </MenuItem.Icon>
-                </MenuItem>
-                <MenuItem Header="List" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.List}">
-                    <MenuItem.Icon>
-                        <PathIcon Data="{DynamicResource HelixIconListGeometry}" />
-                    </MenuItem.Icon>
-                </MenuItem>
-                <MenuItem Header="Grid" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.Grid}">
-                    <MenuItem.Icon>
-                        <PathIcon Data="{DynamicResource HelixIconGridGeometry}" />
-                    </MenuItem.Icon>
-                </MenuItem>
-                <MenuItem Header="Columns" Command="{Binding SetViewModeCommand}" CommandParameter="{x:Static models:LayoutMode.Miller}">
-                    <MenuItem.Icon>
-                        <PathIcon Data="{DynamicResource HelixIconLayoutColumnThreeGeometry}" />
-                    </MenuItem.Icon>
-                </MenuItem>
             </MenuItem>
             <Separator />
             <MenuItem Header="Show more options" Command="{Binding ShowMoreOptionsCommand}">

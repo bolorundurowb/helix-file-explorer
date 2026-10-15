@@ -49,13 +49,18 @@ public partial class MainWindow : Window
 
     private void ApplyBuildIcon()
     {
-        var uri = new Uri(
 #if DEBUG
-            "avares://HelixExplorer/Assets/helix-explorer-icon-dev.png"
+        const bool useDevIcon = true;
 #else
-            "avares://HelixExplorer/Assets/helix-explorer-icon.png"
+        // A Release build is still a preview install between stable releases (version carries
+        // -preview.N), so it keeps the dev icon to stay visually distinct from a stable install.
+        // AppData/logs are untouched by this - AppPaths.IsDevelopmentProfile stays tied to DEBUG only.
+        var useDevIcon = HelixExplorer.Core.Infrastructure.AppVersion.IsPreview;
 #endif
-        );
+
+        var uri = new Uri(useDevIcon
+            ? "avares://HelixExplorer/Assets/helix-explorer-icon-dev.png"
+            : "avares://HelixExplorer/Assets/helix-explorer-icon.png");
 
         Icon = new WindowIcon(AssetLoader.Open(uri));
         AppLogoImage.Source = new Bitmap(AssetLoader.Open(uri));

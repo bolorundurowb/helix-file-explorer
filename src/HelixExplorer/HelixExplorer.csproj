@@ -4,9 +4,14 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <!-- Dev builds (anything but Release) use the dev icon; Release (production) keeps the standard icon. -->
-    <ApplicationIcon Condition="'$(Configuration)' == 'Release'">..\..\assets\helix-explorer-icon.ico</ApplicationIcon>
-    <ApplicationIcon Condition="'$(Configuration)' != 'Release'">..\..\assets\helix-explorer-icon-dev.ico</ApplicationIcon>
+    <!-- Dev builds (anything but Release) use the dev icon. A Release build also uses it when
+         $(Version) is still a preview (-preview.N): preview installs publish from the same Release
+         configuration as stable, so the icon has to key off the version, not the configuration, to
+         tell them apart. Only a deliberate stable-version bump gets the standard icon. -->
+    <IsPreviewVersion Condition="$(Version.Contains('-preview.'))">true</IsPreviewVersion>
+    <IsPreviewVersion Condition="'$(IsPreviewVersion)' == ''">false</IsPreviewVersion>
+    <ApplicationIcon Condition="'$(Configuration)' == 'Release' and '$(IsPreviewVersion)' != 'true'">..\..\assets\helix-explorer-icon.ico</ApplicationIcon>
+    <ApplicationIcon Condition="'$(Configuration)' != 'Release' or '$(IsPreviewVersion)' == 'true'">..\..\assets\helix-explorer-icon-dev.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <Product>Helix Explorer</Product>
   </PropertyGroup>

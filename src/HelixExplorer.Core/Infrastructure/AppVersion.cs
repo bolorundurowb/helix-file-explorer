@@ -16,6 +16,18 @@ public static class AppVersion
     /// </summary>
     public static string CurrentForPath => SanitizeForPath(Current);
 
+    /// <summary>
+    /// True when the running build's version carries a <c>-preview.N</c> suffix. Release publishes
+    /// ship both stable and preview installs from the same build configuration, so this is how a
+    /// preview install tells itself apart at runtime (e.g. to show the dev icon) without a separate
+    /// configuration; <see cref="AppPaths.IsDevelopmentProfile"/> is unrelated and keeps preview
+    /// installs on the same AppData/logs location as stable.
+    /// </summary>
+    public static bool IsPreview => IsPreviewVersion(Current);
+
+    internal static bool IsPreviewVersion(string version)
+        => HelixVersion.TryParse(version, out var parsed) && !parsed.IsStable;
+
     private static string Resolve()
     {
         var assembly = Assembly.GetEntryAssembly() ?? Assembly.GetExecutingAssembly();

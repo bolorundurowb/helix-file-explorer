@@ -61,4 +61,16 @@ public sealed class AppVersionTests
         AppVersion.CurrentForPath.Must().NotContain("/");
         AppVersion.CurrentForPath.Must().NotContain(@"\");
     }
+
+    [Theory]
+    [InlineData("1.4.4-preview.3", true)]
+    [InlineData("1.4.4-preview.1", true)]
+    [InlineData("1.4.4", false)]
+    [InlineData("0.0.0", false)]
+    [InlineData("not-a-version", false)]
+    [InlineData("", false)]
+    public void IsPreviewVersion_TrueOnlyForPreviewSuffix(string version, bool expected)
+    {
+        AppVersion.IsPreviewVersion(version).Must().Be(expected);
+    }
 }

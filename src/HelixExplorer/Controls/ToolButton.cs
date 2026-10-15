@@ -12,6 +12,9 @@ public sealed class ToolButton : Button
     public static readonly StyledProperty<string?> GestureProperty =
         AvaloniaProperty.Register<ToolButton, string?>(nameof(Gesture));
 
+    // Without this, Avalonia keys styles on ToolButton and Button.toolButton (padding, hover, disabled) never applies.
+    protected override Type StyleKeyOverride => typeof(Button);
+
     public string? Label
     {
         get => GetValue(LabelProperty);

@@ -13,6 +13,10 @@ public static class UiStrings
 
     public static string OperationCancelled => "Operation cancelled";
 
+    public static string OperationCompleteTitle => "Operation complete";
+
+    public static string OperationFailedTitle => "Operation failed";
+
     public static string RenameFailed => "Rename failed";
 
     public static string NewFolderFailed => "Could not create folder";
@@ -84,6 +88,10 @@ public static class UiStrings
     public static string PathsCopied => "Paths copied";
 
     public static string Extracted => "Extracted";
+
+    public static string Extracting => "Extracting…";
+
+    public static string CreatingArchive => "Creating archive…";
 
     public static string CreatedArchive(string name) => $"Created {name}";
 

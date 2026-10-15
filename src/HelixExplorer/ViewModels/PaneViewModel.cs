@@ -48,6 +48,7 @@ public sealed partial class PaneViewModel :
     private readonly ILogger<PaneViewModel> _logger;
     private readonly IExternalFileDragService? _externalFileDragService;
     private readonly IExternalFileDragPayloadBuilder? _dragPayloadBuilder;
+    private readonly IFileOperationReporter _reporter;
     private readonly PaneSelectionModel _selection = new();
     private readonly PaneNavigationController _navigation;
     private readonly PaneListingCoordinator _listing = new();
@@ -115,6 +116,7 @@ public sealed partial class PaneViewModel :
         _logger = dependencies.Logger;
         _externalFileDragService = dependencies.ExternalFileDragService;
         _dragPayloadBuilder = dependencies.DragPayloadBuilder;
+        _reporter = dependencies.OperationReporter;
         _navigation = new PaneNavigationController(dependencies.FileSystem, dependencies.Archive);
         _fileOperations = dependencies.CoordinatorFactory.CreateFileOperationCoordinator();
         _refreshCoordinator = dependencies.CoordinatorFactory.CreateRefreshCoordinator();
@@ -1519,10 +1521,12 @@ public sealed partial class PaneViewModel :
             : "Archive.zip";
         var destination = PaneFileOperationCoordinator.GetUniquePath(Path.Combine(hostDir, zipName));
 
+        var created = false;
         _archiveOverlayHeld = true;
         try
         {
             IsLoading = true;
+            _reporter.Begin(FileOperationKind.Copy, totalItems: 0, UiStrings.CreatingArchive);
             await _archive.CreateZipAsync(sources, destination).ConfigureAwait(true);
 
             // Sources are carried on the batch because redoing a compress has to rebuild the archive,
@@ -1535,13 +1539,16 @@ public sealed partial class PaneViewModel :
                 Sources = sources
             });
 
+            _reporter.Complete(FileOperationKind.Copy, sources.Count, UiStrings.CreatedArchive(Path.GetFileName(destination)));
+            created = true;
             await RefreshAsync(showLoading: false).ConfigureAwait(true);
-            StatusText = UiStrings.CreatedArchive(Path.GetFileName(destination));
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"CompressToZip failed: {ex.Message}");
-            StatusText = UiStrings.CompressToZipFailed;
+            // A refresh that throws after the archive exists must not report the compress as failed.
+            if (!created)
+                _reporter.Fail(UiStrings.CompressToZipFailed);
         }
         finally
         {
@@ -1566,10 +1573,12 @@ public sealed partial class PaneViewModel :
         if (physicalArchives.Count == 0 && virtualPaths.Count == 0)
             return;
 
+        var extracted = false;
         _archiveOverlayHeld = true;
         try
         {
             IsLoading = true;
+            _reporter.Begin(FileOperationKind.Copy, totalItems: 0, UiStrings.Extracting);
             var extractChanges = new List<FileOperationChange>();
 
             foreach (var archivePath in physicalArchives)
@@ -1592,7 +1601,7 @@ public sealed partial class PaneViewModel :
                 var hostDir = PaneFileOperationCoordinator.GetPhysicalHostDirectory(CurrentPath, IsArchive);
                 if (string.IsNullOrEmpty(hostDir))
                 {
-                    StatusText = UiStrings.ExtractLocationUnknown;
+                    _reporter.Fail(UiStrings.ExtractLocationUnknown);
                     return;
                 }
 
@@ -1617,15 +1626,17 @@ public sealed partial class PaneViewModel :
                 });
             }
 
+            _reporter.Complete(FileOperationKind.Copy, physicalArchives.Count + virtualPaths.Count, UiStrings.Extracted);
+            extracted = true;
+
             if (!IsArchive)
                 await RefreshAsync(showLoading: false).ConfigureAwait(true);
-
-            StatusText = UiStrings.Extracted;
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"ExtractHere failed: {ex.Message}");
-            StatusText = UiStrings.ExtractFailed;
+            if (!extracted)
+                _reporter.Fail(UiStrings.ExtractFailed);
         }
         finally
         {
@@ -1777,7 +1788,7 @@ public sealed partial class PaneViewModel :
             ? SelectedEntries[0].FullPath
             : CurrentPath;
 
-        _shellActions.TryOpenInTerminal(dirPath, status => StatusText = status);
+        _shellActions.TryOpenInTerminal(dirPath, _reporter.Fail);
     }
 
     private bool CanOpenInTerminal()
@@ -1872,7 +1883,7 @@ public sealed partial class PaneViewModel :
         catch (Exception ex)
         {
             Debug.WriteLine($"OpenBranchFlyout failed: {ex.Message}");
-            StatusText = UiStrings.ListBranchesFailed;
+            _reporter.Fail(UiStrings.ListBranchesFailed);
         }
     }
 
@@ -1888,7 +1899,7 @@ public sealed partial class PaneViewModel :
             var ok = await _git.CheckoutBranchAsync(CurrentPath, branch).ConfigureAwait(true);
             if (!ok)
             {
-                StatusText = UiStrings.CheckoutBranchFailed(branch);
+                _reporter.Fail(UiStrings.CheckoutBranchFailed(branch));
                 return;
             }
 
@@ -1897,7 +1908,7 @@ public sealed partial class PaneViewModel :
         catch (Exception ex)
         {
             Debug.WriteLine($"CheckoutBranch failed: {ex.Message}");
-            StatusText = UiStrings.CheckoutBranchFailed(branch);
+            _reporter.Fail(UiStrings.CheckoutBranchFailed(branch));
         }
     }
 
@@ -1910,23 +1921,25 @@ public sealed partial class PaneViewModel :
         try
         {
             string text;
+            string note;
             if (SelectedEntries.Count > 0)
             {
                 text = string.Join(Environment.NewLine, SelectedEntries.Select(e => e.FullPath));
-                StatusText = SelectedEntries.Count == 1 ? UiStrings.PathCopied : UiStrings.PathsCopied;
+                note = SelectedEntries.Count == 1 ? UiStrings.PathCopied : UiStrings.PathsCopied;
             }
             else
             {
                 text = CurrentPath;
-                StatusText = UiStrings.PathCopied;
+                note = UiStrings.PathCopied;
             }
 
             await _uiHost.SetClipboardTextAsync(text).ConfigureAwait(true);
+            _reporter.Note(note);
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"CopyPath failed: {ex.Message}");
-            StatusText = UiStrings.CopyPathFailed;
+            _reporter.Fail(UiStrings.CopyPathFailed);
         }
     }
 

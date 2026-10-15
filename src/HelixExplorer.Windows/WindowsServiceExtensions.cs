@@ -30,6 +30,8 @@ public static class WindowsServiceExtensions
         services.AddSingleton<IStaTaskScheduler, Shell.StaTaskScheduler>();
         services.AddSingleton<IAccentColorSource, WinAccentColorSource>();
         services.AddSingleton<IHighContrastSource, WinHighContrastSource>();
+        // Scoped like IUiHost, which it reads the window handle from: taskbar state is per window.
+        services.AddScoped<IAttentionService, Shell.WinAttentionService>();
         return services;
     }
 }

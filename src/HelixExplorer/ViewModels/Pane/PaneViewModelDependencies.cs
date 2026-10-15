@@ -27,4 +27,5 @@ public sealed record PaneViewModelDependencies(
     IPaneCoordinatorFactory CoordinatorFactory,
     ILogger<PaneViewModel> Logger,
     IExternalFileDragService ExternalFileDragService,
-    IExternalFileDragPayloadBuilder DragPayloadBuilder);
+    IExternalFileDragPayloadBuilder DragPayloadBuilder,
+    IFileOperationReporter OperationReporter);

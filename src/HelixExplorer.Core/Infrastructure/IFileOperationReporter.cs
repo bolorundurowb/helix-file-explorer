@@ -30,4 +30,10 @@ public interface IFileOperationReporter : IFileOperationControl
     void Fail(string message);
 
     void Cancelled(string message);
+
+    /// <summary>
+    /// Brief confirmation shown next to the status chip and then dropped. Not recorded in the
+    /// status centre and does not affect <see cref="IsBusy"/>.
+    /// </summary>
+    void Note(string message);
 }

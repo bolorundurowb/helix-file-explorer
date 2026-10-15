@@ -38,6 +38,7 @@ public sealed class PaneViewModelFactory(IServiceProvider serviceProvider) : IPa
             serviceProvider.GetRequiredService<IPaneCoordinatorFactory>(),
             serviceProvider.GetRequiredService<ILogger<PaneViewModel>>(),
             serviceProvider.GetRequiredService<IExternalFileDragService>(),
-            serviceProvider.GetRequiredService<IExternalFileDragPayloadBuilder>()));
+            serviceProvider.GetRequiredService<IExternalFileDragPayloadBuilder>(),
+            serviceProvider.GetRequiredService<IFileOperationReporter>()));
     }
 }

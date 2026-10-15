@@ -140,6 +140,11 @@ public sealed partial class FileOperationReporter : ObservableObject, IFileOpera
         EndActiveOperation();
     }
 
+    /// <summary>Raised by <see cref="Note"/>; the status centre owns how long the note stays.</summary>
+    public event EventHandler<string>? NoteRaised;
+
+    public void Note(string message) => NoteRaised?.Invoke(this, message);
+
     public void WaitIfPaused(CancellationToken cancellationToken)
     {
         while (IsPaused)

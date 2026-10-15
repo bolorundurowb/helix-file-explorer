@@ -886,6 +886,10 @@
                                FontSize="12"
                                Opacity="0.7"
                                IsVisible="{Binding ShowFileToolbar}" />
+                    <TextBlock Text="{Binding StatusCentre.Note}"
+                               VerticalAlignment="Center"
+                               FontSize="12"
+                               IsVisible="{Binding StatusCentre.HasNote}" />
                     <Button x:Name="StatusCentreChip"
                             Classes="toolButton"
                             Command="{Binding ToggleStatusCentreCommand}"

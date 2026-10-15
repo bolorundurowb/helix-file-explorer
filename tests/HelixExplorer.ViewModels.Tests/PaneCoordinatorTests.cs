@@ -634,6 +634,7 @@ public class PaneFileOperationPasteAvailabilityTests
         public void Complete(FileOperationKind kind, int itemCount, string message) { }
         public void Fail(string message) { }
         public void Cancelled(string message) { }
+        public void Note(string message) { }
     }
 
     private sealed class TempClipboardPaths : IDisposable

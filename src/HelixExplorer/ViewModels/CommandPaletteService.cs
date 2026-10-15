@@ -39,7 +39,7 @@ public sealed class CommandPaletteService
         Add("Details View", "View", vm => vm.SetViewModeCommand.Execute(LayoutMode.Details));
         Add("List View", "View", vm => vm.SetViewModeCommand.Execute(LayoutMode.List));
         Add("Grid View", "View", vm => vm.SetViewModeCommand.Execute(LayoutMode.Grid));
-        Add("Miller Columns", "View", vm => vm.SetViewModeCommand.Execute(LayoutMode.Miller));
+        Add("Columns View", "View", vm => vm.SetViewModeCommand.Execute(LayoutMode.Miller));
         Add("Show Hidden Items", "View", vm => vm.ToggleShowHiddenFilesCommand.Execute(null));
         Add("Show File Extensions", "View", vm => vm.ToggleShowFileExtensionsCommand.Execute(null));
         Add("Select All", "Selection", vm => vm.SelectAllCommand.Execute(null), "Ctrl+A", CanSelectAll);

@@ -1,6 +1,7 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:conv="using:HelixExplorer.Converters"
+             xmlns:services="using:HelixExplorer.Services"
              x:Class="HelixExplorer.App"
              RequestedThemeVariant="Default">
     <Application.Styles>
@@ -71,6 +72,7 @@
                     <SolidColorBrush x:Key="HelixIconPasteBrush" Color="#1A1A1A" />
                     <SolidColorBrush x:Key="HelixIconDeleteBrush" Color="#C42B1C" />
                     <SolidColorBrush x:Key="HelixIconRenameBrush" Color="#1A1A1A" />
+                    <x:Boolean x:Key="HelixTabTintVisible">True</x:Boolean>
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Dark">
                     <SolidColorBrush x:Key="HelixChromeBrush" Color="#202020" />
@@ -123,6 +125,73 @@
                     <SolidColorBrush x:Key="HelixIconPasteBrush" Color="#E6E6E6" />
                     <SolidColorBrush x:Key="HelixIconDeleteBrush" Color="#FF99A4" />
                     <SolidColorBrush x:Key="HelixIconRenameBrush" Color="#E6E6E6" />
+                    <x:Boolean x:Key="HelixTabTintVisible">True</x:Boolean>
+                </ResourceDictionary>
+                <!--
+                    Active while Windows runs a contrast theme. AvaloniaThemeService recolours the six
+                    system brushes in place from GetSysColor, so every alias below follows the OS theme.
+                    Selection and hover fills stay transparent: row text is not swapped to HighlightText,
+                    so a Highlight fill would fail contrast. Selection shows through the Highlight bar.
+                    Keys not listed fall back to the Light or Dark dictionary, chosen by Window brightness.
+                -->
+                <ResourceDictionary x:Key="{x:Static services:AvaloniaThemeService.HighContrastDark}">
+                    <SolidColorBrush x:Key="HelixSystemWindowBrush" Color="#000000" />
+                    <SolidColorBrush x:Key="HelixSystemWindowTextBrush" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="HelixSystemHighlightBrush" Color="#1AEBFF" />
+                    <SolidColorBrush x:Key="HelixSystemHighlightTextBrush" Color="#000000" />
+                    <SolidColorBrush x:Key="HelixSystemGrayTextBrush" Color="#3FF23F" />
+                    <SolidColorBrush x:Key="HelixSystemHotlightBrush" Color="#FFFF00" />
+
+                    <StaticResource x:Key="HelixChromeBrush" ResourceKey="HelixSystemWindowBrush" />
+                    <StaticResource x:Key="HelixSidebarBrush" ResourceKey="HelixSystemWindowBrush" />
+                    <StaticResource x:Key="HelixContentCardBrush" ResourceKey="HelixSystemWindowBrush" />
+                    <StaticResource x:Key="HelixSurfaceBrush" ResourceKey="HelixSystemWindowBrush" />
+                    <StaticResource x:Key="HelixFileAreaBrush" ResourceKey="HelixSystemWindowBrush" />
+                    <StaticResource x:Key="HelixAddressBarBrush" ResourceKey="HelixSystemWindowBrush" />
+                    <StaticResource x:Key="HelixToolbarBrush" ResourceKey="HelixSystemWindowBrush" />
+                    <StaticResource x:Key="HelixStatusBarBrush" ResourceKey="HelixSystemWindowBrush" />
+                    <StaticResource x:Key="HelixTabStripBrush" ResourceKey="HelixSystemWindowBrush" />
+                    <StaticResource x:Key="HelixTabSelectedBrush" ResourceKey="HelixSystemWindowBrush" />
+                    <StaticResource x:Key="HelixNavButtonBrush" ResourceKey="HelixSystemWindowBrush" />
+                    <StaticResource x:Key="HelixMenuBackgroundBrush" ResourceKey="HelixSystemWindowBrush" />
+                    <StaticResource x:Key="HelixHomeCardBrush" ResourceKey="HelixSystemWindowBrush" />
+                    <StaticResource x:Key="HelixHomeCardHoverBrush" ResourceKey="HelixSystemWindowBrush" />
+                    <StaticResource x:Key="HelixSettingsContentBrush" ResourceKey="HelixSystemWindowBrush" />
+                    <StaticResource x:Key="HelixSettingsRowBrush" ResourceKey="HelixSystemWindowBrush" />
+                    <StaticResource x:Key="HelixBorderColor" ResourceKey="HelixSystemWindowTextBrush" />
+
+                    <StaticResource x:Key="HelixEntryForegroundBrush" ResourceKey="HelixSystemWindowTextBrush" />
+                    <StaticResource x:Key="HelixSecondaryTextBrush" ResourceKey="HelixSystemWindowTextBrush" />
+                    <StaticResource x:Key="HelixTertiaryTextBrush" ResourceKey="HelixSystemWindowTextBrush" />
+                    <StaticResource x:Key="HelixIconCutBrush" ResourceKey="HelixSystemWindowTextBrush" />
+                    <StaticResource x:Key="HelixIconCopyBrush" ResourceKey="HelixSystemWindowTextBrush" />
+                    <StaticResource x:Key="HelixIconPasteBrush" ResourceKey="HelixSystemWindowTextBrush" />
+                    <StaticResource x:Key="HelixIconRenameBrush" ResourceKey="HelixSystemWindowTextBrush" />
+                    <StaticResource x:Key="HelixGitUntrackedBrush" ResourceKey="HelixSystemGrayTextBrush" />
+                    <StaticResource x:Key="ButtonForegroundDisabled" ResourceKey="HelixSystemGrayTextBrush" />
+
+                    <SolidColorBrush x:Key="HelixHoverBrush" Color="Transparent" />
+                    <SolidColorBrush x:Key="HelixSelectionFillBrush" Color="Transparent" />
+                    <SolidColorBrush x:Key="HelixSelectionInactiveFillBrush" Color="Transparent" />
+                    <SolidColorBrush x:Key="HelixSidebarSelectedBrush" Color="Transparent" />
+                    <SolidColorBrush x:Key="HelixSidebarPillBrush" Color="Transparent" />
+                    <SolidColorBrush x:Key="HelixSettingsNavSelectedBrush" Color="Transparent" />
+                    <StaticResource x:Key="HelixSelectionBarBrush" ResourceKey="HelixSystemHighlightBrush" />
+
+                    <StaticResource x:Key="HelixAccentBrush" ResourceKey="HelixSystemHighlightBrush" />
+                    <StaticResource x:Key="HelixAccentForegroundBrush" ResourceKey="HelixSystemHighlightTextBrush" />
+                    <StaticResource x:Key="HelixFocusBorderBrush" ResourceKey="HelixSystemHotlightBrush" />
+                    <StaticResource x:Key="HelixSettingsNavAccentBar" ResourceKey="HelixSystemHighlightBrush" />
+                    <StaticResource x:Key="HelixToggleOnBrush" ResourceKey="HelixSystemHighlightBrush" />
+                    <StaticResource x:Key="HelixProgressBrush" ResourceKey="HelixSystemHighlightBrush" />
+                    <StaticResource x:Key="ToggleSwitchFillOn" ResourceKey="HelixSystemHighlightBrush" />
+                    <StaticResource x:Key="ToggleSwitchFillOnPointerOver" ResourceKey="HelixSystemHighlightBrush" />
+                    <StaticResource x:Key="ToggleSwitchFillOnPressed" ResourceKey="HelixSystemHighlightBrush" />
+                    <StaticResource x:Key="ToggleSwitchStrokeOn" ResourceKey="HelixSystemHighlightBrush" />
+                    <StaticResource x:Key="ToggleSwitchStrokeOnPointerOver" ResourceKey="HelixSystemHighlightBrush" />
+                    <StaticResource x:Key="ToggleSwitchStrokeOnPressed" ResourceKey="HelixSystemHighlightBrush" />
+
+                    <x:Boolean x:Key="HelixTabTintVisible">False</x:Boolean>
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 

@@ -361,6 +361,7 @@
                                 <Grid RowDefinitions="4,*,Auto">
                                     <Border Grid.Row="0"
                                             Background="{Binding TintBrush}"
+                                            IsVisible="{DynamicResource HelixTabTintVisible}"
                                             CornerRadius="8,8,0,0"
                                             IsHitTestVisible="False" />
                                     <Grid Grid.Row="1"

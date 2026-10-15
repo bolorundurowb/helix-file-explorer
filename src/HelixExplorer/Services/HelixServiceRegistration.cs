@@ -63,7 +63,8 @@ public static class HelixServiceRegistration
                     else
                         Dispatcher.UIThread.Post(() => themes.ApplyTheme(mode));
                 },
-                () => store.Load().Theme);
+                () => store.Load().Theme,
+                sp.GetRequiredService<IHighContrastSource>());
         });
         services.AddTransient<PaneRefreshCoordinator>();
         services.AddTransient<PaneFileOperationCoordinator>();

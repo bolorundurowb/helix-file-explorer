@@ -29,7 +29,7 @@ public static class CommandRegistry
         Window("view.layout.details", "Details View", "View", vm => vm.SetViewModeCommand.Execute(LayoutMode.Details)),
         Window("view.layout.list", "List View", "View", vm => vm.SetViewModeCommand.Execute(LayoutMode.List)),
         Window("view.layout.grid", "Grid View", "View", vm => vm.SetViewModeCommand.Execute(LayoutMode.Grid)),
-        Window("view.layout.miller", "Miller Columns", "View", vm => vm.SetViewModeCommand.Execute(LayoutMode.Miller)),
+        Window("view.layout.miller", "Columns View", "View", vm => vm.SetViewModeCommand.Execute(LayoutMode.Miller)),
         Window("view.showHidden", "Show Hidden Items", "View", vm => vm.ToggleShowHiddenFilesCommand.Execute(null)),
         Window("view.showExtensions", "Show File Extensions", "View", vm => vm.ToggleShowFileExtensionsCommand.Execute(null)),
         Window("selection.all", "Select All", "Selection", vm => vm.SelectAllCommand.Execute(null), "Ctrl+A", CanSelectAll),

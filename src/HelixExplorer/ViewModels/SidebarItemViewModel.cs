@@ -40,10 +40,18 @@ public sealed partial class SidebarItemViewModel : ObservableObject
     public bool IsHomeItem => Kind == SidebarItemKind.Home;
     public bool IsRecycleBinItem => ShellPath.IsRecycleBin(Path);
     /// <summary>
-    /// Home and Recycle Bin use branded vector icons; other items prefer shell bitmaps.
+    /// The Network root has no shell glyph, so it keeps the wireframe globe instead of a folder.
     /// </summary>
-    public bool UsesVectorIcon => IsHomeItem || IsRecycleBinItem;
-    public bool ShowsFolderFallback => !HasIcon && !UsesVectorIcon;
+    public bool IsNetworkRootItem => Kind == SidebarItemKind.Network && NetworkPath.IsNetworkRoot(Path);
+    /// <summary>
+    /// Home, Recycle Bin, and the Network root use branded vector icons; other items prefer shell bitmaps.
+    /// </summary>
+    public bool UsesVectorIcon => IsHomeItem || IsRecycleBinItem || IsNetworkRootItem;
+    /// <summary>
+    /// Discovered network rows that never receive a shell bitmap use the same globe, not the folder fallback.
+    /// </summary>
+    public bool ShowsGlobeIcon => Kind == SidebarItemKind.Network && !HasIcon;
+    public bool ShowsFolderFallback => !HasIcon && !UsesVectorIcon && !ShowsGlobeIcon;
 
     [ObservableProperty]
     private bool _isSelected;
@@ -51,6 +59,7 @@ public sealed partial class SidebarItemViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasIcon))]
     [NotifyPropertyChangedFor(nameof(ShowsFolderFallback))]
+    [NotifyPropertyChangedFor(nameof(ShowsGlobeIcon))]
     private Bitmap? _icon;
 
     [ObservableProperty]

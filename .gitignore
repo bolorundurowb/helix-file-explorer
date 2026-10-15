@@ -3,6 +3,7 @@ bin/
 obj/
 out/
 publish/
+dist/
 artifacts/
 
 ## Visual Studio / VS Code / Rider

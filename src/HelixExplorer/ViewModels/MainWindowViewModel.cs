@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -364,7 +365,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SidebarColumnWidth))]
-    private double _sidebarWidth = 300;
+    private double _sidebarWidth = 325;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SidebarColumnWidth))]
@@ -372,15 +373,17 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
     [NotifyPropertyChangedFor(nameof(SidebarColumnMaxWidth))]
     private bool _isSidebarCollapsed;
 
-    public double SidebarColumnWidth
+    // ColumnDefinition.Width is a GridLength and Avalonia has no double->GridLength conversion; binding a
+    // double is silently dropped, leaving the column star-sized up to its MaxWidth regardless of the setting.
+    public GridLength SidebarColumnWidth
     {
-        get => SidebarColumnLayout.Resolve(SidebarWidth, IsSidebarCollapsed).Width;
+        get => new(SidebarColumnLayout.Resolve(SidebarWidth, IsSidebarCollapsed).Width, GridUnitType.Pixel);
         set
         {
-            if (IsSidebarCollapsed || double.IsNaN(value) || value <= 0)
+            if (IsSidebarCollapsed || !value.IsAbsolute || double.IsNaN(value.Value) || value.Value <= 0)
                 return;
 
-            SidebarWidth = value;
+            SidebarWidth = value.Value;
         }
     }
 

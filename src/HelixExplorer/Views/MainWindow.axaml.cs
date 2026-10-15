@@ -1,8 +1,10 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -12,6 +14,8 @@ using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using HelixExplorer.Core.FileSystem;
+using HelixExplorer.Input;
 using HelixExplorer.ViewModels;
 
 namespace HelixExplorer.Views;
@@ -34,7 +38,11 @@ public partial class MainWindow : Window
         SidebarSplitter.DragCompleted += OnSidebarDragCompleted;
 
         AttachTabOverflowHandlers();
+        SidebarList.AddHandler(KeyDownEvent, OnSidebarKeyDown, RoutingStrategies.Tunnel);
+        SidebarList.ContainerPrepared += OnSidebarContainerPrepared;
+        BranchList.ItemsSource = _branchChoices;
         AddHandler(PointerPressedEvent, OnWindowPointerPressed, RoutingStrategies.Tunnel);
+        AddHandler(KeyDownEvent, OnChromeKeyDown, RoutingStrategies.Tunnel);
     }
 
     private void ApplyBuildIcon()
@@ -66,6 +74,8 @@ public partial class MainWindow : Window
             vm.ApplyWindowLayout(this);
             ApplyOpenInTerminalKeyBinding(vm.OpenInTerminalGesture);
             vm.PropertyChanged += OnViewModelPropertyChanged;
+            vm.EditPathRequested += OnEditPathRequested;
+            vm.WindowCloseRequested += OnWindowCloseRequested;
         }
 
         Dispatcher.UIThread.Post(() =>
@@ -223,6 +233,20 @@ public partial class MainWindow : Window
 
     private void OnWindowPointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        var properties = e.GetCurrentPoint(this).Properties;
+        if (properties.IsXButton1Pressed || properties.IsXButton2Pressed)
+        {
+            if (DataContext is MainWindowViewModel window)
+            {
+                var command = properties.IsXButton1Pressed ? window.GoBackCommand : window.GoForwardCommand;
+                if (command.CanExecute(null))
+                    command.Execute(null);
+            }
+
+            e.Handled = true;
+            return;
+        }
+
         if (DataContext is not MainWindowViewModel vm || !vm.IsStatusCentreOpen)
             return;
 
@@ -318,7 +342,7 @@ public partial class MainWindow : Window
 
     private void OnSidebarDragOver(object? sender, DragEventArgs e)
     {
-        if (sender is not Border { DataContext: SidebarItemViewModel item } || !item.IsNavigable)
+        if (SidebarItemFrom(sender) is not { IsNavigable: true } item)
             return;
 
         if (!e.DataTransfer.Contains(DataFormat.File))
@@ -328,9 +352,7 @@ public partial class MainWindow : Window
         item.IsDropTarget = true;
         _sidebarDropTarget = item;
 
-        e.DragEffects = e.KeyModifiers.HasFlag(KeyModifiers.Control)
-            ? DragDropEffects.Copy
-            : DragDropEffects.Move;
+        e.DragEffects = ToAvaloniaDropEffect(ResolveSidebarDropEffect(e, item.Path));
         e.Handled = true;
     }
 
@@ -348,9 +370,7 @@ public partial class MainWindow : Window
 
     private async void OnSidebarDrop(object? sender, DragEventArgs e)
     {
-        if (sender is not Border { DataContext: SidebarItemViewModel item }
-            || !item.IsNavigable
-            || string.IsNullOrEmpty(item.Path))
+        if (SidebarItemFrom(sender) is not { IsNavigable: true, Path: { Length: > 0 } path })
             return;
 
         if (DataContext is not MainWindowViewModel vm)
@@ -376,14 +396,46 @@ public partial class MainWindow : Window
         if (paths.Count == 0)
             return;
 
-        var isCopy = e.KeyModifiers.HasFlag(KeyModifiers.Control)
-                     || e.DragEffects == DragDropEffects.Copy;
-        await vm.HandleSidebarDropAsync(paths, item.Path, isCopy);
-
+        var effect = ResolveSidebarDropEffect(e, path);
         e.Handled = true;
+
+        // The drop pipeline copies or moves. A shortcut request must not fall through to a move.
+        if (effect == HelixExplorer.Core.Infrastructure.DragDropEffects.Link)
+            return;
+
+        await vm.HandleSidebarDropAsync(paths, path, effect == HelixExplorer.Core.Infrastructure.DragDropEffects.Copy);
     }
 
+    private static HelixExplorer.Core.Infrastructure.DragDropEffects ResolveSidebarDropEffect(DragEventArgs e, string? destination)
+    {
+        string? source = null;
+        var files = e.DataTransfer.TryGetFiles();
+        if (files is { Length: > 0 })
+            source = files[0].TryGetLocalPath();
+
+        return DropEffectPolicy.Resolve(
+            source,
+            destination,
+            e.KeyModifiers.HasFlag(KeyModifiers.Control),
+            e.KeyModifiers.HasFlag(KeyModifiers.Shift),
+            e.KeyModifiers.HasFlag(KeyModifiers.Alt));
+    }
+
+    private static DragDropEffects ToAvaloniaDropEffect(HelixExplorer.Core.Infrastructure.DragDropEffects effect)
+        => effect switch
+        {
+            HelixExplorer.Core.Infrastructure.DragDropEffects.Copy => DragDropEffects.Copy,
+            HelixExplorer.Core.Infrastructure.DragDropEffects.Move => DragDropEffects.Move,
+            HelixExplorer.Core.Infrastructure.DragDropEffects.Link => DragDropEffects.Link,
+            _ => DragDropEffects.None
+        };
+
+    private static SidebarItemViewModel? SidebarItemFrom(object? sender)
+        => sender is Control { DataContext: SidebarItemViewModel item } ? item : null;
+
     private SidebarItemViewModel? _sidebarDropTarget;
+    private readonly ObservableCollection<BranchChoice> _branchChoices = new();
+    private int _chromeFocusIndex = -1;
 
     private int _dragSourceIndex = -1;
     private Point _dragStartPosition;
@@ -395,20 +447,38 @@ public partial class MainWindow : Window
 
     private void OnTabStripWheel(object? sender, PointerWheelEventArgs e)
     {
-        if (DataContext is not MainWindowViewModel vm)
-            return;
-
-        var timestamp = Stopwatch.GetTimestamp();
-        if (_lastTabWheelTimestamp != 0
-            && Stopwatch.GetElapsedTime(_lastTabWheelTimestamp, timestamp) < TabWheelScrollInterval)
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
+            if (DataContext is not MainWindowViewModel vm)
+                return;
+
+            var timestamp = Stopwatch.GetTimestamp();
+            if (_lastTabWheelTimestamp != 0
+                && Stopwatch.GetElapsedTime(_lastTabWheelTimestamp, timestamp) < TabWheelScrollInterval)
+            {
+                e.Handled = true;
+                return;
+            }
+
+            _lastTabWheelTimestamp = timestamp;
+            var delta = e.Delta.X != 0 ? e.Delta.X : e.Delta.Y;
+            vm.CycleSelectedTab(delta > 0 ? -1 : 1);
             e.Handled = true;
             return;
         }
 
-        _lastTabWheelTimestamp = timestamp;
-        var delta = e.Delta.X != 0 ? e.Delta.X : e.Delta.Y;
-        vm.CycleSelectedTab(delta > 0 ? -1 : 1);
+        if (TabScrollViewer is null)
+            return;
+
+        var extent = TabScrollViewer.Extent.Width;
+        var viewport = TabScrollViewer.Viewport.Width;
+        if (extent <= viewport + 0.5)
+            return;
+
+        var notch = e.Delta.Y != 0 ? e.Delta.Y : e.Delta.X;
+        var maxOffset = Math.Max(0, extent - viewport);
+        var next = Math.Clamp(TabScrollViewer.Offset.X - notch * 72, 0, maxOffset);
+        TabScrollViewer.Offset = new Vector(next, 0);
         e.Handled = true;
     }
 
@@ -507,21 +577,268 @@ public partial class MainWindow : Window
             return;
 
         await pane.OpenBranchFlyoutCommand.ExecuteAsync(null);
+        if (BranchFilterBox is not null)
+            BranchFilterBox.Text = string.Empty;
+        RefreshBranchChoices();
         if (sender is Button button)
             FlyoutBase.ShowAttachedFlyout(button);
     }
 
-    private async void OnBranchSelected(object? sender, TappedEventArgs e)
+    private void OnBranchFilterChanged(object? sender, TextChangedEventArgs e)
+        => RefreshBranchChoices();
+
+    private void OnBranchFilterKeyDown(object? sender, KeyEventArgs e)
     {
-        if (sender is not ListBox { SelectedItem: string branch })
+        if (e.Key != Key.Enter)
             return;
 
+        BranchChoice? selected = BranchList.SelectedItem as BranchChoice
+            ?? _branchChoices.FirstOrDefault(choice => choice.IsCurrent)
+            ?? _branchChoices.FirstOrDefault();
+        if (selected is null)
+            return;
+
+        e.Handled = true;
+        _ = CheckoutBranchAsync(selected);
+    }
+
+    private void OnBranchListTapped(object? sender, TappedEventArgs e)
+    {
+        if (BranchChoiceFrom(e.Source) is not { } choice)
+            return;
+
+        e.Handled = true;
+        _ = CheckoutBranchAsync(choice);
+    }
+
+    private void OnBranchListKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || BranchList.SelectedItem is not BranchChoice choice)
+            return;
+
+        e.Handled = true;
+        _ = CheckoutBranchAsync(choice);
+    }
+
+    private void RefreshBranchChoices()
+    {
+        var query = BranchFilterBox?.Text?.Trim() ?? string.Empty;
+        var pane = (DataContext as MainWindowViewModel)?.ActivePane;
+        var current = pane?.RepositoryStatus.Branch ?? string.Empty;
+        _branchChoices.Clear();
+        if (pane is null)
+            return;
+
+        foreach (var branch in pane.Branches)
+        {
+            if (query.Length > 0 && !branch.Contains(query, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            _branchChoices.Add(new BranchChoice
+            {
+                Name = branch,
+                IsCurrent = string.Equals(branch, current, StringComparison.Ordinal)
+            });
+        }
+
+        BranchList.SelectedItem = _branchChoices.FirstOrDefault(choice => choice.IsCurrent) ?? _branchChoices.FirstOrDefault();
+    }
+
+    private async Task CheckoutBranchAsync(BranchChoice choice)
+    {
         if (DataContext is not MainWindowViewModel { ActivePane: { } pane })
             return;
 
-        await pane.CheckoutBranchCommand.ExecuteAsync(branch);
+        await pane.CheckoutBranchCommand.ExecuteAsync(choice.Name);
         if (BranchButton is not null)
             FlyoutBase.GetAttachedFlyout(BranchButton)?.Hide();
+    }
+
+    private static BranchChoice? BranchChoiceFrom(object? source)
+    {
+        for (var control = source as Control; control is not null; control = control.Parent as Control)
+        {
+            if (control.DataContext is BranchChoice choice)
+                return choice;
+        }
+
+        return null;
+    }
+
+    private void OnSidebarContainerPrepared(object? sender, ContainerPreparedEventArgs e)
+    {
+        if (e.Container is not ListBoxItem container)
+            return;
+
+        var item = container.DataContext as SidebarItemViewModel;
+        var navigable = item is { IsNavigable: true };
+        container.Focusable = navigable;
+        if (item is { IsSectionHeader: true })
+            AutomationProperties.SetName(container, item.Title);
+
+        if (container.Classes.Contains("sidebarWired"))
+            return;
+
+        container.Classes.Add("sidebarWired");
+        DragDrop.SetAllowDrop(container, true);
+        container.AddHandler(DragDrop.DragOverEvent, OnSidebarDragOver);
+        container.AddHandler(DragDrop.DragLeaveEvent, OnSidebarDragLeave);
+        container.AddHandler(DragDrop.DropEvent, OnSidebarDrop);
+    }
+
+    private void OnSidebarKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key is Key.Up or Key.Down)
+        {
+            MoveSidebarSelection(e.Key == Key.Down ? 1 : -1);
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Enter
+            && DataContext is MainWindowViewModel vm
+            && SidebarList.SelectedItem is SidebarItemViewModel item
+            && item.IsNavigable)
+        {
+            if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+                vm.OpenSidebarInNewTabCommand.Execute(item);
+            else
+                vm.NavigateSidebarCommand.Execute(item);
+            e.Handled = true;
+            return;
+        }
+
+        if ((e.Key == Key.F10 && e.KeyModifiers == KeyModifiers.Shift) || e.Key == Key.Apps)
+        {
+            OpenSidebarContextMenu();
+            e.Handled = true;
+        }
+    }
+
+    private void MoveSidebarSelection(int delta)
+    {
+        var count = SidebarList.ItemCount;
+        if (count == 0)
+            return;
+
+        var index = SidebarList.SelectedIndex;
+        if (index < 0)
+            index = delta > 0 ? -1 : count;
+
+        for (var step = 0; step < count; step++)
+        {
+            index += delta;
+            if (index < 0 || index >= count)
+                return;
+
+            if (SidebarList.Items[index] is not SidebarItemViewModel { IsNavigable: true })
+                continue;
+
+            SidebarList.SelectedIndex = index;
+            if (SidebarList.SelectedItem is { } selected)
+                SidebarList.ScrollIntoView(selected);
+            if (SidebarList.ContainerFromIndex(index) is Control container)
+                container.Focus();
+            return;
+        }
+    }
+
+    private void OpenSidebarContextMenu()
+    {
+        if (SidebarList.SelectedItem is not SidebarItemViewModel { IsNavigable: true })
+            return;
+
+        if (SidebarList.ContainerFromItem(SidebarList.SelectedItem) is not Control container)
+            return;
+
+        var host = container.GetVisualDescendants().OfType<Control>().FirstOrDefault(control => control.ContextMenu is not null);
+        host?.ContextMenu?.Open(host);
+    }
+
+    private void OnEditPathRequested(object? sender, EventArgs e)
+        => Dispatcher.UIThread.Post(FocusAddress, DispatcherPriority.Loaded);
+
+    private void OnWindowCloseRequested(object? sender, EventArgs e)
+        => Close();
+
+    private void OnChromeKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.F6 || e.KeyModifiers != KeyModifiers.None || TextInputFocus.IsActive())
+            return;
+
+        if (DataContext is not MainWindowViewModel vm)
+            return;
+
+        _chromeFocusIndex = ChromeFocusCycle.Next(CurrentChromeSlot(vm), vm.IsDualPaneActive);
+        ApplyChromeFocus(vm, _chromeFocusIndex);
+        e.Handled = true;
+    }
+
+    private int CurrentChromeSlot(MainWindowViewModel vm)
+    {
+        if (FocusManager?.GetFocusedElement() is not Visual focused)
+            return _chromeFocusIndex;
+
+        if (OmnibarFocus.IsWithin(SidebarList, focused))
+            return ChromeFocusCycle.Sidebar;
+        if (OmnibarFocus.IsWithin(AddressOmnibar, focused) || BrowserPanes.ContainsAddress(focused))
+            return ChromeFocusCycle.Address;
+        if (OmnibarFocus.IsWithin(StatusBar, focused))
+            return ChromeFocusCycle.StatusBar;
+
+        var other = OtherPane(vm);
+        if (other is not null && BrowserPanes.FileSurfaceContains(other, focused))
+            return ChromeFocusCycle.OtherPane;
+        if (vm.ActivePane is { } active && BrowserPanes.FileSurfaceContains(active, focused))
+            return ChromeFocusCycle.ActivePane;
+
+        return _chromeFocusIndex;
+    }
+
+    private void ApplyChromeFocus(MainWindowViewModel vm, int slot)
+    {
+        switch (slot)
+        {
+            case ChromeFocusCycle.Sidebar:
+                SidebarList.Focus();
+                if (SidebarList.SelectedIndex < 0)
+                    MoveSidebarSelection(1);
+                break;
+            case ChromeFocusCycle.Address:
+                FocusAddress();
+                break;
+            case ChromeFocusCycle.ActivePane:
+                BrowserPanes.FocusFileSurface(vm.ActivePane);
+                break;
+            case ChromeFocusCycle.OtherPane:
+                BrowserPanes.FocusFileSurface(OtherPane(vm));
+                break;
+            case ChromeFocusCycle.StatusBar:
+                if (BranchButton.IsVisible)
+                    BranchButton.Focus();
+                else
+                    StatusCentreChip.Focus();
+                break;
+        }
+    }
+
+    private void FocusAddress()
+    {
+        if (DataContext is MainWindowViewModel { IsDualPaneActive: true, ActivePane: { } pane })
+        {
+            BrowserPanes.FocusAddress(pane);
+            return;
+        }
+
+        OmnibarFocus.Focus(AddressOmnibar);
+    }
+
+    private static PaneViewModel? OtherPane(MainWindowViewModel vm)
+    {
+        if (vm.SelectedTab is not { IsDualPane: true } tab)
+            return null;
+
+        return ReferenceEquals(tab.ActivePane, tab.LeftPane) ? tab.RightPane : tab.LeftPane;
     }
 
     private void OnSidebarSetColorClick(object? sender, RoutedEventArgs e)
@@ -613,4 +930,11 @@ public partial class MainWindow : Window
 
         return null;
     }
+}
+
+public sealed class BranchChoice
+{
+    public required string Name { get; init; }
+
+    public bool IsCurrent { get; init; }
 }

@@ -16,10 +16,32 @@
                                       Home="{Binding Home}" />
 
             <Grid x:Name="DualGrid" IsVisible="{Binding IsDualPane}">
-                <Grid x:Name="LeftHost">
-                    <controls:PaneContentHost Pane="{Binding LeftPane}"
-                                                Home="{Binding Home}" />
-                    <Border IsVisible="{Binding LeftPane.IsActive}"
+                <Grid x:Name="LeftHost" RowDefinitions="Auto,*">
+                    <Border Grid.Row="0"
+                            Height="28"
+                            Background="{DynamicResource HelixToolbarBrush}"
+                            ClipToBounds="True">
+                        <Grid>
+                            <views:Omnibar x:Name="LeftAddress"
+                                           Margin="4,0"
+                                           VerticalAlignment="Center"
+                                           DataContext="{Binding LeftPane}" />
+                            <Border Height="2"
+                                    VerticalAlignment="Bottom"
+                                    Background="{DynamicResource HelixBorderColor}"
+                                    IsHitTestVisible="False" />
+                            <Border Height="2"
+                                    VerticalAlignment="Bottom"
+                                    Background="{DynamicResource HelixAccentBrush}"
+                                    IsVisible="{Binding LeftPane.IsActive}"
+                                    IsHitTestVisible="False" />
+                        </Grid>
+                    </Border>
+                    <controls:PaneContentHost Grid.Row="1"
+                                              Pane="{Binding LeftPane}"
+                                              Home="{Binding Home}" />
+                    <Border Grid.Row="1"
+                            IsVisible="{Binding LeftPane.IsActive}"
                             BorderBrush="{DynamicResource HelixFocusBorderBrush}"
                             BorderThickness="2"
                             CornerRadius="4"
@@ -29,10 +51,32 @@
                 <GridSplitter x:Name="Splitter"
                               Background="{DynamicResource HelixBorderColor}" />
 
-                <Grid x:Name="RightHost">
-                    <controls:PaneContentHost Pane="{Binding RightPane}"
-                                                Home="{Binding Home}" />
-                    <Border IsVisible="{Binding RightPane.IsActive, FallbackValue=False}"
+                <Grid x:Name="RightHost" RowDefinitions="Auto,*">
+                    <Border Grid.Row="0"
+                            Height="28"
+                            Background="{DynamicResource HelixToolbarBrush}"
+                            ClipToBounds="True">
+                        <Grid>
+                            <views:Omnibar x:Name="RightAddress"
+                                           Margin="4,0"
+                                           VerticalAlignment="Center"
+                                           DataContext="{Binding RightPane}" />
+                            <Border Height="2"
+                                    VerticalAlignment="Bottom"
+                                    Background="{DynamicResource HelixBorderColor}"
+                                    IsHitTestVisible="False" />
+                            <Border Height="2"
+                                    VerticalAlignment="Bottom"
+                                    Background="{DynamicResource HelixAccentBrush}"
+                                    IsVisible="{Binding RightPane.IsActive, FallbackValue=False}"
+                                    IsHitTestVisible="False" />
+                        </Grid>
+                    </Border>
+                    <controls:PaneContentHost Grid.Row="1"
+                                              Pane="{Binding RightPane}"
+                                              Home="{Binding Home}" />
+                    <Border Grid.Row="1"
+                            IsVisible="{Binding RightPane.IsActive, FallbackValue=False}"
                             BorderBrush="{DynamicResource HelixFocusBorderBrush}"
                             BorderThickness="2"
                             CornerRadius="4"

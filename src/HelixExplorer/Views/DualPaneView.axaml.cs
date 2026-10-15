@@ -1,8 +1,11 @@
 using System.ComponentModel;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.VisualTree;
+using HelixExplorer.Controls;
 using HelixExplorer.Core.Models;
 using HelixExplorer.ViewModels;
 
@@ -57,9 +60,9 @@ public sealed partial class DualPaneView : UserControl
 
         if (orientation == PaneSplitOrientation.Vertical)
         {
-            DualGrid.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
+            DualGrid.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star) { MinWidth = 240 });
             DualGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
-            DualGrid.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
+            DualGrid.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star) { MinWidth = 240 });
 
             Grid.SetColumn(LeftHost, 0);
             Grid.SetRow(LeftHost, 0);
@@ -104,4 +107,56 @@ public sealed partial class DualPaneView : UserControl
         if (_tab?.RightPane is { } right)
             _tab.SetActivePane(right);
     }
+
+    public bool FocusAddress(PaneViewModel? pane)
+        => OmnibarFocus.Focus(AddressFor(pane));
+
+    public bool FocusFileSurface(PaneViewModel? pane)
+        => OmnibarFocus.FocusFileSurface(HostFor(pane));
+
+    public bool ContainsAddress(Visual visual)
+        => OmnibarFocus.IsWithin(LeftAddress, visual) || OmnibarFocus.IsWithin(RightAddress, visual);
+
+    public bool FileSurfaceContains(PaneViewModel? pane, Visual visual)
+    {
+        var host = HostFor(pane);
+        return OmnibarFocus.IsWithin(host, visual)
+               && !OmnibarFocus.IsWithin(LeftAddress, visual)
+               && !OmnibarFocus.IsWithin(RightAddress, visual);
+    }
+
+    private Omnibar AddressFor(PaneViewModel? pane)
+        => ReferenceEquals(pane, _tab?.RightPane) ? RightAddress : LeftAddress;
+
+    private Control HostFor(PaneViewModel? pane)
+        => ReferenceEquals(pane, _tab?.RightPane) ? RightHost : LeftHost;
+}
+
+internal static class OmnibarFocus
+{
+    public static bool Focus(Omnibar? omnibar)
+    {
+        if (omnibar is null)
+            return false;
+
+        var box = omnibar.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(static box => box.IsVisible);
+        return box?.Focus() ?? omnibar.Focus();
+    }
+
+    public static bool FocusFileSurface(Control host)
+    {
+        var pane = host.GetVisualDescendants().OfType<PaneView>().FirstOrDefault();
+        if (pane is null)
+            return host.Focus();
+
+        Control? target = pane.GetVisualDescendants().OfType<DataGrid>().FirstOrDefault(static control => control.IsVisible);
+        target ??= pane.GetVisualDescendants().OfType<VirtualizingFileGrid>().FirstOrDefault(static control => control.IsVisible);
+        target ??= pane.GetVisualDescendants().OfType<ListBox>().LastOrDefault(static control => control.IsVisible);
+        return target?.Focus() ?? pane.Focus();
+    }
+
+    public static bool IsWithin(Visual? ancestor, object? source)
+        => ancestor is not null
+           && source is Visual visual
+           && (ReferenceEquals(ancestor, visual) || ancestor.IsVisualAncestorOf(visual));
 }

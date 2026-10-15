@@ -29,6 +29,7 @@ public static class WindowsServiceExtensions
         services.AddScoped<Func<IFileChangeWatcher>>(sp => () => sp.GetRequiredService<IFileChangeWatcher>());
         services.AddSingleton<IStaTaskScheduler, Shell.StaTaskScheduler>();
         services.AddSingleton<IAccentColorSource, WinAccentColorSource>();
+        services.AddSingleton<IHighContrastSource, WinHighContrastSource>();
         return services;
     }
 }

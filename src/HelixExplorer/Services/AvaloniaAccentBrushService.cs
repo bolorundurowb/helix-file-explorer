@@ -8,6 +8,24 @@ namespace HelixExplorer.Services;
 
 public sealed class AvaloniaAccentBrushService(IAccentColorSource accentColors) : IAccentBrushService
 {
+    private static readonly string[] AccentKeys =
+    [
+        "HelixAccentBrush",
+        "HelixSelectionBarBrush",
+        "HelixFocusBorderBrush",
+        "HelixSettingsNavAccentBar",
+        "HelixToggleOnBrush",
+        "HelixProgressBrush",
+        "HelixAccentForegroundBrush",
+        "HelixSelectionFillBrush",
+        "ToggleSwitchFillOn",
+        "ToggleSwitchFillOnPointerOver",
+        "ToggleSwitchFillOnPressed",
+        "ToggleSwitchStrokeOn",
+        "ToggleSwitchStrokeOnPointerOver",
+        "ToggleSwitchStrokeOnPressed",
+    ];
+
     public uint? CustomAccentArgb { get; private set; }
 
     public event Action? AccentChanged;
@@ -23,6 +41,14 @@ public sealed class AvaloniaAccentBrushService(IAccentColorSource accentColors) 
     {
         if (Application.Current?.Resources is not ResourceDictionary resources)
             return;
+
+        // Root keys outrank theme dictionaries, so a custom accent would hide the contrast colours.
+        if (AvaloniaThemeService.IsHighContrast(AvaloniaThemeService.EffectiveVariant))
+        {
+            foreach (var key in AccentKeys)
+                resources.Remove(key);
+            return;
+        }
 
         var isDark = Application.Current.ActualThemeVariant == ThemeVariant.Dark;
         var system = CustomAccentArgb is null ? accentColors.TryReadAccentColor() : null;

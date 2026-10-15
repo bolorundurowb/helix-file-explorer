@@ -102,6 +102,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
         AccentColorArgb = settings.AccentColorArgb;
         ApplyOpenInTerminalGesture(settings.OpenInTerminalGesture);
         AutoCheckForUpdates = settings.AutoCheckForUpdates;
+        UpdateChannel = settings.UpdateChannel;
 
         _accentBrushes.ApplyCustomAccent(AccentColorArgb);
         _themeService.ThemeChanged += OnThemeServiceChanged;
@@ -166,6 +167,18 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
 
     partial void OnAutoCheckForUpdatesChanged(bool value)
         => _settingsCoordinator.ScheduleSave(settings => settings.AutoCheckForUpdates = value);
+
+    [ObservableProperty]
+    private UpdateChannel _updateChannel = UpdateChannel.Stable;
+
+    partial void OnUpdateChannelChanged(UpdateChannel value)
+    {
+        _settingsCoordinator.ScheduleSave(settings => settings.UpdateChannel = value);
+
+        // A status/URL from the previous channel's check would otherwise linger and
+        // point at the wrong release until the user explicitly checks again.
+        _settingsPage.ResetUpdateCheckState();
+    }
 
     /// <summary>
     /// Proxies the active pane so one window-level <see cref="KeyBinding"/> works regardless of focus.

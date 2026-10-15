@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using HelixExplorer.Core.Infrastructure;
+using HelixExplorer.Core.Settings;
 using HelixExplorer.Core.Theming;
 
 namespace HelixExplorer.ViewModels;
@@ -21,8 +22,13 @@ public sealed partial class SettingsPageViewModel : ObservableObject
             { "Accept", "application/vnd.github+json" }
         }
     };
-    private const string ReleasesUrl =
+    private const string LatestReleaseUrl =
         "https://api.github.com/repos/bolorundurowb/helix-file-explorer/releases/latest";
+
+    // One page is enough: GitHub returns releases newest-first, and a preview-per-merge
+    // cadence would exhaust the unauthenticated 60-requests-per-hour limit if this paginated.
+    private const string AllReleasesUrl =
+        "https://api.github.com/repos/bolorundurowb/helix-file-explorer/releases?per_page=100";
 
     private readonly IMessenger _messenger;
 
@@ -36,7 +42,8 @@ public sealed partial class SettingsPageViewModel : ObservableObject
         CopyrightNotice = AppAssembly.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright
                           ?? "Copyright © 2026";
 
-        // SemVer pre-release suffixes would break numeric compare against GitHub latest.
+        // Source Link appends a commit SHA after '+'; HelixVersion.TryParse only
+        // understands the MAJOR.MINOR.PATCH[-preview.N] part before it.
         _currentVersion = AppVersion;
         var plusIndex = _currentVersion.IndexOf('+');
         if (plusIndex >= 0)
@@ -115,40 +122,28 @@ public sealed partial class SettingsPageViewModel : ObservableObject
 
         try
         {
-            var response = await _httpClient.GetAsync(ReleasesUrl).ConfigureAwait(true);
-            if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            if (!HelixVersion.TryParse(_currentVersion, out var current))
             {
-                // Unauthenticated GitHub API calls are rate limited; this is the usual "at times" failure.
-                UpdateStatus = "Could not check for updates (rate limited). Try again later.";
+                UpdateStatus = "Could not determine the current version.";
                 return;
             }
 
-            if (!response.IsSuccessStatusCode)
-            {
-                UpdateStatus = "Could not check for updates. Try again later.";
+            var found = Main.UpdateChannel == UpdateChannel.Preview
+                ? await FindBestPreviewReleaseAsync().ConfigureAwait(true)
+                : await FindLatestStableReleaseAsync().ConfigureAwait(true);
+
+            if (found is null)
                 return;
-            }
 
-            var json = await response.Content.ReadAsStringAsync().ConfigureAwait(true);
-            using var doc = JsonDocument.Parse(json);
-            var tagName = doc.RootElement.GetProperty("tag_name").GetString();
-            var htmlUrl = doc.RootElement.GetProperty("html_url").GetString();
-
-            if (string.IsNullOrEmpty(tagName))
+            var (latest, htmlUrl) = found.Value;
+            if (latest > current)
             {
-                UpdateStatus = "No release information found.";
-                return;
-            }
-
-            var latestVersion = tagName.TrimStart('v', 'V');
-            if (IsNewerVersion(latestVersion, _currentVersion))
-            {
-                UpdateStatus = $"Update available: v{latestVersion} (current: v{_currentVersion})";
+                UpdateStatus = $"Update available: v{latest} (current: v{current})";
                 UpdateReleaseUrl = htmlUrl;
             }
             else
             {
-                UpdateStatus = $"You are up to date (v{_currentVersion})";
+                UpdateStatus = $"You are up to date (v{current})";
             }
         }
         catch (TaskCanceledException)
@@ -163,6 +158,105 @@ public sealed partial class SettingsPageViewModel : ObservableObject
         {
             IsCheckingForUpdates = false;
         }
+    }
+
+    /// <summary>
+    /// Stable channel: GitHub's own "latest" already excludes drafts and prereleases, so a
+    /// stable install is never offered a preview build.
+    /// </summary>
+    private async Task<(HelixVersion Version, string? Url)?> FindLatestStableReleaseAsync()
+    {
+        var response = await _httpClient.GetAsync(LatestReleaseUrl).ConfigureAwait(true);
+        if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+        {
+            // Unauthenticated GitHub API calls are rate limited; this is the usual "at times" failure.
+            UpdateStatus = "Could not check for updates (rate limited). Try again later.";
+            return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            UpdateStatus = "Could not check for updates. Try again later.";
+            return null;
+        }
+
+        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(true);
+        var selected = SelectStableRelease(json);
+        if (selected is null)
+            UpdateStatus = "No release information found.";
+
+        return selected;
+    }
+
+    /// <summary>
+    /// Pulled out of <see cref="FindLatestStableReleaseAsync"/> so the selection logic is
+    /// testable without an HTTP round trip; internal rather than private only for that reason.
+    /// </summary>
+    internal static (HelixVersion Version, string? Url)? SelectStableRelease(string releaseJson)
+    {
+        using var doc = JsonDocument.Parse(releaseJson);
+        var tagName = doc.RootElement.GetProperty("tag_name").GetString();
+        var htmlUrl = doc.RootElement.GetProperty("html_url").GetString();
+
+        return HelixVersion.TryParse(tagName, out var version) ? (version, htmlUrl) : null;
+    }
+
+    /// <summary>
+    /// Preview channel: pages through every release (drafts excluded, since a half-finished
+    /// release should never be offered as an update) and picks the greatest version across
+    /// both channels, so a newer stable release still supersedes an older preview.
+    /// </summary>
+    private async Task<(HelixVersion Version, string? Url)?> FindBestPreviewReleaseAsync()
+    {
+        var response = await _httpClient.GetAsync(AllReleasesUrl).ConfigureAwait(true);
+        if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+        {
+            UpdateStatus = "Could not check for updates (rate limited). Try again later.";
+            return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            UpdateStatus = "Could not check for updates. Try again later.";
+            return null;
+        }
+
+        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(true);
+        var selected = SelectBestPreviewRelease(json);
+        if (selected is null)
+            UpdateStatus = "No release information found.";
+
+        return selected;
+    }
+
+    /// <summary>
+    /// Pulled out of <see cref="FindBestPreviewReleaseAsync"/> so the selection logic is
+    /// testable without an HTTP round trip; internal rather than private only for that reason.
+    /// </summary>
+    internal static (HelixVersion Version, string? Url)? SelectBestPreviewRelease(string releasesJson)
+    {
+        using var doc = JsonDocument.Parse(releasesJson);
+
+        HelixVersion? best = null;
+        string? bestUrl = null;
+
+        foreach (var release in doc.RootElement.EnumerateArray())
+        {
+            if (release.TryGetProperty("draft", out var draft) && draft.GetBoolean())
+                continue;
+
+            var tagName = release.TryGetProperty("tag_name", out var tagProp) ? tagProp.GetString() : null;
+            if (!HelixVersion.TryParse(tagName, out var version))
+                continue;
+
+            if (best is null || version > best.Value)
+            {
+                best = version;
+                bestUrl = release.TryGetProperty("html_url", out var urlProp) ? urlProp.GetString() : null;
+            }
+        }
+
+        return best is null ? null : (best.Value, bestUrl);
     }
 
     [RelayCommand]
@@ -180,13 +274,14 @@ public sealed partial class SettingsPageViewModel : ObservableObject
         _messenger.Send(new GlobalNavigationRequestMessage(directory));
     }
 
-    private static bool IsNewerVersion(string latest, string current)
+    /// <summary>
+    /// Called when the update channel changes so a stale status/URL from the previous
+    /// channel's check cannot linger and point at the wrong release.
+    /// </summary>
+    public void ResetUpdateCheckState()
     {
-        if (!Version.TryParse(latest, out var latestVer))
-            return false;
-        if (!Version.TryParse(current, out var currentVer))
-            return false;
-        return latestVer > currentVer;
+        UpdateStatus = string.Empty;
+        UpdateReleaseUrl = null;
     }
 }
 

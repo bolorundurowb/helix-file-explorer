@@ -26,6 +26,31 @@
         <Style Selector="WindowDrawnDecorations /template/ Button#PART_PopoverFullScreenButton">
             <Setter Property="IsVisible" Value="False" />
         </Style>
+        <!-- Leaf swatches: drop the Fluent icon, gesture, and star columns so the grid stays tight. -->
+        <Style Selector="MenuItem.tintSwatch">
+            <Setter Property="Padding" Value="4" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Name="PART_LayoutRoot"
+                            Background="Transparent"
+                            Padding="{TemplateBinding Padding}"
+                            CornerRadius="4">
+                        <ContentPresenter Content="{TemplateBinding Header}"
+                                          ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="MenuItem.tintSwatch:selected /template/ Border#PART_LayoutRoot">
+            <Setter Property="Background" Value="{DynamicResource MenuFlyoutItemBackgroundPointerOver}" />
+        </Style>
+        <Style Selector="MenuItem.tintSwatch:pressed /template/ Border#PART_LayoutRoot:pointerover">
+            <Setter Property="Background" Value="{DynamicResource MenuFlyoutItemBackgroundPressed}" />
+        </Style>
     </Window.Styles>
 
     <Window.KeyBindings>
@@ -356,6 +381,7 @@
                                     PointerMoved="OnTabPointerMoved"
                                     PointerReleased="OnTabPointerReleased"
                                     PointerCaptureLost="OnTabPointerCaptureLost"
+                                    Loaded="OnTabChipLoaded"
                                     WindowDecorationProperties.ElementRole="User">
                                 <!-- Fixed-height top bar so titles stay aligned whether tinted or not. The active bar
                                      overlays the content row so selection never grows the chip past the title bar. -->
@@ -423,9 +449,13 @@
                                             IsVisible="False" />
                                 </Grid>
                                 <Border.ContextMenu>
-                                    <ContextMenu Opening="OnTabContextMenuOpening">
-                                        <MenuItem Header="Tint" Tag="{x:Static settings:FolderColorPalette.All}" />
-                                        <MenuItem Header="Clear tint" Command="{Binding ClearTintCommand}" />
+                                    <ContextMenu>
+                                        <MenuItem Header="Change tab color" Tag="{x:Static settings:TabTintPalette.All}">
+                                            <MenuItem.Icon>
+                                                <PathIcon Data="{DynamicResource HelixIconColorGeometry}" />
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <MenuItem Header="Clear tab color" Command="{Binding ClearTintCommand}" />
                                         <Separator />
                                         <MenuItem Header="Close tabs to the right" Command="{Binding CloseTabsToRightCommand}" />
                                         <MenuItem Header="Close tabs to the left" Command="{Binding CloseTabsToLeftCommand}" />

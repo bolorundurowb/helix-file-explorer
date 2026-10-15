@@ -852,14 +852,14 @@ public partial class MainWindow : Window
             CommandMenuBuilder.Fill(flyout.Items, groups, pane);
     }
 
-    private void OnTabContextMenuOpening(object? sender, CancelEventArgs e)
+    private void OnTabChipLoaded(object? sender, RoutedEventArgs e)
     {
-        if (sender is not ContextMenu menu)
+        if (sender is not Control { ContextMenu: { } menu })
             return;
 
-        // Opening fires before the menu is parented to the tab the first time, so DataContext is only
-        // reliable once an item is clicked.
-        CommandMenuBuilder.FillColorSubmenus(
+        // Filled up front because colours added during Opening do not turn the item into a submenu on the
+        // first open. The tab is resolved at click time since the menu's DataContext follows the chip.
+        CommandMenuBuilder.FillTintSwatches(
             menu.Items,
             new RelayCommand<string>(hex => (menu.DataContext as TabViewModel)?.SetTintCommand.Execute(hex)));
     }

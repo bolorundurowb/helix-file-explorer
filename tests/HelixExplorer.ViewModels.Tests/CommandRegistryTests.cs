@@ -1,4 +1,6 @@
+using System.Windows.Input;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Persistence;
 using HelixExplorer.Core.Settings;
@@ -174,6 +176,50 @@ public sealed class CommandRegistryTests : IDisposable
         headers.Must().BeSequenceEqual(FolderColorPalette.All.Select(c => c.Name).Append("Clear colour").ToArray());
     }
 
+    [Fact]
+    public void TintSwatches_FillFourColumnGrid_WithoutTextAndWithoutDuplicates()
+    {
+        var (count, parameters, anyTextHeader, columns) = HeadlessSession.RunOnUiThread(() =>
+        {
+            var submenu = new MenuItem { Header = "Change tab color", Tag = TabTintPalette.All };
+            var menu = new ContextMenu();
+            menu.Items.Add(submenu);
+
+            CommandMenuBuilder.FillTintSwatches(menu.Items, NoOpCommand.Instance);
+            CommandMenuBuilder.FillTintSwatches(menu.Items, NoOpCommand.Instance);
+
+            var items = submenu.Items.OfType<MenuItem>().ToList();
+            var panel = submenu.ItemsPanel?.Build();
+            return (
+                items.Count,
+                items.Select(i => (string)i.CommandParameter!).ToList(),
+                items.Any(i => i.Header is string),
+                panel is UniformGrid grid ? grid.Columns : 0);
+        });
+
+        count.Must().Be(TabTintPalette.All.Count);
+        parameters.Must().BeSequenceEqual(TabTintPalette.All.Select(c => c.Hex).ToArray());
+        anyTextHeader.Must().BeFalse();
+        columns.Must().Be(4);
+    }
+
     private static IEnumerable<IReadOnlyList<IReadOnlyList<CommandDefinition<PaneViewModel>>>> PaneMenus()
         => [CommandRegistry.SortMenu, CommandRegistry.GroupByMenu, CommandRegistry.LayoutMenu];
+
+    private sealed class NoOpCommand : ICommand
+    {
+        public static NoOpCommand Instance { get; } = new();
+
+        public event EventHandler? CanExecuteChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public bool CanExecute(object? parameter) => true;
+
+        public void Execute(object? parameter)
+        {
+        }
+    }
 }

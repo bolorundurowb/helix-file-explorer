@@ -1,7 +1,10 @@
 using System.Windows.Input;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
@@ -17,6 +20,10 @@ namespace HelixExplorer.Views;
 internal static class CommandMenuBuilder
 {
     private static readonly IBrush[] SwatchBrushes = FolderColorPalette.All
+        .Select(c => (IBrush)new ImmutableSolidColorBrush(Color.Parse(c.Hex)))
+        .ToArray();
+
+    private static readonly IBrush[] TintSwatchBrushes = TabTintPalette.All
         .Select(c => (IBrush)new ImmutableSolidColorBrush(Color.Parse(c.Hex)))
         .ToArray();
 
@@ -43,6 +50,19 @@ internal static class CommandMenuBuilder
         {
             if (item is MenuItem { Tag: IReadOnlyList<FolderColorOption> } menuItem)
                 FillColors(menuItem.Items, command);
+        }
+    }
+
+    /// <summary>
+    /// Fills every direct submenu tagged with <see cref="TabTintPalette.All"/> as a 4-column swatch grid.
+    /// <paramref name="command"/> receives the hex value. Names are exposed only to automation.
+    /// </summary>
+    public static void FillTintSwatches(ItemCollection items, ICommand command)
+    {
+        foreach (var item in items)
+        {
+            if (item is MenuItem { Tag: IReadOnlyList<TabTintOption> } menuItem)
+                FillTintGrid(menuItem, command);
         }
     }
 
@@ -85,6 +105,33 @@ internal static class CommandMenuBuilder
                 CommandParameter = color.Hex,
                 Icon = new Ellipse { Width = 12, Height = 12, Fill = SwatchBrushes[i] },
             });
+        }
+    }
+
+    private static void FillTintGrid(MenuItem menuItem, ICommand command)
+    {
+        menuItem.ItemsPanel = new FuncTemplate<Panel?>(() => new UniformGrid { Columns = 4 });
+        menuItem.Items.Clear();
+
+        var colors = TabTintPalette.All;
+        for (var i = 0; i < colors.Count; i++)
+        {
+            var color = colors[i];
+            var swatch = new MenuItem
+            {
+                Command = command,
+                CommandParameter = color.Hex,
+                Header = new Border
+                {
+                    Width = 24,
+                    Height = 24,
+                    CornerRadius = new CornerRadius(4),
+                    Background = TintSwatchBrushes[i],
+                },
+            };
+            swatch.Classes.Add("tintSwatch");
+            AutomationProperties.SetName(swatch, color.Name);
+            menuItem.Items.Add(swatch);
         }
     }
 

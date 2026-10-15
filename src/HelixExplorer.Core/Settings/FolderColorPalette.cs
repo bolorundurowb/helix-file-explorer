@@ -3,7 +3,8 @@ namespace HelixExplorer.Core.Settings;
 public sealed record FolderColorOption(string Name, string Hex);
 
 /// <summary>
-/// The single colour list offered for folders, sidebar items, and tabs, so the three menus cannot drift apart.
+/// The colour list offered for folders and sidebar items, so those menus cannot drift apart.
+/// Tab colours use <see cref="TabTintPalette"/>.
 /// </summary>
 public static class FolderColorPalette
 {

@@ -1,8 +1,10 @@
 # AGENTS.md
 
-Instructions for coding agents working in **Helix Explorer** — a Windows file manager (Avalonia + .NET 10). Prefer this file over inventing project conventions. Humans should still use `README.md` and `CONTRIBUTING.md`.
+Instructions for coding agents working in **Helix Explorer** — a fast, modern file manager built with Avalonia + .NET 10 (Windows-only today, designed to be portable across desktop OSes). Prefer this file over inventing project conventions. Humans should still use `README.md` and `CONTRIBUTING.md`.
 
 **Speed and performance are the priority.** Prefer efficient enumeration, allocation-conscious code, and UI that stays responsive under large folders and heavy file ops. Do not trade away responsiveness for convenience abstractions.
+
+**Portability is a design goal.** Helix Explorer targets all major desktop OSes (Windows, macOS, Linux); only Windows is supported today, but write every change as if another platform adapter is coming. Keep OS-specific behavior behind Core `I*` contracts and platform adapters (`Win*`, `Avalonia*`), and do not let Windows assumptions (paths, separators, drive letters, shell semantics, P/Invoke, `System.Windows.Forms`) leak outside `HelixExplorer.Windows`. New Core/ViewModel code should be reusable unchanged by a future platform project.
 
 ## Setup and commands
 
@@ -40,6 +42,7 @@ Bump the product version only in `Directory.Build.props` — the release decisio
 - **Pane VMs are not DI-registered.** Build them with `IPaneViewModelFactory`; build their coordinators with `IPaneCoordinatorFactory`. Each pane gets its own watcher via the scoped `Func<IFileChangeWatcher>` factory — do not inject `IFileChangeWatcher` directly into a pane.
 - Prefer Core `I*` interfaces from UI/ViewModels. The only platform type allowed to surface in a Core contract is an opaque `nint` window handle (`IShellContextMenuService`, `IUiHost`); never reference Avalonia, WinForms, or COM types from Core.
 - **Platform services should implement a Core `I*` contract.** `WinThemeWatcher` is a known exception — registered as a concrete singleton in `HelixServiceRegistration` because it needs a callback closure; give it a Core interface if another consumer needs to abstract it.
+- **Keep it portable.** OS-specific behavior belongs behind a Core `I*` contract with a `Win*` adapter (a future platform gets its own adapter). Do not encode Windows-only assumptions (path separators, drive letters, reserved names, registry, shell) in Core or the ViewModels — they must compile and run unchanged on another platform once that project exists.
 
 ## Threading and platform boundaries
 
@@ -56,6 +59,7 @@ Bump the product version only in `Directory.Build.props` — the release decisio
 
 - **Performance first:** optimize hot paths (directory listing, filtering, sorting, thumbnails, watchers, file ops). Reuse the existing allocation-conscious primitives — `ArrayPoolList<T>` for pooled enumeration, `SearchValues<char>` for first-char probes, precomputed comparer permutations in `FileSystemEntryComparer`, cached grouping buckets in `FileGrouping`. Avoid unnecessary allocations, sync-over-async on the UI thread, and work that blocks browsing. Measure before micro-optimizing cold paths.
 - **Comments explain why, not what or how.** Comment non-obvious intent, trade-offs, invariants, and constraints (e.g. why WinForms is required for drag-out). Do not narrate the code (`// increment i`, `// call Save`). If the “why” is already clear from naming and structure, skip the comment.
+- **Language: English (Nigeria), `en-NG`.** All human-readable text — code comments, XML docs, markdown (including this file), user-facing strings, commit messages, and issue/PR text — is written in Nigerian English. Keep code identifiers (type, member, and parameter names) in standard English, and do not add translated/alternate-locale copies of strings.
 - `TreatWarningsAsErrors` is on in `Directory.Build.props` — fix warnings; do not disable it.
 - Nullable + `ImplicitUsings` enabled; `LangVersion latest`. Match nearby style: file-scoped namespaces, primary constructors for services/stores, collection expressions `[]`, immutable `readonly record struct`/`sealed` models.
 - **ViewModels:** CommunityToolkit.Mvvm (`ObservableObject`, `[ObservableProperty]`, `[RelayCommand]`, `partial`). Split cross-cutting pane behavior into coordinators under `ViewModels/Pane/` (`.cs`), not into the large VMs. Keep new pane behavior out of `PaneViewModel`/`MainWindowViewModel` where a coordinator fits; coordinators read/mutate VM state through a host interface (see `IPaneRefreshHost`). Extract pure decision logic into testable helper classes (`PaneNavigationController`, `PaneSelectionModel`, `ListingPipeline`, `Input/RenameKeyGesture`).
@@ -116,6 +120,8 @@ Use `AppPaths` / `AppVersion` instead of hard-coding paths. Do not write anythin
 
 - Commit secrets (`.env`, `secrets.json`, `*.local.json`) or build artifacts.
 - Put Avalonia, WinForms, or COM interop into `HelixExplorer.Core`.
+- Use WinForms types outside `WinFormsExternalFileDragService` — `UseWindowsForms=true` makes `System.Windows.Forms` implicitly visible project-wide, so this is easy to do by accident.
+- Add new direct `Dispatcher.UIThread`, `Process.Start`, or blocking `.Result`/`.GetAwaiter().GetResult()` call sites; route through `IUiThreadDispatcher`, a Core launcher, or an await instead (see "Threading and platform boundaries").
 - Add projects outside `HelixExplorer.slnx` or invent alternate build/solution files.
 - Add dependencies with licenses incompatible with **GPL-3.0-or-later** without explicit discussion.
 - Drive-by refactors, unrelated formatting, or docs the user did not ask for.

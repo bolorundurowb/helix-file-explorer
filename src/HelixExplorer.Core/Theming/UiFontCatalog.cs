@@ -4,8 +4,8 @@ public static class UiFontCatalog
 {
     public const string BundledCollectionScheme = "fonts:Helix#DM Sans";
     public const string InterCollectionScheme = "fonts:Inter#Inter";
-    public const string IbmPlexSansCollectionScheme = "fonts:Helix#IBM Plex Sans";
-    public const string PlusJakartaSansCollectionScheme = "fonts:Helix#Plus Jakarta Sans";
+    public const string IbmPlexSansCollectionScheme = "fonts:HelixPlex#IBM Plex Sans";
+    public const string PlusJakartaSansCollectionScheme = "fonts:HelixJakarta#Plus Jakarta Sans";
 
     public static IReadOnlyList<UiFontOption> Options { get; } =
     [

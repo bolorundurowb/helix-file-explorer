@@ -70,6 +70,10 @@ public partial class App : Application
             AppPaths.AppData,
             _fileLoggerProvider.LogsDirectory);
 
+        CrashLogger.AttachLogger(startupLogger);
+        AvaloniaUiThreadDispatcher.ObserveUnhandledExceptions(ex =>
+            CrashLogger.Report("Dispatcher.UIThread.UnhandledException", ex, null, fatal: false));
+
         desktop.ShutdownRequested += OnShutdownRequested;
 
         var windowHost = _host.Services.GetRequiredService<IWindowHostService>();
@@ -105,6 +109,7 @@ public partial class App : Application
         _host?.Services.GetService<IArchiveProvider>()?.CleanupExtractedFiles();
         _host?.Dispose();
         _host = null;
+        CrashLogger.MarkCleanShutdown();
         _fileLoggerProvider?.Dispose();
         _fileLoggerProvider = null;
     }

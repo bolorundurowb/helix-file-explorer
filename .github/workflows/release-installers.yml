@@ -1,10 +1,9 @@
 name: Release (publish)
 
-# Called only by release-on-master.yml and release-on-tag.yml, which already
-# decided the version, its channel, and whether it should be latest. This
-# workflow has no `push`/`workflow_dispatch` triggers of its own: those moved
-# to the callers so a manual bump cannot publish twice (once from this file's
-# old push trigger, once from the caller that now owns that decision).
+# Called only by release-on-tag.yml, which already decided the version, its
+# channel, and whether it should be latest. This workflow has no
+# `push`/`workflow_dispatch` triggers of its own: a tag push is the only
+# release trigger, so a merge to master cannot publish.
 on:
   workflow_call:
     inputs:

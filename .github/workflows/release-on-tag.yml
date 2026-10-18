@@ -5,11 +5,10 @@ on:
     tags:
       - 'v*'
 
-# Shared with release-on-master.yml: this workflow also writes to master (the
-# post-release stable-tag props sync), so a tag push and a merge must not
-# race on Directory.Build.props.
+# The props sync pushes to master, so two tag publishes must not race on
+# Directory.Build.props.
 concurrency:
-  group: release-master
+  group: release-tag
   cancel-in-progress: false
 
 permissions:
@@ -59,19 +58,16 @@ jobs:
       version: ${{ needs.decide.outputs.version }}
       prerelease: ${{ needs.decide.outputs.prerelease == 'true' }}
       make_latest: ${{ needs.decide.outputs.make_latest }}
-      # A tag push's github.sha is already the commit the tag points at, so
-      # there is no ambiguity to resolve the way the master caller has to.
+      # A tag push's github.sha is the commit the tag points at.
       ref: ${{ github.sha }}
     permissions:
       contents: write
 
   sync-props:
     needs: [decide, release]
-    # Only a stable tag's props get synced onto master: a preview tag would
-    # point master's Directory.Build.props at a preview, which the master
-    # caller would then treat as "already released" and immediately mint yet
-    # another preview from it.
-    if: needs.decide.outputs.noop != 'true' && needs.decide.outputs.prerelease != 'true'
+    # Stable and preview tags both sync. The script commits nothing when
+    # Directory.Build.props is already at the tag version or ahead of it.
+    if: needs.decide.outputs.noop != 'true'
     runs-on: windows-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

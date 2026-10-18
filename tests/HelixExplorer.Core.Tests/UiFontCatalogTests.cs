@@ -40,13 +40,13 @@ public class UiFontCatalogTests
     [Fact]
     public void ResolveFontFamilySource_IbmPlexSans_UsesBundledCollection()
     {
-        UiFontCatalog.ResolveFontFamilySource(UiFontFamily.IbmPlexSans).Must().Be("fonts:Helix#IBM Plex Sans");
+        UiFontCatalog.ResolveFontFamilySource(UiFontFamily.IbmPlexSans).Must().Be("fonts:HelixPlex#IBM Plex Sans");
     }
 
     [Fact]
     public void ResolveFontFamilySource_PlusJakartaSans_UsesBundledCollection()
     {
-        UiFontCatalog.ResolveFontFamilySource(UiFontFamily.PlusJakartaSans).Must().Be("fonts:Helix#Plus Jakarta Sans");
+        UiFontCatalog.ResolveFontFamilySource(UiFontFamily.PlusJakartaSans).Must().Be("fonts:HelixJakarta#Plus Jakarta Sans");
     }
 
     [Fact]

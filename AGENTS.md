@@ -24,7 +24,7 @@ Release installer publish (matches CI):
 dotnet publish src/HelixExplorer/HelixExplorer.csproj -c Release -r win-x64 --self-contained true -p:DebugType=none -p:DebugSymbols=false -o publish/win-x64
 ```
 
-Bump the product version only in `Directory.Build.props` — the release decision reads it via `scripts/Resolve-ReleaseVersion.ps1`. A deliberate bump to a stable version publishes that exact version; a new `master` commit with no bump mints and publishes the next `preview.N`; re-pushing a commit already covered by a non-draft release is a no-op (ancestor check). See "Releases".
+Bump the product version only in `Directory.Build.props`. A push to `master` does not publish. Push a `v*` tag to release that version; if `Directory.Build.props` on `master` is strictly behind the tag, the tag workflow commits the tag version into it. See "Releases".
 
 ## Architecture (keep boundaries)
 
@@ -61,7 +61,7 @@ Bump the product version only in `Directory.Build.props` — the release decisio
 - **Comments explain why, not what or how.** Comment non-obvious intent, trade-offs, invariants, and constraints (e.g. why WinForms is required for drag-out). Do not narrate the code (`// increment i`, `// call Save`). If the “why” is already clear from naming and structure, skip the comment.
 - **Language: English (Nigeria), `en-NG`.** All human-readable text — code comments, XML docs, markdown (including this file), user-facing strings, commit messages, and issue/PR text — is written in Nigerian English. Keep code identifiers (type, member, and parameter names) in standard English, and do not add translated/alternate-locale copies of strings.
 - `TreatWarningsAsErrors` is on in `Directory.Build.props` — fix warnings; do not disable it.
-- Nullable + `ImplicitUsings` enabled; `LangVersion latest`. Match nearby style: file-scoped namespaces, primary constructors for services/stores, collection expressions `[]`, immutable `readonly record struct`/`sealed` models.
+- Nullable + `ImplicitUsings` enabled; `LangVersion latest`. Prefer current C# features — file-scoped namespaces, primary constructors for services/stores, collection expressions `[]`, immutable `readonly record struct`/`sealed` models, and the like — except where the newer form is harder to read than the code around it. Prefer `var` when the type is apparent from the right-hand side.
 - **ViewModels:** CommunityToolkit.Mvvm (`ObservableObject`, `[ObservableProperty]`, `[RelayCommand]`, `partial`). Split cross-cutting pane behavior into coordinators under `ViewModels/Pane/` (`.cs`), not into the large VMs. Keep new pane behavior out of `PaneViewModel`/`MainWindowViewModel` where a coordinator fits; coordinators read/mutate VM state through a host interface (see `IPaneRefreshHost`). Extract pure decision logic into testable helper classes (`PaneNavigationController`, `PaneSelectionModel`, `ListingPipeline`, `Input/RenameKeyGesture`).
 - **Messaging:** `IMessenger` is scoped per window and is a `WeakReferenceMessenger`. Define messages as `record` types in `ViewModels/Messages.cs`.
 - **Settings persistence:** `AppSettingsCoordinator.ScheduleSave` is debounced and applies only mutated fields through `ISettingsStore.Update` (field-level last-write-wins across windows). Do not overwrite the whole settings document from a window.
@@ -91,11 +91,12 @@ Use `AppPaths` / `AppVersion` instead of hard-coding paths. Do not write anythin
 
 ## Releases
 
-- `.github/workflows/release-on-master.yml` and `release-on-tag.yml` decide *what* to publish (stable vs. the next `preview.N`, `make_latest`); `release-installers.yml` is a `workflow_call`-only publisher that *builds and ships* a version it is told to. Both callers share `scripts/Resolve-ReleaseVersion.ps1` for parsing, preview-increment, and `make_latest` logic — do not duplicate that logic inline in a workflow. (The props bump/commit/push/retry loop is still duplicated inline in both callers — keep it that way if you touch it, or extract it deliberately.)
-- The decision is derived from already-published GitHub releases (ancestor-of-a-non-draft-release check), never from a commit diff, so a re-run of an already-released commit is a safe no-op. Note that `release-on-master.yml` hard-resets to `origin/master` before deciding, so a `workflow_dispatch` from a branch evaluates current `master`, not that branch's commit or `Directory.Build.props`.
-- `build-and-test.yml` runs on **every** push/PR to `master`; it is not path-filtered. Only the release workflows ignore `**/*.md`, `.github/ISSUE_TEMPLATE/**`, `.github/workflows/**`, and `LICENSE`. **Workflow-only changes are never exercised by pushing to `master` in this repo** — test them on a scratch fork.
-- To force a republish: delete the GitHub release for that version (the tag can stay) then re-run/re-dispatch. This only reliably works for the **latest** release — if any later non-draft release also contains the commit, the ancestor check still no-ops.
-- Releases are **not** gated on `build-and-test.yml`; a published release does not imply tests passed, and tag releases never run it at all (it triggers only on `master` pushes/PRs). Preview tags never sync `Directory.Build.props` back to `master`; stable tags do.
+- A push to `master` does not publish. `release-on-tag.yml` runs on a `v*` tag push and decides *what* to publish (`prerelease`, `make_latest`); `release-installers.yml` is a `workflow_call`-only publisher that *builds and ships* the version it is told. The tag caller uses `scripts/Resolve-ReleaseVersion.ps1` for parsing, `make_latest`, and the props-sync decision — do not duplicate that logic inline in the workflow. The props commit/push/retry loop lives in `release-on-tag.yml`.
+- A tag that is already a non-draft release is a no-op, so re-running the same tag does not publish twice. `make_latest` is false for a preview and for a stable tag that is not newer than the highest published stable release, so a hotfix does not become the in-app updater's latest.
+- After a successful publish, the tag workflow commits the tag version into `Directory.Build.props` on `master` only when that file is strictly behind the tag. Preview tags sync the same way. If the file is already at that version or ahead of it, nothing is committed.
+- `build-and-test.yml` runs on **every** push/PR to `master`; it is not path-filtered. Tag releases are not exercised by a push to `master` — test the tag workflow on a scratch fork.
+- To force a republish: delete the GitHub release for that tag, then re-run the tag workflow (or delete the tag and push it again). The workflow no-ops while that tag is still a non-draft release.
+- Releases are **not** gated on `build-and-test.yml`; a published release does not imply tests passed. `build-and-test.yml` triggers only on `master` pushes/PRs, so a tag release never runs it.
 - Release tooling is not validated at PR time: `Resolve-ReleaseVersion.ps1` has no Pester tests and `polyinstall validate` runs only in the publish workflow. Validate release-script/manifest changes manually (or on a scratch-fork workflow run) before relying on them; do not expect CI to catch them.
 
 ## Installer
@@ -108,13 +109,37 @@ Use `AppPaths` / `AppVersion` instead of hard-coding paths. Do not write anythin
 
 - Core logic: `tests/HelixExplorer.Core.Tests` (`net10.0`). DI/ViewModel/UI regressions: `tests/HelixExplorer.ViewModels.Tests` (`net10.0-windows`, Avalonia.Headless). CI is Windows-only.
 - Stack is xUnit + **OmniAssert** (both projects have `global using OmniAssert;`). Prefer `.Must()…` assertions; use `Ensure.ThrowsAsync<T>` for async throws. Avoid introducing other assertion libraries, and never write a no-op assertion (`true.Must().BeTrue()` — see `SqliteAppDatabaseTests`).
-- Name tests `Subject_Condition_Expected`/`Behavior_Context_Outcome`; use `[Theory]`/`[InlineData]` for tables. Model shared provider behavior as an abstract contract class (`IFileSystemProviderContractTests`).
+- Structure a test the way idiomatic C# and xUnit expect:
+  - One `public sealed` class per production type, named `{Type}Tests`, in a file of the same name. Mirror a production subfolder when the type already has one (`Persistence/SqliteAppDatabaseTests`).
+  - One method per behaviour. It is `public`, returns `void` or `Task`, and does not branch or loop to decide the result. Tests stay independent of each other.
+  - Body is Arrange, Act, Assert, with a blank line between the three. Assert the observable result of the production method. Several assertions are fine when they describe that one result.
+  - Name it `<Method>_should<ExpectedOutcome>_when<Condition>`, for example `Classify_shouldReturnPhysical_whenThePathIsADrivePath`. `Method` is the production member under test. Omit `_when<Condition>` when the case is the ordinary path and needs no qualifier. Use `[Theory]`/`[InlineData]` when one rule is checked across inputs; the name states the rule and the data carries the cases. Model shared provider behaviour as an abstract contract class (`IFileSystemProviderContractTests`).
+  - Apply this name to new tests and to any test you are already changing. Leave the rest of the suite on its current names.
 - **Exercise the real composition root** via `AddHelixApplicationServices()`; build providers with `validateScopes: true`. Do not fork registration. For graph tests, override *boundary* services with last-registration-wins — and always override **both** `IAppDatabase` **and** `ISettingsStore` (plus network discovery) so tests never read/write the developer's real `%AppData%\HelixExplorer`. Tests that override only `IAppDatabase` (`CommandRegistryTests`, `PaneSortPublishTests`, `TabCloseRangeCommandTests`) still leak reads of the real profile — do not copy that. Unit tests may construct VMs/coordinators directly.
 - **Exercise the production type/method under test, not BCL mechanics or an unrelated class.** Counter-examples to avoid in `DiAndRefreshRegressionTests.cs`: `PaneRefreshCoordinatorTests` actually drives `PaneListingCoordinator`/`PathUtilities`/`CancellationTokenSource` rather than `PaneRefreshCoordinator`; `PublishGate_*` only calls `PathUtilities.PathsEqual`; `AppSettingsTests` "atomic save" cases never call `JsonSettingsStore`. Assert observable behavior of the real subject.
 - **Do not reach into production internals with reflection.** `GetInjectedReporter` reflects over a private field of `PaneFileOperationCoordinator`; use an `InternalsVisibleTo` seam or assert through public behavior instead.
 - Anything touching Avalonia objects or `Dispatcher.UIThread` must build/show/measure/arrange/dispose on the headless UI thread (`HeadlessSession.RunOnUiThread`). The real `HelixExplorer.App` is loaded via `HeadlessAppBuilder`.
 - Prefer injected clocks (`Func<DateTime>`) and schedulers (`ManualStatusCentreScheduler`) over wall-clock `Task.Delay`. Do not add timing-based performance assertions to the normal suite (`FilterAndSessionTests`' 10k-filter `<500 ms` case is the counter-example to avoid).
 - When changing DI lifetimes, pane refresh, or window close behavior, update or add regression tests (`DiAndRefreshRegressionTests.cs`) and run `dotnet test`.
+
+## Commits
+
+The subject is a single line. Take it from the current branch name (`GIT_BRANCH_NAME`):
+
+- A Jira id is a project key and number already in the branch, such as `HELIX-14` in `feature/HELIX-14-crash-log`. Use that id alone.
+- Otherwise a GitHub issue id is `#` plus the issue number: a `#123` already in the branch, or the number in `123-…`, `issue-123`, `issues/123`, or `gh-123`. The subject is `#123`.
+
+When the branch has neither, start with the type of the changeset, a colon, and one short summary of the whole change. Types are `ft` (feature), `ch` (any other code change), `tst` (tests), and `doc` (documentation).
+
+Leave the next line blank, then list each change in the commit on its own line:
+
+```
+doc: describe how commit messages are written
+
+- take the subject from a Jira or GitHub id on the branch
+- fall back to a type prefix and a one-line summary
+- list each change on its own line under a blank line
+```
 
 ## Do not
 

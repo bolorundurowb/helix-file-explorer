@@ -3,13 +3,13 @@ using HelixExplorer.Core.Theming;
 
 namespace HelixExplorer.ViewModels.Tests;
 
-public class AppSettingsCoordinatorTests
+public sealed class AppSettingsCoordinatorTests
 {
     [Fact]
     public void SaveNow_PersistsViaMergeUpdate_NotWholeDocumentSave()
     {
         var store = new RecordingSettingsStore(new AppSettings { Theme = ThemeMode.Light });
-        var coordinator = CreateCoordinator(store, out _);
+        var coordinator = CreateCoordinator(store, out _, out _);
 
         coordinator.SaveNow(settings => settings.SidebarWidth = 320);
 
@@ -23,7 +23,7 @@ public class AppSettingsCoordinatorTests
     public void Flush_WithNoPendingMutation_DoesNotWrite()
     {
         var store = new RecordingSettingsStore(new AppSettings());
-        var coordinator = CreateCoordinator(store, out _);
+        var coordinator = CreateCoordinator(store, out _, out _);
 
         coordinator.Flush();
 
@@ -32,14 +32,14 @@ public class AppSettingsCoordinatorTests
     }
 
     [Fact]
-    public void Flush_PersistsPendingMutation_Immediately_ViaMergeUpdate()
+    public void Flush_shouldPersistPendingMutationImmediatelyViaMergeUpdate()
     {
-        using var sync = new SyncContextScope();
         var store = new RecordingSettingsStore(new AppSettings { Theme = ThemeMode.Light });
-        var coordinator = CreateCoordinator(store, out _);
+        var coordinator = CreateCoordinator(store, out _, out var scheduler);
 
         coordinator.ScheduleSave(settings => settings.SidebarWidth = 320);
         coordinator.Flush();
+        scheduler.Fire();
 
         store.UpdateCalls.Must().Be(1);
         store.SaveCalls.Must().Be(0);
@@ -48,16 +48,15 @@ public class AppSettingsCoordinatorTests
     }
 
     [Fact]
-    public async Task ScheduleSave_PersistsAfterDebounce_ViaMergeUpdate()
+    public void ScheduleSave_shouldPersistViaMergeUpdate_whenDebounceElapses()
     {
-        using var sync = new SyncContextScope();
         var store = new RecordingSettingsStore(new AppSettings { Theme = ThemeMode.Light });
-        var coordinator = CreateCoordinator(store, out _);
+        var coordinator = CreateCoordinator(store, out _, out var scheduler);
 
         coordinator.ScheduleSave(settings => settings.SidebarWidth = 320);
+        scheduler.Fire();
 
-        await Task.Delay(500);
-
+        scheduler.LastDelay.Must().Be(AppSettingsCoordinator.PersistDebounceDelay);
         store.UpdateCalls.Must().Be(1);
         store.SaveCalls.Must().Be(0);
         store.Current.SidebarWidth.Must().Be(320);
@@ -65,16 +64,14 @@ public class AppSettingsCoordinatorTests
     }
 
     [Fact]
-    public async Task ScheduleSave_CoalescesRapidMutations_IntoOneMergeUpdate()
+    public void ScheduleSave_shouldCoalesceRapidMutationsIntoOneMergeUpdate()
     {
-        using var sync = new SyncContextScope();
         var store = new RecordingSettingsStore(new AppSettings { Theme = ThemeMode.Light });
-        var coordinator = CreateCoordinator(store, out _);
+        var coordinator = CreateCoordinator(store, out _, out var scheduler);
 
         coordinator.ScheduleSave(settings => settings.SidebarWidth = 300);
         coordinator.ScheduleSave(settings => settings.Theme = ThemeMode.Dark);
-
-        await Task.Delay(500);
+        scheduler.Fire();
 
         store.UpdateCalls.Must().Be(1);
         store.SaveCalls.Must().Be(0);
@@ -86,7 +83,7 @@ public class AppSettingsCoordinatorTests
     public void SaveNow_AppliesTheme_WhenThemeChanges()
     {
         var store = new RecordingSettingsStore(new AppSettings { Theme = ThemeMode.Light });
-        var coordinator = CreateCoordinator(store, out var theme);
+        var coordinator = CreateCoordinator(store, out var theme, out _);
 
         coordinator.SaveNow(settings => settings.Theme = ThemeMode.Dark);
 
@@ -94,11 +91,18 @@ public class AppSettingsCoordinatorTests
     }
 
     private static AppSettingsCoordinator CreateCoordinator(
-        RecordingSettingsStore store, out RecordingThemeService theme)
+        RecordingSettingsStore store,
+        out RecordingThemeService theme,
+        out ManualDebounceScheduler scheduler)
     {
         theme = new RecordingThemeService();
+        scheduler = new ManualDebounceScheduler();
         return new AppSettingsCoordinator(
-            store, theme, new NoopUiFontService(), new NoopAccentBrushService());
+            store,
+            theme,
+            new NoopUiFontService(),
+            new NoopAccentBrushService(),
+            scheduler.Schedule);
     }
 
     private sealed class RecordingSettingsStore(AppSettings initial) : ISettingsStore
@@ -156,20 +160,28 @@ public class AppSettingsCoordinatorTests
         public event Action? AccentChanged { add { } remove { } }
     }
 
-    private sealed class SyncContextScope : IDisposable
+    private sealed class ManualDebounceScheduler
     {
-        private readonly SynchronizationContext? _previous = SynchronizationContext.Current;
+        private readonly List<(Action Callback, CancellationToken Token)> _scheduled = [];
 
-        public SyncContextScope()
-            => SynchronizationContext.SetSynchronizationContext(new ImmediateSyncContext());
+        public TimeSpan LastDelay { get; private set; }
 
-        public void Dispose()
-            => SynchronizationContext.SetSynchronizationContext(_previous);
-    }
+        public void Schedule(TimeSpan delay, Action callback, CancellationToken cancellationToken)
+        {
+            LastDelay = delay;
+            _scheduled.Add((callback, cancellationToken));
+        }
 
-    private sealed class ImmediateSyncContext : SynchronizationContext
-    {
-        public override void Post(SendOrPostCallback d, object? state) => d(state);
-        public override void Send(SendOrPostCallback d, object? state) => d(state);
+        public void Fire()
+        {
+            var pending = _scheduled.ToArray();
+            _scheduled.Clear();
+
+            foreach (var (callback, token) in pending)
+            {
+                if (!token.IsCancellationRequested)
+                    callback();
+            }
+        }
     }
 }

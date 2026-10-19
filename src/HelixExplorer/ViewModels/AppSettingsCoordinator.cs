@@ -1,3 +1,4 @@
+using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Core.Settings;
 using HelixExplorer.Core.Theming;
 
@@ -10,20 +11,51 @@ namespace HelixExplorer.ViewModels;
 /// applies only the mutated fields, so concurrent windows interleave their edits instead of one
 /// window overwriting another's changes with a stale snapshot.
 /// </summary>
-public sealed class AppSettingsCoordinator(
-    ISettingsStore settingsStore,
-    IThemeService themeService,
-    IUiFontService uiFontService,
-    IAccentBrushService accentBrushes) : IDisposable
+public sealed class AppSettingsCoordinator : IDisposable
 {
-    private const int PersistDebounceMs = 300;
+    public static readonly TimeSpan PersistDebounceDelay = TimeSpan.FromMilliseconds(300);
+
+    private readonly ISettingsStore _settingsStore;
+    private readonly IThemeService _themeService;
+    private readonly IUiFontService _uiFontService;
+    private readonly IAccentBrushService _accentBrushes;
+    private readonly Action<TimeSpan, Action, CancellationToken> _schedule;
+    private readonly CancellationTokenScope _persistScope = new();
 
     private AppSettings? _cached;
     private Action<AppSettings>? _pendingMutation;
-    private CancellationTokenSource? _persistCts;
     private bool _disposed;
 
-    public AppSettings Load() => _cached ??= settingsStore.Load();
+    public AppSettingsCoordinator(
+        ISettingsStore settingsStore,
+        IThemeService themeService,
+        IUiFontService uiFontService,
+        IAccentBrushService accentBrushes)
+        : this(settingsStore, themeService, uiFontService, accentBrushes, ScheduleOnThreadPool)
+    {
+    }
+
+    internal AppSettingsCoordinator(
+        ISettingsStore settingsStore,
+        IThemeService themeService,
+        IUiFontService uiFontService,
+        IAccentBrushService accentBrushes,
+        Action<TimeSpan, Action, CancellationToken> schedule)
+    {
+        ArgumentNullException.ThrowIfNull(settingsStore);
+        ArgumentNullException.ThrowIfNull(themeService);
+        ArgumentNullException.ThrowIfNull(uiFontService);
+        ArgumentNullException.ThrowIfNull(accentBrushes);
+        ArgumentNullException.ThrowIfNull(schedule);
+
+        _settingsStore = settingsStore;
+        _themeService = themeService;
+        _uiFontService = uiFontService;
+        _accentBrushes = accentBrushes;
+        _schedule = schedule;
+    }
+
+    public AppSettings Load() => _cached ??= _settingsStore.Load();
 
     public void ScheduleSave(Action<AppSettings> mutate)
     {
@@ -31,19 +63,10 @@ public sealed class AppSettingsCoordinator(
         ArgumentNullException.ThrowIfNull(mutate);
 
         Apply(mutate);
-        _pendingMutation = Compose(_pendingMutation, mutate);
+        AddPending(mutate);
 
-        var cts = new CancellationTokenSource();
-        var previous = Interlocked.Exchange(ref _persistCts, cts);
-        previous?.Cancel();
-        previous?.Dispose();
-
-        var token = cts.Token;
-        _ = Task.Delay(PersistDebounceMs, token).ContinueWith(
-            _ => PersistPending(),
-            CancellationToken.None,
-            TaskContinuationOptions.OnlyOnRanToCompletion,
-            TaskScheduler.FromCurrentSynchronizationContext());
+        var token = _persistScope.Renew();
+        _schedule(PersistDebounceDelay, PersistPending, token);
     }
 
     public void SaveNow(Action<AppSettings> mutate)
@@ -52,21 +75,15 @@ public sealed class AppSettingsCoordinator(
         ArgumentNullException.ThrowIfNull(mutate);
 
         Apply(mutate);
-
-        var cts = Interlocked.Exchange(ref _persistCts, null);
-        cts?.Cancel();
-        cts?.Dispose();
+        _persistScope.Cancel();
 
         var mutation = Compose(Interlocked.Exchange(ref _pendingMutation, null), mutate);
-        settingsStore.Update(mutation);
+        _settingsStore.Update(mutation);
     }
 
     public void Flush()
     {
-        var cts = Interlocked.Exchange(ref _persistCts, null);
-        cts?.Cancel();
-        cts?.Dispose();
-
+        _persistScope.Cancel();
         PersistPending();
     }
 
@@ -76,6 +93,17 @@ public sealed class AppSettingsCoordinator(
             return;
         _disposed = true;
         Flush();
+        _persistScope.Dispose();
+    }
+
+    private static void ScheduleOnThreadPool(TimeSpan delay, Action callback, CancellationToken cancellationToken)
+    {
+        _ = Task.Delay(delay, cancellationToken).ContinueWith(
+            static (_, state) => ((Action)state!).Invoke(),
+            callback,
+            cancellationToken,
+            TaskContinuationOptions.OnlyOnRanToCompletion,
+            TaskScheduler.Default);
     }
 
     private void Apply(Action<AppSettings> mutate)
@@ -89,18 +117,29 @@ public sealed class AppSettingsCoordinator(
         _cached = settings;
 
         if (settings.Theme != previousTheme)
-            themeService.ApplyTheme(settings.Theme);
+            _themeService.ApplyTheme(settings.Theme);
         if (settings.UiFont != previousFont)
-            uiFontService.ApplyFont(settings.UiFont);
+            _uiFontService.ApplyFont(settings.UiFont);
         if (settings.AccentColorArgb != previousAccent)
-            accentBrushes.ApplyCustomAccent(settings.AccentColorArgb);
+            _accentBrushes.ApplyCustomAccent(settings.AccentColorArgb);
+    }
+
+    private void AddPending(Action<AppSettings> mutate)
+    {
+        while (true)
+        {
+            var current = _pendingMutation;
+            var next = Compose(current, mutate);
+            if (ReferenceEquals(Interlocked.CompareExchange(ref _pendingMutation, next, current), current))
+                return;
+        }
     }
 
     private void PersistPending()
     {
         var mutation = Interlocked.Exchange(ref _pendingMutation, null);
         if (mutation is not null)
-            settingsStore.Update(mutation);
+            _settingsStore.Update(mutation);
     }
 
     private static Action<AppSettings> Compose(Action<AppSettings>? first, Action<AppSettings> next)

@@ -661,7 +661,7 @@
                     <controls:ToolButton Label="Sort" Tag="{x:Static vm:CommandRegistry.SortMenu}">
                         <PathIcon Data="{DynamicResource HelixIconArrowSortGeometry}" Width="14" Height="14" />
                         <Button.Flyout>
-                            <MenuFlyout Opening="OnPaneCommandFlyoutOpening" />
+                            <controls:CommandMenuFlyout Opening="OnPaneCommandFlyoutOpening" />
                         </Button.Flyout>
                     </controls:ToolButton>
                     <controls:ToolButton AutomationProperties.Name="Group"
@@ -670,7 +670,7 @@
                                          ToolTip.Tip="{Binding GroupButtonToolTip}">
                         <PathIcon Data="{DynamicResource HelixIconGroupGeometry}" Width="14" Height="14" />
                         <Button.Flyout>
-                            <MenuFlyout Opening="OnPaneCommandFlyoutOpening" />
+                            <controls:CommandMenuFlyout Opening="OnPaneCommandFlyoutOpening" />
                         </Button.Flyout>
                     </controls:ToolButton>
                     <controls:ToolButton Label="Copy path"

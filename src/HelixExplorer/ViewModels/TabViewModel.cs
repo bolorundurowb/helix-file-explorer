@@ -141,6 +141,7 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         pane.PinPathRequested += OnPanePinPathRequested;
         pane.SelectionChanged += OnPaneSelectionChanged;
         pane.DirectoryContentsChanged += OnPaneDirectoryContentsChanged;
+        pane.ActivationRequested += OnPaneActivationRequested;
         pane.ApplyViewSettings(_showHiddenFiles, _showFileExtensions, _directorySort);
         return pane;
     }
@@ -527,6 +528,14 @@ public sealed partial class TabViewModel : ObservableObject, IDisposable
         pane.MoveToOtherPaneRequested -= OnPaneMoveToOtherPaneRequested;
         pane.PinPathRequested -= OnPanePinPathRequested;
         pane.SelectionChanged -= OnPaneSelectionChanged;
+        pane.DirectoryContentsChanged -= OnPaneDirectoryContentsChanged;
+        pane.ActivationRequested -= OnPaneActivationRequested;
+    }
+
+    private void OnPaneActivationRequested(object? sender, EventArgs e)
+    {
+        if (sender is PaneViewModel pane)
+            SetActivePane(pane);
     }
 
     public void RefreshFolderColorBindings()

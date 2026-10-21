@@ -203,8 +203,22 @@ public sealed partial class PaneView : UserControl
         _pane.SortChanged += OnPaneSortChanged;
         _pane.BringEntryIntoViewRequested += OnBringEntryIntoViewRequested;
         UpdateInactiveClass();
+        PrefillContextMenus(_pane);
         if (_pane.IsMillerView)
             RebuildMiller();
+    }
+
+    /// <summary>
+    /// Opening refills these on every show, but a submenu that is still empty when its parent first opens does
+    /// not render as a submenu, so the generated Sort by / Group by / Layout / colour items are seeded up front.
+    /// </summary>
+    private void PrefillContextMenus(PaneViewModel pane)
+    {
+        if (this.TryFindResource("EntryContextMenu", out var entryMenu) && entryMenu is ContextMenu entry)
+            CommandMenuBuilder.FillTaggedSubmenus(entry.Items, pane);
+
+        if (this.TryFindResource("EmptyAreaContextMenu", out var emptyMenu) && emptyMenu is ContextMenu empty)
+            CommandMenuBuilder.FillTaggedSubmenus(empty.Items, pane);
     }
 
     private void OnPaneNavigated(object? sender, EventArgs e)
@@ -289,12 +303,15 @@ public sealed partial class PaneView : UserControl
 
     private async void OnEntryContextMenuOpening(object? sender, CancelEventArgs e)
     {
-        if (sender is not ContextMenu menu)
+        // Avalonia raises Opening before it positions the menu and only ever sets the placement target on the
+        // menu's inner popup, so ContextMenu.PlacementTarget is null here for a right-click. The menu is a
+        // resource of this view, so the pane it acts on is this view's pane.
+        if (sender is not ContextMenu menu || Pane is not { } pane)
             return;
 
-        if (menu.PlacementTarget is not Control { DataContext: PaneViewModel pane })
-            return;
-
+        // Window-level commands (shortcut, palette) follow the active pane, so they must agree with the pane
+        // whose menu is showing even when it was opened from the keyboard.
+        pane.RequestActivation();
         menu.DataContext = pane;
         CommandMenuBuilder.FillTaggedSubmenus(menu.Items, pane);
         // Resolve clipboard validity before command state is applied so Paste enablement matches

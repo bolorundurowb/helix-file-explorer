@@ -1,9 +1,10 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Input.Raw;
 using Avalonia.Media.Transformation;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Persistence;
@@ -97,6 +98,9 @@ public sealed class MainWindowTabReorderTests : IDisposable
         unchanged.Must().BeTrue();
     }
 
+    // The pointer tests raise the chip's pointer events directly rather than going through headless mouse input:
+    // the tab strip sits in the window's title bar, which headless hit testing does not route to reliably, and
+    // what is under test here is the drag handling, not Avalonia's hit testing.
     [Fact]
     public void DraggingATab_LeavesTheOrderAloneUntilDrop_ThenReordersOnceAndKeepsItSelected()
     {
@@ -104,19 +108,23 @@ public sealed class MainWindowTabReorderTests : IDisposable
         {
             var strip = TabStrip(window);
             var dragged = vm.Tabs[0];
+            vm.SelectedTab = dragged;
+
+            var chip = Chip(strip, 0);
+            var mouse = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true);
             var start = ChipCentre(window, strip, 0);
             var end = ChipCentre(window, strip, 2) + new Vector(10, 0);
 
-            // Headless input carries button state only in the modifiers, so moves must say the button is held.
-            window.MouseDown(start, MouseButton.Left);
-            window.MouseMove(start + new Vector(20, 0), RawInputModifiers.LeftMouseButton);
-            window.MouseMove(end, RawInputModifiers.LeftMouseButton);
+            Press(window, chip, mouse, start);
+            Move(window, chip, mouse, start + new Vector(20, 0));
+            Move(window, chip, mouse, end);
 
             var orderDuringDrag = vm.Tabs.IndexOf(dragged);
             var chipFollowsPointer = IsTranslated(strip.ContainerFromIndex(0)!);
             var neighbourMovedAside = IsTranslated(strip.ContainerFromIndex(1)!);
 
-            window.MouseUp(end, MouseButton.Left);
+            Release(window, chip, mouse, end);
+            Dispatcher.UIThread.RunJobs();
 
             return (
                 orderDuringDrag,
@@ -124,6 +132,7 @@ public sealed class MainWindowTabReorderTests : IDisposable
                 neighbourMovedAside,
                 OrderAfterDrop: vm.Tabs.IndexOf(dragged),
                 SelectionKept: ReferenceEquals(vm.SelectedTab, dragged),
+                ContentBound: ReferenceEquals(window.FindControl<DualPaneView>("BrowserPanes")!.DataContext, dragged),
                 NeighbourCleared: strip.ContainerFromIndex(0)!.RenderTransform is null);
         });
 
@@ -132,27 +141,59 @@ public sealed class MainWindowTabReorderTests : IDisposable
         result.neighbourMovedAside.Must().BeTrue();
         result.OrderAfterDrop.Must().Be(2);
         result.SelectionKept.Must().BeTrue();
+        result.ContentBound.Must().BeTrue();
         result.NeighbourCleared.Must().BeTrue();
     }
 
     [Fact]
-    public void ClickingATabWithoutMoving_DoesNotReorder()
+    public void PressingATabWithoutPassingTheThreshold_DoesNotReorderOrMoveAnything()
     {
         var result = WithWindow((vm, window) =>
         {
             var strip = TabStrip(window);
             var before = vm.Tabs.ToArray();
+            var chip = Chip(strip, 1);
+            var mouse = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true);
             var point = ChipCentre(window, strip, 1);
 
-            window.MouseDown(point, MouseButton.Left);
-            window.MouseMove(point + new Vector(3, 0), RawInputModifiers.LeftMouseButton);
-            window.MouseUp(point + new Vector(3, 0), MouseButton.Left);
+            Press(window, chip, mouse, point);
+            Move(window, chip, mouse, point + new Vector(3, 0));
+            var translated = Enumerable.Range(0, strip.ItemCount).Any(i => IsTranslated(strip.ContainerFromIndex(i)!));
+            Release(window, chip, mouse, point + new Vector(3, 0));
 
-            return (Unchanged: before.SequenceEqual(vm.Tabs), Selected: ReferenceEquals(vm.SelectedTab, before[1]));
+            return (Unchanged: before.SequenceEqual(vm.Tabs), translated);
         });
 
         result.Unchanged.Must().BeTrue();
-        result.Selected.Must().BeTrue();
+        result.translated.Must().BeFalse();
+    }
+
+    [Fact]
+    public void LosingCaptureMidDrag_CancelsWithoutReordering()
+    {
+        var result = WithWindow((vm, window) =>
+        {
+            var strip = TabStrip(window);
+            var before = vm.Tabs.ToArray();
+            var chip = Chip(strip, 0);
+            var mouse = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true);
+            var start = ChipCentre(window, strip, 0);
+            var end = ChipCentre(window, strip, 2) + new Vector(10, 0);
+
+            Press(window, chip, mouse, start);
+            Move(window, chip, mouse, start + new Vector(20, 0));
+            Move(window, chip, mouse, end);
+            chip.RaiseEvent(new PointerCaptureLostEventArgs(chip, mouse));
+
+            // A release after the cancel (as when focus returns) must not commit the abandoned drag.
+            Release(window, chip, mouse, end);
+
+            var translated = Enumerable.Range(0, strip.ItemCount).Any(i => IsTranslated(strip.ContainerFromIndex(i)!));
+            return (Unchanged: before.SequenceEqual(vm.Tabs), translated);
+        });
+
+        result.Unchanged.Must().BeTrue();
+        result.translated.Must().BeFalse();
     }
 
     private T WithWindow<T>(Func<MainWindowViewModel, MainWindow, T> body)
@@ -192,6 +233,9 @@ public sealed class MainWindowTabReorderTests : IDisposable
 
                 window.Measure(new Size(WindowWidth, WindowHeight));
                 window.Arrange(new Rect(0, 0, WindowWidth, WindowHeight));
+                // Tabs added after Show only get their item templates realised by a full layout pass.
+                Dispatcher.UIThread.RunJobs();
+                window.UpdateLayout();
                 return body(vm, window);
             }
             finally
@@ -207,11 +251,52 @@ public sealed class MainWindowTabReorderTests : IDisposable
 
     private static ListBox TabStrip(MainWindow window) => window.FindControl<ListBox>("TabStrip")!;
 
+    private static Control Chip(ListBox strip, int index)
+    {
+        var container = strip.ContainerFromIndex(index)
+            ?? throw new InvalidOperationException($"Tab strip has no container for index {index} (ItemCount {strip.ItemCount}).");
+
+        if (container is ContentControl contentControl)
+            contentControl.ApplyTemplate();
+
+        var chip = container.GetVisualDescendants().OfType<Border>().FirstOrDefault(b => b.Name == "TabChip");
+        if (chip is not null)
+            return chip;
+
+        // Report what the container actually holds so a template or layout change is obvious from the failure.
+        var tree = string.Join(", ", container.GetVisualDescendants()
+            .Select(v => $"{v.GetType().Name}{(v is Control { Name: { } name } ? "#" + name : string.Empty)}"));
+        throw new InvalidOperationException(
+            $"No TabChip under tab container {index} ({container.GetType().Name}, bounds {container.Bounds}, " +
+            $"visible {container.IsEffectivelyVisible}). Visual descendants: [{tree}]");
+    }
+
+    private static void Press(MainWindow window, Control chip, IPointer pointer, Point position)
+        => chip.RaiseEvent(new PointerPressedEventArgs(
+            chip, pointer, window, position, 0,
+            new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed),
+            KeyModifiers.None));
+
+    private static void Move(MainWindow window, Control chip, IPointer pointer, Point position)
+        => chip.RaiseEvent(new PointerEventArgs(
+            InputElement.PointerMovedEvent, chip, pointer, window, position, 0,
+            new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.Other),
+            KeyModifiers.None));
+
+    private static void Release(MainWindow window, Control chip, IPointer pointer, Point position)
+        => chip.RaiseEvent(new PointerReleasedEventArgs(
+            chip, pointer, window, position, 0,
+            new PointerPointProperties(RawInputModifiers.None, PointerUpdateKind.LeftButtonReleased),
+            KeyModifiers.None, MouseButton.Left));
+
     private static Point ChipCentre(MainWindow window, ListBox strip, int index)
     {
-        var container = strip.ContainerFromIndex(index)!;
-        var centre = new Point(container.Bounds.Width / 2, container.Bounds.Height / 2);
-        return container.TranslatePoint(centre, window)!.Value;
+        var chip = Chip(strip, index);
+        if (chip.Bounds.Width <= 0)
+            throw new InvalidOperationException($"Tab chip {index} was never laid out (bounds {chip.Bounds}).");
+
+        var centre = new Point(chip.Bounds.Width / 2, chip.Bounds.Height / 2);
+        return chip.TranslatePoint(centre, window)!.Value;
     }
 
     private sealed class EmptyNetworkLocations : INetworkLocationProvider

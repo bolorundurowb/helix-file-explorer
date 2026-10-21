@@ -68,8 +68,8 @@ public static class CommandRegistry
             Option("sort.column.size", "Size", "Sort", p => p.SortColumn = SortColumn.Size, p => p.SortColumn == SortColumn.Size),
         ],
         [
-            Option("sort.ascending", "Ascending", "Sort", p => p.SortDescending = false, p => !p.SortDescending, "HelixSortAscendingGeometry"),
-            Option("sort.descending", "Descending", "Sort", p => p.SortDescending = true, p => p.SortDescending, "HelixSortDescendingGeometry"),
+            Option("sort.ascending", "Ascending", "Sort", p => p.SortDescending = false, p => !p.SortDescending),
+            Option("sort.descending", "Descending", "Sort", p => p.SortDescending = true, p => p.SortDescending),
         ],
         [
             DirectorySortOption("sort.foldersFirst", "Sort folders first", DirectorySortMode.FoldersFirst),

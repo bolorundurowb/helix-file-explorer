@@ -446,7 +446,8 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
 
     public UiFontOption SelectedUiFontOption
     {
-        get => UiFontCatalog.Options.First(option => option.Value == UiFont);
+        get => UiFontCatalog.Options.FirstOrDefault(option => option.Value == UiFont)
+               ?? UiFontCatalog.Options[0];
         set
         {
             if (value is null || value.Value == UiFont)

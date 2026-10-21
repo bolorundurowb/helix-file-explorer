@@ -2,18 +2,18 @@ namespace HelixExplorer.Core.Theming;
 
 public static class UiFontCatalog
 {
-    public const string BundledCollectionScheme = "fonts:Helix#DM Sans";
     public const string InterCollectionScheme = "fonts:Inter#Inter";
+    public const string SourceSans3CollectionScheme = "fonts:HelixSourceSans#Source Sans 3";
     public const string IbmPlexSansCollectionScheme = "fonts:HelixPlex#IBM Plex Sans";
-    public const string PlusJakartaSansCollectionScheme = "fonts:HelixJakarta#Plus Jakarta Sans";
+    public const string GeistSansCollectionScheme = "fonts:HelixGeist#Geist";
 
     public static IReadOnlyList<UiFontOption> Options { get; } =
     [
         new(UiFontFamily.System, "System default"),
-        new(UiFontFamily.DmSans, "DM Sans"),
         new(UiFontFamily.Inter, "Inter"),
+        new(UiFontFamily.SourceSans3, "Source Sans 3"),
         new(UiFontFamily.IbmPlexSans, "IBM Plex Sans"),
-        new(UiFontFamily.PlusJakartaSans, "Plus Jakarta Sans")
+        new(UiFontFamily.GeistSans, "Geist Sans")
     ];
 
     public static string GetDisplayName(UiFontFamily font) =>
@@ -33,10 +33,10 @@ public static class UiFontCatalog
     public static string ResolveFontFamilySource(UiFontFamily font) =>
         font switch
         {
-            UiFontFamily.DmSans => BundledCollectionScheme,
             UiFontFamily.Inter => InterCollectionScheme,
+            UiFontFamily.SourceSans3 => SourceSans3CollectionScheme,
             UiFontFamily.IbmPlexSans => IbmPlexSansCollectionScheme,
-            UiFontFamily.PlusJakartaSans => PlusJakartaSansCollectionScheme,
+            UiFontFamily.GeistSans => GeistSansCollectionScheme,
             _ => GetSystemFontFamilySource()
         };
 }

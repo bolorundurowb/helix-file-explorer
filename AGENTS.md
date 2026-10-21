@@ -71,7 +71,7 @@ Bump the product version only in `Directory.Build.props`. A push to `master` doe
 - **User-facing strings** shared across the UI go in `Localization/UiStrings.cs`.
 - **Settings/session files:** `System.Text.Json` with atomic save — write a unique `*.tmp` then `File.Move(tmp, path, overwrite: true)` — under an in-process lock plus a cross-process named mutex, and expose read-modify-write `Update` rather than blind overwrite. Preserve that pattern.
 - **SQLite (`IAppDatabase`):** one shared connection, a single `ConnectionGate` lock for all store commands, WAL mode, and schema versioning via `PRAGMA user_version` (no silent schema drift). Stores own their SQL under that gate.
-- Keep fonts embedded (`Assets/Fonts/**`, `Avalonia.Fonts.Inter`, `DMSans`) unless explicitly asked to change packaging.
+- Keep fonts embedded (`Assets/Fonts/**`, `Avalonia.Fonts.Inter`, and the bundled Source Sans 3, IBM Plex Sans, and Geist Sans TTFs in Regular, Medium, and SemiBold only) unless explicitly asked to change packaging.
 - **WinForms exists only for native file drag-out** (`WinFormsExternalFileDragService` / `CF_HDROP`). Because the Windows project sets `UseWindowsForms=true`, `System.Windows.Forms` is a project-wide implicit using — do not let WinForms types leak anywhere else.
 - **Shell file ops:** delete-to-recycle, elevated permanent delete, and Recycle Bin restore go through Vanara `IFileOperation` (`ShellFileOperationsHelper`); copy, move, rename, and create-folder use `System.IO`. Surface failures as HRESULTs (`FileSystemErrorMessages`), not raw exception text. Archives use SharpCompress; Git uses the `git` CLI (`CliGitProvider`).
 - Keep custom-control/view code-behind to interaction only; put behavior in ViewModels/coordinators.

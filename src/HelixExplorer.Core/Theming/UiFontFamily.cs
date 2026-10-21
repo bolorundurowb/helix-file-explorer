@@ -1,10 +1,13 @@
+using System.Text.Json.Serialization;
+
 namespace HelixExplorer.Core.Theming;
 
+[JsonConverter(typeof(UiFontFamilyJsonConverter))]
 public enum UiFontFamily
 {
     System,
-    DmSans,
     Inter,
+    SourceSans3,
     IbmPlexSans,
-    PlusJakartaSans
+    GeistSans
 }

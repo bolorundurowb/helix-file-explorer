@@ -147,6 +147,47 @@ public class JsonSettingsStoreTests
         }
     }
 
+    [Theory]
+    [InlineData("DmSans")]
+    [InlineData("PlusJakartaSans")]
+    [InlineData("Seafoam")]
+    public void Load_shouldResetTheFontToSystem_whenTheStoredFontIsNotInTheCatalog(string storedFont)
+    {
+        var path = Path.Combine(Path.GetTempPath(), "helix-settings-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            File.WriteAllText(path,
+                "{\"Theme\":\"Dark\",\"UiFont\":\"" + storedFont + "\",\"SidebarWidth\":260}");
+
+            var loaded = new JsonSettingsStore(path).Load();
+
+            loaded.UiFont.Must().Be(UiFontFamily.System);
+            loaded.Theme.Must().Be(ThemeMode.Dark);
+            loaded.SidebarWidth.Must().Be(260);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Save_shouldPersistTheFontMemberName_whenAFontIsSelected()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "helix-settings-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            new JsonSettingsStore(path).Save(new AppSettings { UiFont = UiFontFamily.GeistSans });
+
+            File.ReadAllText(path).Contains("\"GeistSans\"", StringComparison.Ordinal).Must().BeTrue();
+            new JsonSettingsStore(path).Load().UiFont.Must().Be(UiFontFamily.GeistSans);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+        }
+    }
+
     [Fact]
     public void Update_OnlyMutatesTouchedFields_PreservingOthers()
     {

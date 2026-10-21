@@ -11,6 +11,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Media.Imaging;
+using Avalonia.Media.Transformation;
 using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
@@ -444,12 +445,19 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<BranchChoice> _branchChoices = new();
     private int _chromeFocusIndex = -1;
 
+    private TabViewModel? _dragTab;
+    private Control? _dragContainer;
+    private Panel? _dragPanel;
     private int _dragSourceIndex = -1;
+    private int _dragTargetIndex = -1;
     private Point _dragStartPosition;
+    private double _dragOffset;
+    private double _dragSlotWidth;
     private bool _isDragging;
     private long _lastTabWheelTimestamp;
 
     private const double TabDragThreshold = 6;
+    private static readonly TimeSpan TabShiftDuration = TimeSpan.FromMilliseconds(150);
     private static readonly TimeSpan TabWheelScrollInterval = TimeSpan.FromMilliseconds(360);
 
     private void OnTabStripWheel(object? sender, PointerWheelEventArgs e)
@@ -501,11 +509,17 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (e.InitialPressMouseButton == MouseButton.Left)
+        if (e.InitialPressMouseButton != MouseButton.Left)
+            return;
+
+        if (_isDragging)
         {
-            if (_isDragging)
-                e.Handled = true;
-            EndTabDrag();
+            e.Handled = true;
+            CommitTabDrag();
+        }
+        else
+        {
+            ResetTabDragState();
         }
     }
 
@@ -517,23 +531,33 @@ public partial class MainWindow : Window
         if (sender is not Control { DataContext: TabViewModel tab } || DataContext is not MainWindowViewModel vm)
             return;
 
-        _dragSourceIndex = vm.Tabs.IndexOf(tab);
-        _dragStartPosition = e.GetPosition(TabStrip);
+        var index = vm.Tabs.IndexOf(tab);
+        if (index < 0 || TabStrip.ContainerFromIndex(index) is not Control container
+            || container.GetVisualParent() is not Panel panel)
+            return;
+
+        _dragTab = tab;
+        _dragContainer = container;
+        _dragPanel = panel;
+        _dragSourceIndex = index;
+        _dragTargetIndex = index;
+        _dragStartPosition = e.GetPosition(panel);
+        _dragOffset = 0;
         _isDragging = false;
     }
 
     private void OnTabPointerMoved(object? sender, PointerEventArgs e)
     {
-        if (_dragSourceIndex < 0 || DataContext is not MainWindowViewModel vm)
+        if (_dragTab is null || _dragPanel is null)
             return;
 
-        if (!e.GetCurrentPoint(TabStrip).Properties.IsLeftButtonPressed)
+        if (!e.GetCurrentPoint(_dragPanel).Properties.IsLeftButtonPressed)
         {
-            EndTabDrag();
+            CancelTabDrag();
             return;
         }
 
-        var position = e.GetPosition(TabStrip);
+        var position = e.GetPosition(_dragPanel);
 
         if (!_isDragging)
         {
@@ -541,41 +565,208 @@ public partial class MainWindow : Window
                 && Math.Abs(position.Y - _dragStartPosition.Y) < TabDragThreshold)
                 return;
 
-            _isDragging = true;
+            BeginTabDrag();
             if (sender is Control chip)
                 e.Pointer.Capture(chip);
         }
 
-        var targetIndex = HitTestTabIndex(position);
-        if (targetIndex >= 0 && targetIndex != _dragSourceIndex)
-        {
-            vm.MoveTab(_dragSourceIndex, targetIndex);
-            _dragSourceIndex = targetIndex;
-        }
+        UpdateTabDrag(position.X - _dragStartPosition.X);
     }
 
     private void OnTabPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
-        => EndTabDrag();
+        => CancelTabDrag();
 
-    private int HitTestTabIndex(Point position)
+    // The collection is reordered once, on drop. Moving it while the pointer is down is what made dragging feel
+    // broken: Avalonia treats ObservableCollection.Move as remove + insert, so the chip holding pointer capture
+    // was torn down (ending the drag after one hop) and the ListBox dropped its selection, which cleared
+    // SelectedTab and left the content host bound to nothing. Instead the dragged chip follows the pointer and
+    // its neighbours slide aside, like a browser tab strip.
+    private void BeginTabDrag()
+    {
+        if (_dragContainer is null)
+            return;
+
+        _isDragging = true;
+        _dragSlotWidth = _dragContainer.Bounds.Width + TabSlotGap(_dragSourceIndex);
+
+        for (var i = 0; i < TabStrip.ItemCount; i++)
+        {
+            if (TabStrip.ContainerFromIndex(i) is not Control container)
+                continue;
+
+            if (ReferenceEquals(container, _dragContainer))
+            {
+                container.Transitions = null;
+                container.ZIndex = 1;
+                continue;
+            }
+
+            // Identity rather than null so the first shift interpolates from a real transform.
+            container.RenderTransform = TransformOperations.Identity;
+            container.Transitions = CreateTabShiftTransitions();
+        }
+    }
+
+    private void UpdateTabDrag(double delta)
+    {
+        if (_dragContainer is null)
+            return;
+
+        var count = TabStrip.ItemCount;
+        if (TabStrip.ContainerFromIndex(0) is not Control first
+            || TabStrip.ContainerFromIndex(count - 1) is not Control last)
+            return;
+
+        var bounds = _dragContainer.Bounds;
+        _dragOffset = Math.Clamp(delta, first.Bounds.X - bounds.X, Math.Max(0, last.Bounds.Right - bounds.Right));
+        _dragContainer.RenderTransform = TranslateX(_dragOffset);
+
+        var centre = bounds.X + _dragOffset + bounds.Width / 2;
+        var target = _dragSourceIndex;
+        for (var i = _dragSourceIndex + 1; i < count; i++)
+        {
+            if (TabStrip.ContainerFromIndex(i) is not Control next || centre <= next.Bounds.Center.X)
+                break;
+            target = i;
+        }
+
+        if (target == _dragSourceIndex)
+        {
+            for (var i = _dragSourceIndex - 1; i >= 0; i--)
+            {
+                if (TabStrip.ContainerFromIndex(i) is not Control previous || centre >= previous.Bounds.Center.X)
+                    break;
+                target = i;
+            }
+        }
+
+        if (target == _dragTargetIndex)
+            return;
+
+        _dragTargetIndex = target;
+        for (var i = 0; i < count; i++)
+        {
+            if (i == _dragSourceIndex || TabStrip.ContainerFromIndex(i) is not Control container)
+                continue;
+
+            var shift = 0d;
+            if (_dragSourceIndex < target && i > _dragSourceIndex && i <= target)
+                shift = -_dragSlotWidth;
+            else if (target < _dragSourceIndex && i >= target && i < _dragSourceIndex)
+                shift = _dragSlotWidth;
+
+            container.RenderTransform = shift == 0 ? TransformOperations.Identity : TranslateX(shift);
+        }
+    }
+
+    private void CommitTabDrag()
+    {
+        var tab = _dragTab;
+        var container = _dragContainer;
+        var target = _dragTargetIndex;
+        var settleOffset = 0d;
+
+        if (container is not null && target >= 0 && TabStrip.ContainerFromIndex(target) is Control slot)
+        {
+            var bounds = container.Bounds;
+            var slotX = target == _dragSourceIndex
+                ? bounds.X
+                : target > _dragSourceIndex ? slot.Bounds.Right - bounds.Width : slot.Bounds.X;
+            settleOffset = bounds.X + _dragOffset - slotX;
+        }
+
+        // Neighbours already sit where the reorder will put them, so clearing the transforms and moving the item
+        // in the same frame does not jump.
+        ClearTabDragVisuals();
+        ResetTabDragState();
+
+        if (tab is null || DataContext is not MainWindowViewModel vm)
+            return;
+
+        var from = vm.Tabs.IndexOf(tab);
+        if (from < 0 || target < 0 || target >= vm.Tabs.Count)
+            return;
+
+        vm.MoveTab(from, target);
+        SettleDroppedTab(target, settleOffset);
+    }
+
+    private void SettleDroppedTab(int index, double offset)
+    {
+        if (Math.Abs(offset) < 0.5 || TabStrip.ContainerFromIndex(index) is not Control container)
+            return;
+
+        // Start the dropped chip where it was released and glide it into its slot.
+        container.Transitions = null;
+        container.RenderTransform = TranslateX(offset);
+        Dispatcher.UIThread.Post(() =>
+        {
+            container.Transitions = CreateTabShiftTransitions();
+            container.RenderTransform = TransformOperations.Identity;
+        }, DispatcherPriority.Loaded);
+    }
+
+    private void CancelTabDrag()
+    {
+        if (_isDragging)
+            ClearTabDragVisuals();
+
+        ResetTabDragState();
+    }
+
+    private void ClearTabDragVisuals()
     {
         for (var i = 0; i < TabStrip.ItemCount; i++)
         {
             if (TabStrip.ContainerFromIndex(i) is not Control container)
                 continue;
 
-            var bounds = container.Bounds;
-            if (position.X >= bounds.X && position.X < bounds.Right)
-                return i;
+            container.Transitions = null;
+            container.RenderTransform = null;
+            container.ZIndex = 0;
         }
-
-        return -1;
     }
 
-    private void EndTabDrag()
+    private void ResetTabDragState()
     {
+        _dragTab = null;
+        _dragContainer = null;
+        _dragPanel = null;
         _dragSourceIndex = -1;
+        _dragTargetIndex = -1;
+        _dragOffset = 0;
         _isDragging = false;
+    }
+
+    private double TabSlotGap(int index)
+    {
+        if (TabStrip.ContainerFromIndex(index) is not Control container)
+            return 0;
+
+        if (TabStrip.ContainerFromIndex(index + 1) is Control next)
+            return Math.Max(0, next.Bounds.X - container.Bounds.Right);
+
+        if (index > 0 && TabStrip.ContainerFromIndex(index - 1) is Control previous)
+            return Math.Max(0, container.Bounds.X - previous.Bounds.Right);
+
+        return 0;
+    }
+
+    private static Transitions CreateTabShiftTransitions() => new()
+    {
+        new TransformOperationsTransition
+        {
+            Property = RenderTransformProperty,
+            Duration = TabShiftDuration,
+            Easing = new CubicEaseOut()
+        }
+    };
+
+    private static TransformOperations TranslateX(double x)
+    {
+        var builder = TransformOperations.CreateBuilder(1);
+        builder.AppendTranslate(x, 0);
+        return builder.Build();
     }
 
     private async void OnBranchButtonClick(object? sender, RoutedEventArgs e)

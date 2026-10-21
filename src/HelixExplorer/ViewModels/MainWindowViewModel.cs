@@ -813,7 +813,13 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
             || fromIndex == toIndex)
             return;
 
+        // The tab strip ListBox sees Move as remove + insert, drops its selection and writes null back through the
+        // SelectedTab binding. Left like that, the content host loses its DataContext and every IsVisible binding
+        // under it falls back to true, drawing the settings page and both panes over each other.
+        var selected = SelectedTab;
         Tabs.Move(fromIndex, toIndex);
+        if (selected is not null && !ReferenceEquals(SelectedTab, selected))
+            SelectedTab = selected;
     }
 
     private void OnTabsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)

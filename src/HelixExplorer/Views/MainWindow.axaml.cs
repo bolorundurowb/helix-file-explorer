@@ -452,7 +452,8 @@ public partial class MainWindow : Window
     private int _dragTargetIndex = -1;
     private Point _dragStartPosition;
     private double _dragOffset;
-    private double _dragSlotWidth;
+    private double _dragStep;
+    private TabSlot[] _dragSlots = [];
     private bool _isDragging;
     private long _lastTabWheelTimestamp;
 
@@ -586,14 +587,23 @@ public partial class MainWindow : Window
         if (_dragContainer is null)
             return;
 
-        _isDragging = true;
-        _dragSlotWidth = _dragContainer.Bounds.Width + TabSlotGap(_dragSourceIndex);
-
-        for (var i = 0; i < TabStrip.ItemCount; i++)
+        var count = TabStrip.ItemCount;
+        var slots = new TabSlot[count];
+        for (var i = 0; i < count; i++)
         {
             if (TabStrip.ContainerFromIndex(i) is not Control container)
-                continue;
+                return;
 
+            slots[i] = new TabSlot(container.Bounds.X, container.Bounds.Width);
+        }
+
+        _isDragging = true;
+        _dragSlots = slots;
+        _dragStep = TabReorderGeometry.Step(slots, _dragSourceIndex);
+
+        for (var i = 0; i < count; i++)
+        {
+            var container = (Control)TabStrip.ContainerFromIndex(i)!;
             if (ReferenceEquals(container, _dragContainer))
             {
                 container.Transitions = null;
@@ -609,52 +619,23 @@ public partial class MainWindow : Window
 
     private void UpdateTabDrag(double delta)
     {
-        if (_dragContainer is null)
+        if (_dragContainer is null || _dragSlots.Length != TabStrip.ItemCount)
             return;
 
-        var count = TabStrip.ItemCount;
-        if (TabStrip.ContainerFromIndex(0) is not Control first
-            || TabStrip.ContainerFromIndex(count - 1) is not Control last)
-            return;
-
-        var bounds = _dragContainer.Bounds;
-        _dragOffset = Math.Clamp(delta, first.Bounds.X - bounds.X, Math.Max(0, last.Bounds.Right - bounds.Right));
+        _dragOffset = TabReorderGeometry.ClampOffset(_dragSlots, _dragSourceIndex, delta);
         _dragContainer.RenderTransform = TranslateX(_dragOffset);
 
-        var centre = bounds.X + _dragOffset + bounds.Width / 2;
-        var target = _dragSourceIndex;
-        for (var i = _dragSourceIndex + 1; i < count; i++)
-        {
-            if (TabStrip.ContainerFromIndex(i) is not Control next || centre <= next.Bounds.Center.X)
-                break;
-            target = i;
-        }
-
-        if (target == _dragSourceIndex)
-        {
-            for (var i = _dragSourceIndex - 1; i >= 0; i--)
-            {
-                if (TabStrip.ContainerFromIndex(i) is not Control previous || centre >= previous.Bounds.Center.X)
-                    break;
-                target = i;
-            }
-        }
-
+        var target = TabReorderGeometry.TargetIndex(_dragSlots, _dragSourceIndex, _dragOffset);
         if (target == _dragTargetIndex)
             return;
 
         _dragTargetIndex = target;
-        for (var i = 0; i < count; i++)
+        for (var i = 0; i < _dragSlots.Length; i++)
         {
             if (i == _dragSourceIndex || TabStrip.ContainerFromIndex(i) is not Control container)
                 continue;
 
-            var shift = 0d;
-            if (_dragSourceIndex < target && i > _dragSourceIndex && i <= target)
-                shift = -_dragSlotWidth;
-            else if (target < _dragSourceIndex && i >= target && i < _dragSourceIndex)
-                shift = _dragSlotWidth;
-
+            var shift = TabReorderGeometry.NeighbourShift(i, _dragSourceIndex, target, _dragStep);
             container.RenderTransform = shift == 0 ? TransformOperations.Identity : TranslateX(shift);
         }
     }
@@ -662,18 +643,10 @@ public partial class MainWindow : Window
     private void CommitTabDrag()
     {
         var tab = _dragTab;
-        var container = _dragContainer;
         var target = _dragTargetIndex;
-        var settleOffset = 0d;
-
-        if (container is not null && target >= 0 && TabStrip.ContainerFromIndex(target) is Control slot)
-        {
-            var bounds = container.Bounds;
-            var slotX = target == _dragSourceIndex
-                ? bounds.X
-                : target > _dragSourceIndex ? slot.Bounds.Right - bounds.Width : slot.Bounds.X;
-            settleOffset = bounds.X + _dragOffset - slotX;
-        }
+        var settleOffset = _dragSlots.Length > 0 && target >= 0
+            ? TabReorderGeometry.SettleOffset(_dragSlots, _dragSourceIndex, target, _dragOffset)
+            : 0;
 
         // Neighbours already sit where the reorder will put them, so clearing the transforms and moving the item
         // in the same frame does not jump.
@@ -735,21 +708,9 @@ public partial class MainWindow : Window
         _dragSourceIndex = -1;
         _dragTargetIndex = -1;
         _dragOffset = 0;
+        _dragStep = 0;
+        _dragSlots = [];
         _isDragging = false;
-    }
-
-    private double TabSlotGap(int index)
-    {
-        if (TabStrip.ContainerFromIndex(index) is not Control container)
-            return 0;
-
-        if (TabStrip.ContainerFromIndex(index + 1) is Control next)
-            return Math.Max(0, next.Bounds.X - container.Bounds.Right);
-
-        if (index > 0 && TabStrip.ContainerFromIndex(index - 1) is Control previous)
-            return Math.Max(0, container.Bounds.X - previous.Bounds.Right);
-
-        return 0;
     }
 
     private static Transitions CreateTabShiftTransitions() => new()

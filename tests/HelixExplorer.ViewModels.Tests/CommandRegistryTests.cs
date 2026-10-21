@@ -1,6 +1,7 @@
 using System.Windows.Input;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using HelixExplorer.Controls;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Persistence;
 using HelixExplorer.Core.Settings;
@@ -134,9 +135,30 @@ public sealed class CommandRegistryTests : IDisposable
     [Fact]
     public void EmptyToolbarFlyout_IsFilledWhenItOpens()
     {
-        var (isOpen, count) = HeadlessSession.RunOnUiThread(() =>
+        // Counts what the open presenter renders, not flyout.Items: a plain MenuFlyout reports the generated
+        // items on Items while its presenter stays bound to the empty sentinel and shows nothing.
+        var (isOpen, rendered) = OpenFilledToolbarFlyout(() => new CommandMenuFlyout());
+
+        isOpen.Must().BeTrue();
+        rendered.Must().Be(CommandRegistry.GroupByMenu.Sum(g => g.Count));
+    }
+
+    [Fact]
+    public void PlainEmptyMenuFlyout_FilledOnOpening_RendersNothing()
+    {
+        // Pins the Avalonia behaviour CommandMenuFlyout works around. If this starts failing, Avalonia has fixed
+        // the sentinel binding and CommandMenuFlyout can go back to being a plain MenuFlyout.
+        var (_, rendered) = OpenFilledToolbarFlyout(() => new MenuFlyout());
+
+        rendered.Must().Be(0);
+    }
+
+    // Takes a factory, not an instance: an Avalonia object built on the xUnit thread is owned by that thread, and
+    // touching the dispatcher there can claim Dispatcher.UIThread away from the headless session for later tests.
+    private (bool IsOpen, int Rendered) OpenFilledToolbarFlyout(Func<MenuFlyout> createFlyout)
+        => HeadlessSession.RunOnUiThread(() =>
         {
-            var flyout = new MenuFlyout();
+            var flyout = createFlyout();
             flyout.Opening += (_, _) => CommandMenuBuilder.Fill(flyout.Items, CommandRegistry.GroupByMenu, _pane);
             var button = new Button { Flyout = flyout };
             var window = new Window { Content = button, Width = 400, Height = 300 };
@@ -144,7 +166,8 @@ public sealed class CommandRegistryTests : IDisposable
             try
             {
                 flyout.ShowAt(button);
-                return (flyout.IsOpen, flyout.Items.OfType<MenuItem>().Count());
+                var presenter = (MenuFlyoutPresenter)flyout.Popup.Child!;
+                return (flyout.IsOpen, presenter.Items.OfType<MenuItem>().Count());
             }
             finally
             {
@@ -152,10 +175,6 @@ public sealed class CommandRegistryTests : IDisposable
                 window.Close();
             }
         });
-
-        isOpen.Must().BeTrue();
-        count.Must().Be(CommandRegistry.GroupByMenu.Sum(g => g.Count));
-    }
 
     [Fact]
     public void ColorSubmenu_ListsPaletteBeforeStaticEntries_AndDoesNotDuplicate()

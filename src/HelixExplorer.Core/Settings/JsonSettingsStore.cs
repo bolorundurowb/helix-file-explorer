@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using HelixExplorer.Core.Infrastructure;
+using HelixExplorer.Core.Theming;
 
 namespace HelixExplorer.Core.Settings;
 
@@ -12,7 +13,10 @@ public sealed class JsonSettingsStore(string path) : ISettingsStore
     private static readonly JsonSerializerOptions Options = new()
     {
         WriteIndented = true,
-        Converters = { new JsonStringEnumConverter() },
+        // Must precede JsonStringEnumConverter: options converters take precedence over the
+        // enum's own converter, and the generic one throws on a font name this build no longer
+        // ships, blanking the whole settings document through the Load fallback.
+        Converters = { new UiFontFamilyJsonConverter(), new JsonStringEnumConverter() },
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 

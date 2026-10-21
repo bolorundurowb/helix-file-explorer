@@ -44,7 +44,7 @@ public class AppSettingsTests
         var original = new AppSettings
         {
             Theme = ThemeMode.Dark,
-            UiFont = UiFontFamily.DmSans,
+            UiFont = UiFontFamily.SourceSans3,
             SidebarWidth = 280,
             SizeDisplay = SizeDisplayMode.Decimal,
             ShowHiddenFiles = true,
@@ -71,7 +71,7 @@ public class AppSettingsTests
 
         loaded!.Must().NotBeNull();
         loaded!.Theme.Must().Be(ThemeMode.Dark);
-        loaded!.UiFont.Must().Be(UiFontFamily.DmSans);
+        loaded!.UiFont.Must().Be(UiFontFamily.SourceSans3);
         loaded!.SidebarWidth.Must().Be(280);
         loaded!.SizeDisplay.Must().Be(SizeDisplayMode.Decimal);
         loaded!.ShowHiddenFiles.Must().BeTrue();

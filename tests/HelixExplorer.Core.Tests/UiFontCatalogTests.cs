@@ -5,13 +5,24 @@ namespace HelixExplorer.Core.Tests;
 public class UiFontCatalogTests
 {
     [Fact]
-    public void ResolveFontFamilySource_DmSans_UsesBundledCollection()
+    public void Options_shouldListTheFinalFiveInOrder()
     {
-        UiFontCatalog.ResolveFontFamilySource(UiFontFamily.DmSans).Must().Be("fonts:Helix#DM Sans");
+        UiFontCatalog.Options.Count.Must().Be(5);
+
+        UiFontCatalog.Options[0].Value.Must().Be(UiFontFamily.System);
+        UiFontCatalog.Options[0].Label.Must().Be("System default");
+        UiFontCatalog.Options[1].Value.Must().Be(UiFontFamily.Inter);
+        UiFontCatalog.Options[1].Label.Must().Be("Inter");
+        UiFontCatalog.Options[2].Value.Must().Be(UiFontFamily.SourceSans3);
+        UiFontCatalog.Options[2].Label.Must().Be("Source Sans 3");
+        UiFontCatalog.Options[3].Value.Must().Be(UiFontFamily.IbmPlexSans);
+        UiFontCatalog.Options[3].Label.Must().Be("IBM Plex Sans");
+        UiFontCatalog.Options[4].Value.Must().Be(UiFontFamily.GeistSans);
+        UiFontCatalog.Options[4].Label.Must().Be("Geist Sans");
     }
 
     [Fact]
-    public void GetSystemFontFamilySource_MatchesCurrentPlatform()
+    public void GetSystemFontFamilySource_shouldMatchTheCurrentPlatform()
     {
         var source = UiFontCatalog.GetSystemFontFamilySource();
 
@@ -23,40 +34,22 @@ public class UiFontCatalogTests
             source.Must().Be("Cantarell, Ubuntu, Noto Sans, fonts:Inter#Inter");
     }
 
-    [Fact]
-    public void Options_ContainSystemDmSansAndInterLabels()
+    [Theory]
+    [InlineData(UiFontFamily.Inter, "fonts:Inter#Inter")]
+    [InlineData(UiFontFamily.SourceSans3, "fonts:HelixSourceSans#Source Sans 3")]
+    [InlineData(UiFontFamily.IbmPlexSans, "fonts:HelixPlex#IBM Plex Sans")]
+    [InlineData(UiFontFamily.GeistSans, "fonts:HelixGeist#Geist")]
+    public void ResolveFontFamilySource_shouldReturnTheBundledCollection_whenTheFontIsNotSystem(
+        UiFontFamily font,
+        string expected)
     {
-        UiFontCatalog.GetDisplayName(UiFontFamily.System).Must().Be("System default");
-        UiFontCatalog.GetDisplayName(UiFontFamily.DmSans).Must().Be("DM Sans");
-        UiFontCatalog.GetDisplayName(UiFontFamily.Inter).Must().Be("Inter");
+        UiFontCatalog.ResolveFontFamilySource(font).Must().Be(expected);
     }
 
     [Fact]
-    public void ResolveFontFamilySource_Inter_UsesAvaloniaInterCollection()
+    public void ResolveFontFamilySource_shouldUseThePlatformStack_whenTheFontIsSystem()
     {
-        UiFontCatalog.ResolveFontFamilySource(UiFontFamily.Inter).Must().Be("fonts:Inter#Inter");
-    }
-
-    [Fact]
-    public void ResolveFontFamilySource_IbmPlexSans_UsesBundledCollection()
-    {
-        UiFontCatalog.ResolveFontFamilySource(UiFontFamily.IbmPlexSans).Must().Be("fonts:HelixPlex#IBM Plex Sans");
-    }
-
-    [Fact]
-    public void ResolveFontFamilySource_PlusJakartaSans_UsesBundledCollection()
-    {
-        UiFontCatalog.ResolveFontFamilySource(UiFontFamily.PlusJakartaSans).Must().Be("fonts:HelixJakarta#Plus Jakarta Sans");
-    }
-
-    [Fact]
-    public void Options_AreExactlySystemDmSansInterIbmPlexAndPlusJakarta()
-    {
-        UiFontCatalog.Options.Count.Must().Be(5);
-        UiFontCatalog.GetDisplayName(UiFontFamily.System).Must().Be("System default");
-        UiFontCatalog.GetDisplayName(UiFontFamily.DmSans).Must().Be("DM Sans");
-        UiFontCatalog.GetDisplayName(UiFontFamily.Inter).Must().Be("Inter");
-        UiFontCatalog.GetDisplayName(UiFontFamily.IbmPlexSans).Must().Be("IBM Plex Sans");
-        UiFontCatalog.GetDisplayName(UiFontFamily.PlusJakartaSans).Must().Be("Plus Jakarta Sans");
+        UiFontCatalog.ResolveFontFamilySource(UiFontFamily.System)
+            .Must().Be(UiFontCatalog.GetSystemFontFamilySource());
     }
 }

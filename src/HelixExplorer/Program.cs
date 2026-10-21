@@ -33,14 +33,14 @@ internal static class Program
             .ConfigureFonts(fonts =>
             {
                 fonts.AddFontCollection(new EmbeddedFontCollection(
-                    new Uri("fonts:Helix", UriKind.Absolute),
-                    new Uri("avares://HelixExplorer/Assets/Fonts/DMSans", UriKind.Absolute)));
+                    new Uri("fonts:HelixSourceSans", UriKind.Absolute),
+                    new Uri("avares://HelixExplorer/Assets/Fonts/SourceSans3", UriKind.Absolute)));
                 fonts.AddFontCollection(new EmbeddedFontCollection(
                     new Uri("fonts:HelixPlex", UriKind.Absolute),
                     new Uri("avares://HelixExplorer/Assets/Fonts/IBMPlexSans", UriKind.Absolute)));
                 fonts.AddFontCollection(new EmbeddedFontCollection(
-                    new Uri("fonts:HelixJakarta", UriKind.Absolute),
-                    new Uri("avares://HelixExplorer/Assets/Fonts/PlusJakartaSans", UriKind.Absolute)));
+                    new Uri("fonts:HelixGeist", UriKind.Absolute),
+                    new Uri("avares://HelixExplorer/Assets/Fonts/GeistSans", UriKind.Absolute)));
             })
             .LogToTrace();
 }

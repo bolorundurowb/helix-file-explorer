@@ -137,7 +137,7 @@ public sealed class CommandRegistryTests : IDisposable
     {
         // Counts what the open presenter renders, not flyout.Items: a plain MenuFlyout reports the generated
         // items on Items while its presenter stays bound to the empty sentinel and shows nothing.
-        var (isOpen, rendered) = OpenFilledToolbarFlyout(new CommandMenuFlyout());
+        var (isOpen, rendered) = OpenFilledToolbarFlyout(() => new CommandMenuFlyout());
 
         isOpen.Must().BeTrue();
         rendered.Must().Be(CommandRegistry.GroupByMenu.Sum(g => g.Count));
@@ -148,14 +148,17 @@ public sealed class CommandRegistryTests : IDisposable
     {
         // Pins the Avalonia behaviour CommandMenuFlyout works around. If this starts failing, Avalonia has fixed
         // the sentinel binding and CommandMenuFlyout can go back to being a plain MenuFlyout.
-        var (_, rendered) = OpenFilledToolbarFlyout(new MenuFlyout());
+        var (_, rendered) = OpenFilledToolbarFlyout(() => new MenuFlyout());
 
         rendered.Must().Be(0);
     }
 
-    private (bool IsOpen, int Rendered) OpenFilledToolbarFlyout(MenuFlyout flyout)
+    // Takes a factory, not an instance: an Avalonia object built on the xUnit thread is owned by that thread, and
+    // touching the dispatcher there can claim Dispatcher.UIThread away from the headless session for later tests.
+    private (bool IsOpen, int Rendered) OpenFilledToolbarFlyout(Func<MenuFlyout> createFlyout)
         => HeadlessSession.RunOnUiThread(() =>
         {
+            var flyout = createFlyout();
             flyout.Opening += (_, _) => CommandMenuBuilder.Fill(flyout.Items, CommandRegistry.GroupByMenu, _pane);
             var button = new Button { Flyout = flyout };
             var window = new Window { Content = button, Width = 400, Height = 300 };

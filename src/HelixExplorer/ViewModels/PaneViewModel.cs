@@ -165,6 +165,14 @@ public sealed partial class PaneViewModel :
     public event EventHandler? SelectionChanged;
 
     /// <summary>
+    /// Raised when the user starts acting on this pane through a surface that does not press inside its host
+    /// (such as a keyboard-opened context menu), so the owning tab can make it the active pane.
+    /// </summary>
+    public event EventHandler? ActivationRequested;
+
+    public void RequestActivation() => ActivationRequested?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>
     /// Raised after a file operation changed the pane's directory contents, so the owning tab can
     /// refresh a sibling pane showing the same folder (its own watcher lags behind the debounce).
     /// </summary>

@@ -13,7 +13,7 @@ namespace HelixExplorer.Core.Persistence;
 /// </summary>
 public sealed class SqliteAppDatabase : IAppDatabase
 {
-    private const int SchemaVersion = 1;
+    private const int SchemaVersion = 2;
 
     private static readonly JsonSerializerOptions LegacyJsonOptions = new()
     {
@@ -105,6 +105,15 @@ public sealed class SqliteAppDatabase : IAppDatabase
         if (currentVersion >= SchemaVersion)
             return;
 
+        if (currentVersion < 1)
+            ApplySchemaV1();
+
+        if (currentVersion < 2)
+            ApplySchemaV2();
+    }
+
+    private void ApplySchemaV1()
+    {
         using var batch = _connection.CreateCommand();
         batch.CommandText = """
             CREATE TABLE IF NOT EXISTS folder_view_preferences (
@@ -124,6 +133,20 @@ public sealed class SqliteAppDatabase : IAppDatabase
             );
 
             PRAGMA user_version = 1;
+            """;
+        batch.ExecuteNonQuery();
+    }
+
+    private void ApplySchemaV2()
+    {
+        using var batch = _connection.CreateCommand();
+        batch.CommandText = """
+            CREATE TABLE IF NOT EXISTS folder_icons (
+                path TEXT PRIMARY KEY COLLATE NOCASE,
+                icon_file TEXT NOT NULL
+            );
+
+            PRAGMA user_version = 2;
             """;
         batch.ExecuteNonQuery();
     }

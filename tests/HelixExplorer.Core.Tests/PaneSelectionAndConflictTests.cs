@@ -23,6 +23,9 @@ public class FileConflictResolverTests
 
         public Task<FileConflictResolution?> ResolveConflictAsync(FileConflictInfo conflict, bool canApplyToAll)
             => Task.FromResult(Next);
+
+        public Task<string?> PickFolderIconAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult<string?>(null);
     }
 
     [Fact]

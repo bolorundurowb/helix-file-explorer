@@ -28,10 +28,19 @@ public static class AppPaths
         Path.GetTempPath(),
         ProfileFolderName);
 
+    private static readonly string FolderIconsFolder = Path.Combine(
+        AppDataFolder,
+        "folder-icons");
+
     public static string AppData => AppDataFolder;
     public static string SettingsFile => Path.Combine(AppDataFolder, "settings.json");
     public static string SessionFile => Path.Combine(AppDataFolder, "session.json");
     public static string AppDatabaseFile => Path.Combine(AppDataFolder, "helix.db");
+
+    /// <summary>
+    /// Storage for per-folder custom icon PNGs copied from user-selected image files.
+    /// </summary>
+    public static string FolderIconsDirectory => FolderIconsFolder;
 
     /// <summary>
     /// Scratch root under the system temp directory (archive extraction, etc.).

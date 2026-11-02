@@ -512,5 +512,8 @@ public class FileOperationUndoServiceTests
         public Task ShowOperationSummaryAsync(FileOperationResult result, string operationName) => Task.CompletedTask;
         public Task<FileConflictResolution?> ResolveConflictAsync(FileConflictInfo conflict, bool canApplyToAll)
             => Task.FromResult<FileConflictResolution?>(null);
+
+        public Task<string?> PickFolderIconAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult<string?>(null);
     }
 }

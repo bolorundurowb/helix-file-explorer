@@ -11,6 +11,7 @@ using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Core.Models;
+using HelixExplorer.Core.Persistence;
 using HelixExplorer.Core.Settings;
 using HelixExplorer.Core.Theming;
 using HelixExplorer.Input;
@@ -28,6 +29,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
     private readonly IClipboardService _clipboard;
     private readonly IArchiveProvider _archive;
     private readonly IFolderColorService _folderColors;
+    private readonly IFolderIconService _folderIcons;
     private readonly IVolumeChangeWatcher _volumeWatcher;
     private readonly IPaneViewModelFactory _paneFactory;
     private readonly AppSettingsCoordinator _settingsCoordinator;
@@ -58,6 +60,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
         _clipboard = dependencies.Clipboard;
         _archive = dependencies.Archive;
         _folderColors = dependencies.FolderColors;
+        _folderIcons = dependencies.FolderIcons;
         _volumeWatcher = dependencies.VolumeWatcher;
         _paneFactory = dependencies.PaneFactory;
         _settingsCoordinator = dependencies.SettingsCoordinator;
@@ -1000,6 +1003,43 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
             return;
 
         _folderColors.RemoveColor(item.Path);
+    }
+
+    public async Task SetSidebarFolderIconAsync(SidebarItemViewModel item)
+    {
+        if (string.IsNullOrEmpty(item.Path))
+            return;
+
+        var sourcePath = await _dialogs.PickFolderIconAsync().ConfigureAwait(true);
+        if (string.IsNullOrEmpty(sourcePath))
+            return;
+
+        string? created = null;
+        try
+        {
+            _folderIcons.TryGetIconFile(item.Path, out var oldIconFile);
+            created = await FolderIconFiles.CopyAsPngAsync(sourcePath).ConfigureAwait(true);
+            _folderIcons.SetIcon(item.Path, created);
+            created = null;
+            FolderIconFiles.Delete(oldIconFile);
+            await _sidebar.LoadIconsAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            FolderIconFiles.Delete(created);
+            await _dialogs.ShowErrorAsync(UiStrings.SetFolderIconFailed, ex.Message).ConfigureAwait(true);
+        }
+    }
+
+    public void ClearSidebarFolderIcon(SidebarItemViewModel item)
+    {
+        if (string.IsNullOrEmpty(item.Path))
+            return;
+
+        _folderIcons.TryGetIconFile(item.Path, out var oldIconFile);
+        _folderIcons.RemoveIcon(item.Path);
+        FolderIconFiles.Delete(oldIconFile);
+        _ = _sidebar.LoadIconsAsync();
     }
 
     private void OnFolderColorsChanged(object? sender, EventArgs e)

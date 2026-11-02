@@ -1032,6 +1032,28 @@ public partial class MainWindow : Window
         vm.ClearSidebarFolderColor(item);
     }
 
+    private async void OnSidebarSetIconClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+            return;
+
+        if (GetSidebarItemFromMenu(sender) is not SidebarItemViewModel item)
+            return;
+
+        await vm.SetSidebarFolderIconAsync(item).ConfigureAwait(true);
+    }
+
+    private void OnSidebarClearIconClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+            return;
+
+        if (GetSidebarItemFromMenu(sender) is not SidebarItemViewModel item)
+            return;
+
+        vm.ClearSidebarFolderIcon(item);
+    }
+
     private void OnSidebarPinClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not MainWindowViewModel vm)

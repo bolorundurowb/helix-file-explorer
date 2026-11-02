@@ -7,7 +7,6 @@ using CommunityToolkit.Mvvm.Messaging;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Settings;
-using HelixExplorer.ViewModels;
 using HelixExplorer.Views;
 
 namespace HelixExplorer.ViewModels.Tests;

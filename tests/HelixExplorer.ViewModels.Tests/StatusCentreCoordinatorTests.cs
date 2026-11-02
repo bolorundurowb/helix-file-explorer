@@ -1,7 +1,6 @@
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Services;
-using HelixExplorer.ViewModels;
 
 namespace HelixExplorer.ViewModels.Tests;
 

@@ -9,7 +9,6 @@ using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Theming;
 using HelixExplorer.Services;
-using HelixExplorer.ViewModels;
 
 namespace HelixExplorer.ViewModels.Tests;
 

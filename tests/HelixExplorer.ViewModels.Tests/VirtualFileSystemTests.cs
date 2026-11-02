@@ -1,5 +1,4 @@
 using HelixExplorer.Core.FileSystem;
-using HelixExplorer.Core.Models;
 
 namespace HelixExplorer.ViewModels.Tests;
 

@@ -147,7 +147,7 @@ public sealed class PaneViewModelTests : IDisposable
         var child = Path.Combine(parent, "child");
         Directory.CreateDirectory(child);
 
-        OnUi(() =>
+        OnUi(async () =>
         {
             _pane.NavigateTo(parent);
             _pane.EditablePath = "child";
@@ -155,6 +155,7 @@ public sealed class PaneViewModelTests : IDisposable
 
             _pane.CurrentPath.Must().Be(WithSeparator(child));
             _pane.IsEditingPath.Must().BeFalse();
+            await FinishNavigationAsync();
         });
     }
 
@@ -167,13 +168,14 @@ public sealed class PaneViewModelTests : IDisposable
         Directory.CreateDirectory(current);
         Directory.CreateDirectory(sibling);
 
-        OnUi(() =>
+        OnUi(async () =>
         {
             _pane.NavigateTo(current);
             _pane.EditablePath = @"..\sibling";
             _pane.CommitEditablePath();
 
             _pane.CurrentPath.Must().Be(WithSeparator(sibling));
+            await FinishNavigationAsync();
         });
     }
 
@@ -184,7 +186,7 @@ public sealed class PaneViewModelTests : IDisposable
         Directory.CreateDirectory(parent);
         File.WriteAllText(Path.Combine(parent, "readme.txt"), "readme");
 
-        OnUi(() =>
+        OnUi(async () =>
         {
             _pane.NavigateTo(parent);
             var stay = _pane.CurrentPath;
@@ -194,6 +196,7 @@ public sealed class PaneViewModelTests : IDisposable
             _pane.CurrentPath.Must().Be(stay);
             _pane.IsUnavailableState.Must().BeTrue();
             _pane.StatusText.Must().Be(UiStrings.PathIsNotADirectory);
+            await FinishNavigationAsync();
         });
     }
 
@@ -203,7 +206,7 @@ public sealed class PaneViewModelTests : IDisposable
         var parent = Path.Combine(_root, "parent");
         Directory.CreateDirectory(parent);
 
-        OnUi(() =>
+        OnUi(async () =>
         {
             _pane.NavigateTo(parent);
             var stay = _pane.CurrentPath;
@@ -213,6 +216,7 @@ public sealed class PaneViewModelTests : IDisposable
             _pane.CurrentPath.Must().Be(stay);
             _pane.IsUnavailableState.Must().BeTrue();
             _pane.StatusText.Must().Be(UiStrings.FolderNotFound);
+            await FinishNavigationAsync();
         });
     }
 
@@ -222,20 +226,21 @@ public sealed class PaneViewModelTests : IDisposable
         var zip = Path.Combine(_root, "notes.zip");
         File.WriteAllBytes(zip, []);
 
-        OnUi(() =>
+        OnUi(async () =>
         {
             _pane.EditablePath = zip;
             _pane.CommitEditablePath();
 
             _pane.CurrentPath.Must().Be(ArchivePath.Mount(Path.GetFullPath(zip)));
             _pane.IsArchive.Must().BeTrue();
+            await FinishNavigationAsync();
         });
     }
 
     [Fact]
     public void CommitEditablePath_shouldOpenAShellNamespace_whenThePathIsAShellPath()
     {
-        OnUi(() =>
+        OnUi(async () =>
         {
             _pane.EditablePath = ShellPath.RecycleBin;
             _pane.CommitEditablePath();
@@ -243,10 +248,26 @@ public sealed class PaneViewModelTests : IDisposable
             _pane.CurrentPath.Must().Be(ShellPath.RecycleBin);
             _pane.IsShellNamespace.Must().BeTrue();
             _pane.IsUnavailableState.Must().BeFalse();
+            await FinishNavigationAsync();
         });
     }
 
     private void OnUi(Action body) => HeadlessSession.RunOnUiThread(body);
+
+    // Navigation starts a refresh on the thread pool. The headless dispatcher only pumps that hop
+    // while this job is running, so the refresh has to finish before the job returns.
+    private void OnUi(Func<Task> body)
+        => HeadlessSession.RunOnUiThread(async () =>
+        {
+            await body().ConfigureAwait(true);
+            return 0;
+        });
+
+    private async Task FinishNavigationAsync()
+    {
+        await _pane.RefreshAsync().ConfigureAwait(true);
+        _pane.Dispose();
+    }
 
     private static string WithSeparator(string path)
         => PaneNavigationController.EnsureTrailingSeparator(Path.GetFullPath(path));

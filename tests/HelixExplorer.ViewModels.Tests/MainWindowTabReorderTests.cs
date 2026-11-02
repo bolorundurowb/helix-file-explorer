@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
-using Avalonia.Input.Raw;
 using Avalonia.Media.Transformation;
 using Avalonia.Threading;
 using Avalonia.VisualTree;

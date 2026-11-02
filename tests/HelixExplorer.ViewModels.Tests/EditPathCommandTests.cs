@@ -3,7 +3,6 @@ using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Persistence;
 using HelixExplorer.Core.Settings;
 using HelixExplorer.Services;
-using HelixExplorer.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -51,7 +50,7 @@ public sealed class EditPathCommandTests : IDisposable
         var folder = Path.Combine(_root, "docs");
         Directory.CreateDirectory(folder);
 
-        WithViewModel(vm =>
+        WithViewModel(async vm =>
         {
             vm.InitializeWindow(restoreSession: false, initialPath: folder);
 
@@ -60,6 +59,7 @@ public sealed class EditPathCommandTests : IDisposable
 
             vm.ActivePane!.IsEditingPath.Must().BeTrue();
             vm.ActivePane.EditablePath.Must().Be(vm.ActivePane.CurrentPath);
+            await vm.ActivePane.RefreshAsync();
         });
     }
 
@@ -76,6 +76,13 @@ public sealed class EditPathCommandTests : IDisposable
     }
 
     private void WithViewModel(Action<MainWindowViewModel> body)
+        => WithViewModel(vm =>
+        {
+            body(vm);
+            return Task.CompletedTask;
+        });
+
+    private void WithViewModel(Func<MainWindowViewModel, Task> body)
     {
         var settingsPath = Path.Combine(_root, "settings.json");
         new JsonSettingsStore(settingsPath).Save(new AppSettings
@@ -98,12 +105,13 @@ public sealed class EditPathCommandTests : IDisposable
         services.AddSingleton<INetworkLocationProvider, EmptyNetworkLocations>();
         services.AddSingleton<INetworkDiscoveryAvailability, AvailableNetworkDiscovery>();
 
-        HeadlessSession.RunOnUiThread(() =>
+        HeadlessSession.RunOnUiThread(async () =>
         {
             using var provider = services.BuildServiceProvider(validateScopes: true);
             using var scope = provider.CreateScope();
             var vm = scope.ServiceProvider.GetRequiredService<MainWindowViewModel>();
-            body(vm);
+            await body(vm).ConfigureAwait(true);
+            return 0;
         });
     }
 

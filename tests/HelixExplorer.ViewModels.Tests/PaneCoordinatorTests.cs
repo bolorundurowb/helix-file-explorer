@@ -622,6 +622,8 @@ public class PaneFileOperationPasteAvailabilityTests
         public Task ShowErrorAsync(string title, string message) => throw new NotSupportedException();
         public Task ShowOperationSummaryAsync(FileOperationResult result, string operationName) => throw new NotSupportedException();
         public Task<FileConflictResolution?> ResolveConflictAsync(FileConflictInfo conflict, bool canApplyToAll) => throw new NotSupportedException();
+
+        public Task<string?> PickFolderIconAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class UnusedReporter : IFileOperationReporter

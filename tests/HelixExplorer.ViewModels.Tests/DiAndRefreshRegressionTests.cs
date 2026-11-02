@@ -50,6 +50,8 @@ public class ScopedDiWiringTests
         Descriptor<IFolderViewPreferencesStore>(services).Lifetime.Must().Be(ServiceLifetime.Singleton);
         Descriptor<IFolderColorStore>(services).Lifetime.Must().Be(ServiceLifetime.Singleton);
         Descriptor<IFolderColorService>(services).Lifetime.Must().Be(ServiceLifetime.Singleton);
+        Descriptor<IFolderIconStore>(services).Lifetime.Must().Be(ServiceLifetime.Singleton);
+        Descriptor<IFolderIconService>(services).Lifetime.Must().Be(ServiceLifetime.Singleton);
         Descriptor<IFolderViewPreferencesService>(services).Lifetime.Must().Be(ServiceLifetime.Singleton);
     }
 

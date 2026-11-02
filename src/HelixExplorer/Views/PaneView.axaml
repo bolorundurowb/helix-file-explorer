@@ -232,6 +232,16 @@
                 </MenuItem.Icon>
                 <MenuItem Header="Clear colour" Command="{Binding ClearFolderColorCommand}" />
             </MenuItem>
+            <MenuItem Header="Change icon…" Command="{Binding SetFolderIconCommand}">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconImageGeometry}" />
+                </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Clear icon" Command="{Binding ClearFolderIconCommand}">
+                <MenuItem.Icon>
+                    <PathIcon Data="{DynamicResource HelixIconImageOffGeometry}" />
+                </MenuItem.Icon>
+            </MenuItem>
             <Separator />
             <MenuItem Header="Show more options" Command="{Binding ShowMoreOptionsCommand}">
                 <MenuItem.Icon>

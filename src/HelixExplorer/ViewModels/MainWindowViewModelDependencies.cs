@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Infrastructure;
+using HelixExplorer.Core.Persistence;
 using HelixExplorer.Core.Settings;
 using HelixExplorer.Core.Theming;
 using HelixExplorer.Services;
@@ -16,6 +17,7 @@ public sealed record MainWindowViewModelDependencies(
     IClipboardService Clipboard,
     IArchiveProvider Archive,
     IFolderColorService FolderColors,
+    IFolderIconService FolderIcons,
     IVolumeChangeWatcher VolumeWatcher,
     IPaneViewModelFactory PaneFactory,
     AppSettingsCoordinator SettingsCoordinator,

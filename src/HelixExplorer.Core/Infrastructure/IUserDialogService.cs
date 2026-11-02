@@ -122,4 +122,10 @@ public interface IUserDialogService
     Task ShowOperationSummaryAsync(FileOperationResult result, string operationName);
 
     Task<FileConflictResolution?> ResolveConflictAsync(FileConflictInfo conflict, bool canApplyToAll);
+
+    /// <summary>
+    /// Lets the user pick an image file to use as a folder icon.
+    /// Returns the selected file path, or null when cancelled or no file was chosen.
+    /// </summary>
+    Task<string?> PickFolderIconAsync(CancellationToken cancellationToken = default);
 }

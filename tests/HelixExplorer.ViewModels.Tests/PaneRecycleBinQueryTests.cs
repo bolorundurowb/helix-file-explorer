@@ -33,6 +33,8 @@ public sealed class PaneRecycleBinQueryTests : IDisposable
         var services = new ServiceCollection();
         services.AddLogging(builder => builder.AddDebug());
         services.AddHelixApplicationServices();
+        services.AddSingleton<IFileSystemProvider, EmptyFileSystem>();
+        services.AddSingleton<IShellFolderEnumerator, EmptyShellFolders>();
         services.AddSingleton<IAppDatabase>(_ =>
         {
             var db = new SqliteAppDatabase(new JsonSettingsStore(settingsPath), dbPath, settingsPath);
@@ -42,12 +44,13 @@ public sealed class PaneRecycleBinQueryTests : IDisposable
 
         _provider = services.BuildServiceProvider(validateScopes: true);
         _scope = _provider.CreateScope();
-        _pane = _scope.ServiceProvider.GetRequiredService<IPaneViewModelFactory>().Create();
+        _pane = HeadlessSession.RunOnUiThread(
+            () => _scope.ServiceProvider.GetRequiredService<IPaneViewModelFactory>().Create());
     }
 
     public void Dispose()
     {
-        _pane.Dispose();
+        HeadlessSession.RunOnUiThread(_pane.Dispose);
         _scope.Dispose();
         _provider.Dispose();
         try { Directory.Delete(_root, recursive: true); } catch { /* best-effort */ }
@@ -125,14 +128,16 @@ public sealed class PaneRecycleBinQueryTests : IDisposable
     });
 
     /// <summary>
-    /// Entering the bin starts a real shell refresh whose publish is marshalled to the UI thread. Running the
-    /// whole test as one UI-thread job keeps that publish from landing between the arrange and assert steps.
+    /// Entering the bin starts a refresh whose publish is marshalled to the UI thread. The test double makes it
+    /// deterministic, and awaiting it keeps the continuation inside the headless dispatcher job.
     /// </summary>
     private void InRecycleBin(Action body)
-        => HeadlessSession.RunOnUiThread(() =>
+        => HeadlessSession.RunOnUiThread(async () =>
         {
             _pane.CurrentPath = ShellPath.RecycleBin;
+            await _pane.RefreshAsync();
             body();
+            return 0;
         });
 
     private void PublishBinEntries()
@@ -167,4 +172,53 @@ public sealed class PaneRecycleBinQueryTests : IDisposable
             Now,
             Path.GetExtension(displayName),
             OriginalPath: originalPath);
+
+    private sealed class EmptyFileSystem : IFileSystemProvider
+    {
+        public ValueTask<DirectoryListing> GetDirectoryContentsAsync(string path, CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(DirectoryListing.Empty);
+
+        public ValueTask<SearchResult> SearchRecursiveAsync(
+            string path,
+            string query,
+            SearchOptions options,
+            CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(SearchResult.Empty);
+
+        public string ResolvePath(string path) => path;
+
+        public bool DirectoryExists(string path) => false;
+
+        public bool FileExists(string path) => false;
+    }
+
+    private sealed class EmptyShellFolders : IShellFolderEnumerator
+    {
+        public event EventHandler? RecycleBinChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public ValueTask<IReadOnlyList<FileSystemEntry>> EnumerateAsync(string shellPath, CancellationToken ct = default)
+            => ValueTask.FromResult<IReadOnlyList<FileSystemEntry>>([]);
+
+        public ValueTask<bool> RestoreAsync(string itemPath, string? destinationPath = null, CancellationToken ct = default)
+            => ValueTask.FromResult(false);
+
+        public ValueTask EmptyRecycleBinAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
+
+        public ValueTask<(long ItemCount, long TotalSize)> QueryRecycleBinAsync(CancellationToken ct = default)
+            => ValueTask.FromResult((0L, 0L));
+
+        public bool HasRecycleBinItems() => false;
+
+        public void StartRecycleBinWatcher()
+        {
+        }
+
+        public void StopRecycleBinWatcher()
+        {
+        }
+    }
 }

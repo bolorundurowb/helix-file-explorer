@@ -24,6 +24,7 @@ public static class CommandRegistry
         Window("navigation.back", "Go Back", "Navigation", vm => vm.ActivePane?.GoBackCommand.Execute(null), canExecute: CanGoBack),
         Window("navigation.forward", "Go Forward", "Navigation", vm => vm.ActivePane?.GoForwardCommand.Execute(null), canExecute: CanGoForward),
         Window("navigation.up", "Go Up", "Navigation", vm => vm.ActivePane?.GoUpCommand.Execute(null), canExecute: CanGoUp),
+        Window("navigation.goToFolder", "Go to Folder", "Navigation", vm => vm.EditPathCommand.Execute(null), "Ctrl+L", CanEditPath),
         Window("navigation.refresh", "Refresh", "Navigation", vm => vm.ActivePane?.RefreshCommand.Execute(null), "F5"),
         Window("file.newFolder", "New Folder", "File", vm => vm.NewFolderCommand.Execute(null), "Ctrl+Shift+N", CanCreateFolder),
         Window("view.layout.details", "Details View", "View", vm => vm.SetViewModeCommand.Execute(LayoutMode.Details)),
@@ -138,6 +139,9 @@ public static class CommandRegistry
 
     private static bool CanGoUp(MainWindowViewModel vm)
         => vm.ActivePane?.GoUpCommand.CanExecute(null) == true;
+
+    private static bool CanEditPath(MainWindowViewModel vm)
+        => vm.EditPathCommand.CanExecute(null);
 
     private static bool CanCreateFolder(MainWindowViewModel vm)
         => vm.ActivePane is { IsRenaming: false, CanCreateFolderHere: true };

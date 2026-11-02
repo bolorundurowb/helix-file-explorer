@@ -1,5 +1,3 @@
-using HelixExplorer.ViewModels;
-
 namespace HelixExplorer.ViewModels.Tests;
 
 /// <summary>

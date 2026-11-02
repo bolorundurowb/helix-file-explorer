@@ -1,6 +1,5 @@
 using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Models;
-using HelixExplorer.Core.Sorting;
 using HelixExplorer.ViewModels.Pane;
 
 namespace HelixExplorer.ViewModels.Tests;

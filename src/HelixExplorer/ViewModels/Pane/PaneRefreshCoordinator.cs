@@ -4,7 +4,6 @@ using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Models;
-using HelixExplorer.Services;
 using Microsoft.Extensions.Logging;
 
 namespace HelixExplorer.ViewModels.Pane;

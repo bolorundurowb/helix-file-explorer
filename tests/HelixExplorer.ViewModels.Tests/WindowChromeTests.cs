@@ -1,5 +1,4 @@
 using HelixExplorer.Core.Models;
-using HelixExplorer.ViewModels;
 
 namespace HelixExplorer.ViewModels.Tests;
 

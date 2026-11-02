@@ -23,4 +23,11 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\HelixExplorer\HelixExplorer.csproj" />
   </ItemGroup>
+
+  <!-- One headless Avalonia dispatcher for the assembly. Parallel collections rebind it mid-run. -->
+  <ItemGroup>
+    <None Update="xunit.runner.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>

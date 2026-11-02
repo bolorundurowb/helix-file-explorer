@@ -3,7 +3,6 @@ using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Models;
-using HelixExplorer.Core.Search;
 using HelixExplorer.ViewModels.Pane;
 using Microsoft.Extensions.Logging.Abstractions;
 

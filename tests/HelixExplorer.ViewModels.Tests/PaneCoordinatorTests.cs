@@ -312,6 +312,59 @@ public class PaneNavigationControllerTests
     }
 
     [Fact]
+    public void ResolveDestination_shouldJoinARelativePath_whenTheCurrentFolderHasNoTrailingSeparator()
+    {
+        var navigation = CreateController();
+
+        navigation.ResolveDestination("docs", @"C:\Work").Must().Be(@"C:\Work\docs\");
+    }
+
+    [Fact]
+    public void ResolveDestination_shouldJoinAParentRelativeSegment_whenThePathLeavesTheCurrentFolder()
+    {
+        var navigation = CreateController();
+        var joined = Path.Combine(@"C:\Work\docs\", @"..\sibling");
+
+        navigation.ResolveDestination(@"..\sibling", @"C:\Work\docs\").Must().Be(joined + @"\");
+    }
+
+    [Fact]
+    public void ResolveDestination_shouldMoveToTheParent_whenThePathIsDoubleDot()
+    {
+        var navigation = CreateController();
+
+        navigation.ResolveDestination("..", @"C:\Work\docs\").Must().Be(@"C:\Work\");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(PaneConstants.HomeRoute)]
+    [InlineData(ShellPath.RecycleBin)]
+    public void ResolveDestination_shouldLeaveARelativePathUnjoined_whenTheCurrentLocationIsNotAFolder(string currentPath)
+    {
+        var navigation = CreateController();
+
+        navigation.ResolveDestination("docs", currentPath).Must().Be(@"docs\");
+    }
+
+    [Fact]
+    public void ResolveDestination_shouldLeaveARelativePathUnjoined_whenTheCurrentFolderIsAnArchive()
+    {
+        var navigation = CreateController();
+
+        navigation.ResolveDestination("inner", ArchivePath.Mount(@"C:\backup.zip")).Must().Be(@"inner\");
+    }
+
+    [Fact]
+    public void ResolveDestination_shouldMountARelativeArchive_whenTheCurrentFolderContainsIt()
+    {
+        var navigation = CreateController(treatZipAsArchive: true);
+
+        navigation.ResolveDestination("notes.zip", @"C:\Work\")
+            .Must().Be(ArchivePath.Mount(@"C:\Work\notes.zip"));
+    }
+
+    [Fact]
     public void RecordForward_EnablesBackNavigation()
     {
         var navigation = new PaneNavigationController(new FakeFileSystem(), new FakeArchive());
@@ -472,8 +525,8 @@ public class PaneNavigationControllerTests
             .Must().Be(@"\\server\share\notes.txt");
     }
 
-    private static PaneNavigationController CreateController()
-        => new(new FakeFileSystem(), new FakeArchive());
+    private static PaneNavigationController CreateController(bool treatZipAsArchive = false)
+        => new(new FakeFileSystem(), new FakeArchive(treatZipAsArchive));
 
     private sealed class FakeFileSystem : IFileSystemProvider
     {
@@ -490,9 +543,10 @@ public class PaneNavigationControllerTests
         public bool FileExists(string path) => false;
     }
 
-    private sealed class FakeArchive : IArchiveProvider
+    private sealed class FakeArchive(bool treatZipAsArchive = false) : IArchiveProvider
     {
-        public bool IsArchiveFile(string path) => false;
+        public bool IsArchiveFile(string path)
+            => treatZipAsArchive && path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
 
         public ValueTask<IReadOnlyList<FileSystemEntry>> EnumerateAsync(string virtualPath, CancellationToken token = default)
             => ValueTask.FromResult<IReadOnlyList<FileSystemEntry>>(Array.Empty<FileSystemEntry>());

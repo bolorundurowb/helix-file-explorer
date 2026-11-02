@@ -58,6 +58,16 @@ public sealed class CommandRegistryTests : IDisposable
     }
 
     [Fact]
+    public void GoToFolder_shouldBeOfferedOnCtrlL()
+    {
+        var command = CommandRegistry.Palette.Single(c => c.Id == "navigation.goToFolder");
+
+        command.Label.Must().Be("Go to Folder");
+        command.Category.Must().Be("Navigation");
+        command.Gesture.Must().Be("Ctrl+L");
+    }
+
+    [Fact]
     public void CommandIds_AreUnique()
     {
         var ids = CommandRegistry.Palette.Select(c => c.Id)

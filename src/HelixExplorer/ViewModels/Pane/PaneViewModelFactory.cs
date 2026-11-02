@@ -3,6 +3,7 @@ using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.FileSystem.Undo;
 using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Infrastructure;
+using HelixExplorer.Core.Persistence;
 using HelixExplorer.Core.Settings;
 using HelixExplorer.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,6 +25,7 @@ public sealed class PaneViewModelFactory(IServiceProvider serviceProvider) : IPa
             serviceProvider.GetRequiredService<IFileSystemProvider>(),
             serviceProvider.GetRequiredService<IArchiveProvider>(),
             serviceProvider.GetRequiredService<IFolderColorService>(),
+            serviceProvider.GetRequiredService<IFolderIconService>(),
             serviceProvider.GetRequiredService<IFolderViewPreferencesService>(),
             serviceProvider.GetRequiredService<IClipboardService>(),
             serviceProvider.GetRequiredService<IUiHost>(),

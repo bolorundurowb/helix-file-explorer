@@ -36,7 +36,7 @@ public class SqliteAppDatabaseTests
             using var cmd = db.Connection.CreateCommand();
             cmd.CommandText = """
                 SELECT name FROM sqlite_master
-                WHERE type = 'table' AND name IN ('folder_view_preferences', 'folder_colors')
+                WHERE type = 'table' AND name IN ('folder_view_preferences', 'folder_colors', 'folder_icons')
                 ORDER BY name;
                 """;
             using var reader = cmd.ExecuteReader();
@@ -44,7 +44,7 @@ public class SqliteAppDatabaseTests
             while (reader.Read())
                 names.Add(reader.GetString(0));
 
-            names.Must().BeSequenceEqual(new[] { "folder_colors", "folder_view_preferences" });
+            names.Must().BeSequenceEqual(new[] { "folder_colors", "folder_icons", "folder_view_preferences" });
         }
         finally
         {
@@ -54,7 +54,7 @@ public class SqliteAppDatabaseTests
     }
 
     [Fact]
-    public void Initialize_SetsUserVersionToOne()
+    public void Initialize_SetsUserVersionToTwo()
     {
         var dbPath = NewTempDbPath();
         var settingsPath = NewTempSettingsPath();
@@ -66,7 +66,7 @@ public class SqliteAppDatabaseTests
             using var cmd = db.Connection.CreateCommand();
             cmd.CommandText = "PRAGMA user_version;";
             var version = Convert.ToInt32(cmd.ExecuteScalar() ?? 0, System.Globalization.CultureInfo.InvariantCulture);
-            version.Must().Be(1);
+            version.Must().Be(2);
         }
         finally
         {
@@ -448,6 +448,135 @@ public class FolderColorStoreTests
     }
 }
 
+public class FolderIconStoreTests
+{
+    private static string NewTempDbPath()
+        => Path.Combine(Path.GetTempPath(), "helix-test-" + Guid.NewGuid().ToString("N") + ".db");
+
+    private static string NewTempSettingsPath()
+        => Path.Combine(Path.GetTempPath(), "helix-settings-" + Guid.NewGuid().ToString("N") + ".json");
+
+    private static void CleanupDb(string path)
+    {
+        foreach (var p in new[] { path, path + "-wal", path + "-shm" })
+        {
+            try { File.Delete(p); } catch { }
+        }
+    }
+
+    private static (SqliteAppDatabase db, FolderIconStore store) CreateStore(string dbPath)
+    {
+        var settingsPath = NewTempSettingsPath();
+        var db = new SqliteAppDatabase(new JsonSettingsStore(settingsPath), dbPath, settingsPath);
+        db.Initialize();
+        return (db, new FolderIconStore(db));
+    }
+
+    [Fact]
+    public void LoadAll_ReturnsEmpty_WhenNoRows()
+    {
+        var dbPath = NewTempDbPath();
+        try
+        {
+            var (db, store) = CreateStore(dbPath);
+            using (db)
+                store.LoadAll().Count.Must().Be(0);
+        }
+        finally
+        {
+            CleanupDb(dbPath);
+        }
+    }
+
+    [Fact]
+    public void Upsert_ThenLoadAll_ReturnsIconFile()
+    {
+        var dbPath = NewTempDbPath();
+        try
+        {
+            var (db, store) = CreateStore(dbPath);
+            using (db)
+            {
+                store.Upsert(@"C:\Users\docs", @"C:\AppData\icon1.png");
+                store.Upsert(@"C:\Users\pics", @"C:\AppData\icon2.png");
+
+                var all = store.LoadAll();
+                all.Count.Must().Be(2);
+                all[@"C:\Users\docs"].Must().Be(@"C:\AppData\icon1.png");
+                all[@"C:\Users\pics"].Must().Be(@"C:\AppData\icon2.png");
+            }
+        }
+        finally
+        {
+            CleanupDb(dbPath);
+        }
+    }
+
+    [Fact]
+    public void LoadAll_IsCaseInsensitive()
+    {
+        var dbPath = NewTempDbPath();
+        try
+        {
+            var (db, store) = CreateStore(dbPath);
+            using (db)
+            {
+                store.Upsert(@"C:\Users\Docs", @"C:\AppData\icon.png");
+
+                var all = store.LoadAll();
+                all[@"c:\users\docs"].Must().Be(@"C:\AppData\icon.png");
+            }
+        }
+        finally
+        {
+            CleanupDb(dbPath);
+        }
+    }
+
+    [Fact]
+    public void Upsert_OverwritesExistingIcon()
+    {
+        var dbPath = NewTempDbPath();
+        try
+        {
+            var (db, store) = CreateStore(dbPath);
+            using (db)
+            {
+                store.Upsert(@"C:\Users\docs", @"C:\AppData\old.png");
+                store.Upsert(@"C:\Users\docs", @"C:\AppData\new.png");
+
+                var all = store.LoadAll();
+                all[@"C:\Users\docs"].Must().Be(@"C:\AppData\new.png");
+            }
+        }
+        finally
+        {
+            CleanupDb(dbPath);
+        }
+    }
+
+    [Fact]
+    public void Delete_RemovesIcon()
+    {
+        var dbPath = NewTempDbPath();
+        try
+        {
+            var (db, store) = CreateStore(dbPath);
+            using (db)
+            {
+                store.Upsert(@"C:\Users\docs", @"C:\AppData\icon.png");
+                store.Delete(@"C:\Users\docs");
+
+                store.LoadAll().Count.Must().Be(0);
+            }
+        }
+        finally
+        {
+            CleanupDb(dbPath);
+        }
+    }
+}
+
 public class LegacyJsonMigrationTests
 {
     private static readonly JsonSerializerOptions LegacyOptions = new()
@@ -482,6 +611,46 @@ public class LegacyJsonMigrationTests
             FolderColors = colors
         }, LegacyOptions);
         File.WriteAllText(path, json);
+    }
+
+    [Fact]
+    public void Initialize_AddsFolderIconsTable_ToVersionOneDatabase_WithoutLosingColors()
+    {
+        var dbPath = NewTempDbPath();
+        var settingsPath = NewTempSettingsPath();
+        try
+        {
+            // Start from a v2 database, then strip the v2 table to simulate an existing v1 app DB.
+            using (var db = new SqliteAppDatabase(new JsonSettingsStore(settingsPath), dbPath, settingsPath))
+            {
+                db.Initialize();
+                new FolderColorStore(db).Upsert(@"C:\Users\docs", 0xFF0078D4);
+
+                using var cmd = db.Connection.CreateCommand();
+                cmd.CommandText = "DROP TABLE folder_icons; PRAGMA user_version = 1;";
+                cmd.ExecuteNonQuery();
+            }
+
+            using var migrated = new SqliteAppDatabase(new JsonSettingsStore(settingsPath), dbPath, settingsPath);
+            migrated.Initialize();
+
+            using var tableCmd = migrated.Connection.CreateCommand();
+            tableCmd.CommandText = "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'folder_icons';";
+            tableCmd.ExecuteScalar().Must().Be("folder_icons");
+
+            using var versionCmd = migrated.Connection.CreateCommand();
+            versionCmd.CommandText = "PRAGMA user_version;";
+            var version = Convert.ToInt32(versionCmd.ExecuteScalar() ?? 0, System.Globalization.CultureInfo.InvariantCulture);
+            version.Must().Be(2);
+
+            var colorStore = new FolderColorStore(migrated);
+            colorStore.LoadAll()[@"C:\Users\docs"].Must().Be(0xFF0078D4u);
+        }
+        finally
+        {
+            CleanupDb(dbPath);
+            try { File.Delete(settingsPath); } catch { }
+        }
     }
 
     [Fact]

@@ -12,6 +12,7 @@ using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Infrastructure;
 using HelixExplorer.Core.Settings;
 using HelixExplorer.Core.Models;
+using HelixExplorer.Core.Persistence;
 using HelixExplorer.Core.Session;
 using HelixExplorer.Core.Sorting;
 using HelixExplorer.Services;
@@ -34,6 +35,7 @@ public sealed partial class PaneViewModel :
     private readonly IFileSystemProvider _fileSystem;
     private readonly IArchiveProvider _archive;
     private readonly IFolderColorService _folderColors;
+    private readonly IFolderIconService _folderIcons;
     private readonly IFolderViewPreferencesService _folderViewPrefs;
     private readonly IClipboardService _clipboard;
     private readonly IUiHost _uiHost;
@@ -102,6 +104,7 @@ public sealed partial class PaneViewModel :
         _fileSystem = dependencies.FileSystem;
         _archive = dependencies.Archive;
         _folderColors = dependencies.FolderColors;
+        _folderIcons = dependencies.FolderIcons;
         _folderViewPrefs = dependencies.FolderViewPreferences;
         _clipboard = dependencies.Clipboard;
         _uiHost = dependencies.UiHost;
@@ -1776,6 +1779,54 @@ public sealed partial class PaneViewModel :
            && SelectedEntries[0].IsDirectory
            && !ArchivePath.IsVirtual(SelectedEntries[0].FullPath);
 
+    [RelayCommand(CanExecute = nameof(CanSetFolderIcon))]
+    private async Task SetFolderIconAsync()
+    {
+        if (SelectedEntries.Count != 1)
+            return;
+
+        var entry = SelectedEntries[0];
+        var path = entry.FullPath;
+        var sourcePath = await _dialogs.PickFolderIconAsync().ConfigureAwait(true);
+        if (string.IsNullOrEmpty(sourcePath))
+            return;
+
+        string? created = null;
+        try
+        {
+            _folderIcons.TryGetIconFile(path, out var oldIconFile);
+            created = await FolderIconFiles.CopyAsPngAsync(sourcePath).ConfigureAwait(true);
+            _folderIcons.SetIcon(path, created);
+            created = null;
+            FolderIconFiles.Delete(oldIconFile);
+            StatusText = UiStrings.FolderIconChanged(entry.Name);
+        }
+        catch (Exception ex)
+        {
+            FolderIconFiles.Delete(created);
+            await _dialogs.ShowErrorAsync(UiStrings.SetFolderIconFailed, ex.Message).ConfigureAwait(true);
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanSetFolderIcon))]
+    private void ClearFolderIcon()
+    {
+        if (SelectedEntries.Count != 1)
+            return;
+
+        var path = SelectedEntries[0].FullPath;
+        _folderIcons.TryGetIconFile(path, out var oldIconFile);
+        _folderIcons.RemoveIcon(path);
+        FolderIconFiles.Delete(oldIconFile);
+        StatusText = UiStrings.FolderIconCleared(SelectedEntries[0].Name);
+    }
+
+    private bool CanSetFolderIcon()
+        => CanModifySelection()
+           && SelectedEntries.Count == 1
+           && SelectedEntries[0].IsDirectory
+           && !ArchivePath.IsVirtual(SelectedEntries[0].FullPath);
+
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private void Open()
     {
@@ -2163,6 +2214,8 @@ public sealed partial class PaneViewModel :
         NewFolderCommand.NotifyCanExecuteChanged();
         SetFolderColorCommand.NotifyCanExecuteChanged();
         ClearFolderColorCommand.NotifyCanExecuteChanged();
+        SetFolderIconCommand.NotifyCanExecuteChanged();
+        ClearFolderIconCommand.NotifyCanExecuteChanged();
         OpenCommand.NotifyCanExecuteChanged();
         OpenInNewTabCommand.NotifyCanExecuteChanged();
         OpenInNewWindowCommand.NotifyCanExecuteChanged();

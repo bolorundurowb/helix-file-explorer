@@ -1,33 +1,69 @@
 using System.Collections.ObjectModel;
+using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using HelixExplorer.Core.FileSystem;
 using HelixExplorer.Core.Formatting;
 using HelixExplorer.Core.Models;
+using HelixExplorer.Core.Persistence;
 using HelixExplorer.Core.Settings;
+using HelixExplorer.Services;
 
 namespace HelixExplorer.ViewModels;
 
-public sealed partial class HomePageViewModel : ObservableObject
+public sealed partial class HomePageViewModel : ObservableObject, IDisposable
 {
     private readonly IQuickAccessProvider _quickAccess;
     private readonly IVolumeProvider _volumes;
     private readonly ISettingsStore _settingsStore;
     private readonly IMessenger _messenger;
+    private readonly FileVisualService? _visuals;
+    private readonly IFolderIconService? _folderIcons;
+    private readonly IFolderColorService? _folderColors;
 
     public HomePageViewModel(
         IQuickAccessProvider quickAccess,
         IVolumeProvider volumes,
         ISettingsStore settingsStore,
-        IMessenger messenger)
+        IMessenger messenger,
+        FileVisualService? visuals = null,
+        IFolderIconService? folderIcons = null,
+        IFolderColorService? folderColors = null)
     {
         _quickAccess = quickAccess;
         _volumes = volumes;
         _settingsStore = settingsStore;
         _messenger = messenger;
+        _visuals = visuals;
+        _folderIcons = folderIcons;
+        _folderColors = folderColors;
+        if (_folderIcons is not null)
+            _folderIcons.IconsChanged += OnFolderIconsChanged;
+        if (_folderColors is not null)
+            _folderColors.ColorsChanged += OnFolderColorsChanged;
         RefreshPins();
         RefreshDrives();
+    }
+
+    public void Dispose()
+    {
+        if (_folderIcons is not null)
+            _folderIcons.IconsChanged -= OnFolderIconsChanged;
+        if (_folderColors is not null)
+            _folderColors.ColorsChanged -= OnFolderColorsChanged;
+    }
+
+    private void OnFolderIconsChanged(object? sender, string path)
+        => _ = LoadIconsAsync();
+
+    private void OnFolderColorsChanged(object? sender, EventArgs e)
+        => NotifyFolderColorsChanged();
+
+    private void NotifyFolderColorsChanged()
+    {
+        foreach (var item in QuickAccess)
+            item.NotifyFolderColorChanged();
     }
 
     public ObservableCollection<HomeQuickAccessItem> QuickAccess { get; } = new();
@@ -60,7 +96,7 @@ public sealed partial class HomePageViewModel : ObservableObject
 
         var homePath = _quickAccess.GetPath(KnownFolderKind.Home);
         if (!string.IsNullOrEmpty(homePath))
-            QuickAccess.Add(new HomeQuickAccessItem("Home", homePath, IsPinned: true));
+            QuickAccess.Add(new HomeQuickAccessItem("Home", homePath, isPinned: true));
 
         var settings = _settingsStore.Load();
         var defaults = _quickAccess.GetPinnedDefaults()
@@ -83,7 +119,41 @@ public sealed partial class HomePageViewModel : ObservableObject
                 continue;
 
             var title = known.TryGetValue(path.TrimEnd('\\', '/'), out var name) ? name : displayName;
-            QuickAccess.Add(new HomeQuickAccessItem(title, path, IsPinned: true));
+            QuickAccess.Add(new HomeQuickAccessItem(title, path, isPinned: true));
+        }
+
+        _ = LoadIconsAsync();
+    }
+
+    private async Task LoadIconsAsync()
+    {
+        if (_visuals is null || _folderIcons is null)
+            return;
+
+        foreach (var item in QuickAccess)
+        {
+            if (string.IsNullOrEmpty(item.Path)
+                || !_folderIcons.TryGetIconFile(item.Path, out var iconFile)
+                || string.IsNullOrEmpty(iconFile))
+            {
+                item.Icon = null;
+                continue;
+            }
+
+            try
+            {
+                var bitmap = await _visuals.GetBitmapAsync(
+                    item.Path,
+                    isDirectory: true,
+                    size: 40,
+                    preferThumbnail: false,
+                    CancellationToken.None).ConfigureAwait(true);
+                item.Icon = bitmap;
+            }
+            catch
+            {
+                item.Icon = null;
+            }
         }
     }
 
@@ -142,7 +212,24 @@ public sealed partial class HomePageViewModel : ObservableObject
     }
 }
 
-public sealed record HomeQuickAccessItem(string Title, string Path, bool IsPinned);
+public sealed partial class HomeQuickAccessItem : ObservableObject
+{
+    public HomeQuickAccessItem(string title, string path, bool isPinned)
+    {
+        Title = title;
+        Path = path;
+        IsPinned = isPinned;
+    }
+
+    public string Title { get; }
+    public string Path { get; }
+    public bool IsPinned { get; }
+
+    internal void NotifyFolderColorChanged() => OnPropertyChanged(nameof(Path));
+
+    [ObservableProperty]
+    private Bitmap? _icon;
+}
 
 public sealed record HomeDriveItem(string Label, string RootPath, string UsageText, double UsedFraction, bool IsReady)
 {

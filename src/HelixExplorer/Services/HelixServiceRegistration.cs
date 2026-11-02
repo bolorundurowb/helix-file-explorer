@@ -35,6 +35,7 @@ public static class HelixServiceRegistration
         services.AddSingleton<IAppDatabase, SqliteAppDatabase>();
         services.AddSingleton<IFolderViewPreferencesStore, FolderViewPreferencesStore>();
         services.AddSingleton<IFolderColorStore, FolderColorStore>();
+        services.AddSingleton<IFolderIconStore, FolderIconStore>();
         services.AddSingleton<ISessionStore, JsonSessionStore>();
         services.AddSingleton<IThemeService, AvaloniaThemeService>();
         services.AddSingleton<IUiFontService, AvaloniaUiFontService>();
@@ -49,6 +50,7 @@ public static class HelixServiceRegistration
         services.AddSingleton<IGitProvider, CliGitProvider>();
         services.AddSingleton<IArchiveProvider, SharpCompressArchiveProvider>();
         services.AddSingleton<IFolderColorService, FolderColorService>();
+        services.AddSingleton<IFolderIconService, FolderIconService>();
         services.AddSingleton<IFolderViewPreferencesService, FolderViewPreferencesService>();
         services.AddSingleton<FileVisualService>();
         services.AddSingleton(sp =>

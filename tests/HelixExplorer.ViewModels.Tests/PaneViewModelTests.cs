@@ -1,4 +1,7 @@
+using Avalonia.Threading;
 using HelixExplorer.Core.Archives;
+using HelixExplorer.Core.FileSystem;
+using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Models;
 using HelixExplorer.Core.Persistence;
 using HelixExplorer.Core.Settings;
@@ -31,6 +34,13 @@ public sealed class PaneViewModelTests : IDisposable
         var services = new ServiceCollection();
         services.AddLogging(builder => builder.AddDebug());
         services.AddHelixApplicationServices();
+        // A real listing, archive read, or watcher callback continues on the thread pool and can
+        // bind Dispatcher.UIThread there once this headless job has ended.
+        services.AddSingleton<IFileSystemProvider, ImmediateFileSystem>();
+        services.AddSingleton<IArchiveProvider, ImmediateArchive>();
+        services.AddSingleton<IGitProvider, IdleGit>();
+        services.AddSingleton<IFileVisualProvider, EmptyVisuals>();
+        services.AddTransient<IFileChangeWatcher, VirtualFileChangeWatcher>();
         services.AddSingleton<ISettingsStore>(_ => new JsonSettingsStore(settingsPath));
         services.AddSingleton<IAppDatabase>(sp =>
         {
@@ -244,6 +254,8 @@ public sealed class PaneViewModelTests : IDisposable
             finally
             {
                 await _pane.RefreshAsync().ConfigureAwait(true);
+                // Git status is posted after the refresh await returns, so drain it before the job ends.
+                Dispatcher.UIThread.RunJobs();
                 _pane.Dispose();
             }
 
@@ -252,4 +264,73 @@ public sealed class PaneViewModelTests : IDisposable
 
     private static string WithSeparator(string path)
         => PaneNavigationController.EnsureTrailingSeparator(Path.GetFullPath(path));
+
+    private sealed class EmptyVisuals : IFileVisualProvider
+    {
+        public ValueTask<FileVisualData?> GetAsync(FileVisualRequest request, CancellationToken cancellationToken = default)
+            => ValueTask.FromResult<FileVisualData?>(null);
+    }
+
+    private sealed class ImmediateFileSystem : IFileSystemProvider
+    {
+        public ValueTask<DirectoryListing> GetDirectoryContentsAsync(string path, CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(new DirectoryListing(path, Array.Empty<FileSystemEntry>()));
+
+        public ValueTask<SearchResult> SearchRecursiveAsync(
+            string path,
+            string query,
+            SearchOptions options,
+            CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(SearchResult.Empty);
+
+        public string ResolvePath(string path) => Path.GetFullPath(path);
+
+        public bool DirectoryExists(string path)
+        {
+            try { return Directory.Exists(path); }
+            catch (IOException) { return false; }
+        }
+
+        public bool FileExists(string path)
+        {
+            try { return File.Exists(path); }
+            catch (IOException) { return false; }
+        }
+    }
+
+    private sealed class ImmediateArchive : IArchiveProvider
+    {
+        public bool IsArchiveFile(string path) => ArchivePath.IsArchiveFile(path);
+
+        public ValueTask<IReadOnlyList<FileSystemEntry>> EnumerateAsync(string virtualPath, CancellationToken token = default)
+            => ValueTask.FromResult<IReadOnlyList<FileSystemEntry>>(Array.Empty<FileSystemEntry>());
+
+        public ValueTask<string?> ExtractEntryAsync(string virtualPath, CancellationToken token = default)
+            => ValueTask.FromResult<string?>(null);
+
+        public ValueTask CreateZipAsync(IReadOnlyList<string> sourcePaths, string destinationZipPath, CancellationToken token = default)
+            => ValueTask.CompletedTask;
+
+        public ValueTask ExtractArchiveToDirectoryAsync(string archivePath, string destinationDirectory, CancellationToken token = default)
+            => ValueTask.CompletedTask;
+
+        public ValueTask ExtractVirtualEntriesAsync(IReadOnlyList<string> virtualPaths, string destinationDirectory, CancellationToken token = default)
+            => ValueTask.CompletedTask;
+
+        public void CleanupExtractedFiles() { }
+    }
+
+    private sealed class IdleGit : IGitProvider
+    {
+        public bool IsInsideRepository(string path) => false;
+
+        public ValueTask<GitStatusSnapshot> GetStatusAsync(string path, CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(GitStatusSnapshot.Empty);
+
+        public ValueTask<IReadOnlyList<string>> ListBranchesAsync(string path, CancellationToken cancellationToken = default)
+            => ValueTask.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
+
+        public ValueTask<bool> CheckoutBranchAsync(string path, string branch, CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(false);
+    }
 }

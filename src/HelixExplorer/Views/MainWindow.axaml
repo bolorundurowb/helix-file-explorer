@@ -197,6 +197,17 @@
                                                 <Separator />
                                                 <MenuItem Header="Color" Tag="{x:Static settings:FolderColorPalette.All}" />
                                                 <MenuItem Header="Clear color" Click="OnSidebarClearColorClick" />
+                                                <Separator />
+                                                <MenuItem Header="Change icon…" Click="OnSidebarSetIconClick">
+                                                    <MenuItem.Icon>
+                                                        <PathIcon Data="{DynamicResource HelixIconImageGeometry}" />
+                                                    </MenuItem.Icon>
+                                                </MenuItem>
+                                                <MenuItem Header="Clear icon" Click="OnSidebarClearIconClick">
+                                                    <MenuItem.Icon>
+                                                        <PathIcon Data="{DynamicResource HelixIconImageOffGeometry}" />
+                                                    </MenuItem.Icon>
+                                                </MenuItem>
                                             </ContextMenu>
                                         </Border.ContextMenu>
                                         <Grid ColumnDefinitions="3,Auto,*" MinHeight="32">

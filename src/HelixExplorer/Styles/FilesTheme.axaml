@@ -81,6 +81,9 @@
         <Setter Property="BorderBrush" Value="{DynamicResource HelixSelectionBarBrush}" />
         <Setter Property="BorderThickness" Value="2,0,0,0" />
     </Style>
+    <Style Selector="DataGrid#DetailsGrid DataGridCell:focus /template/ Grid#FocusVisual">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
     <Style Selector="UserControl.inactive DataGrid#DetailsGrid DataGridRow:selected /template/ Rectangle#BackgroundRectangle">
         <Setter Property="Fill" Value="{DynamicResource HelixSelectionInactiveFillBrush}" />
         <Setter Property="Opacity" Value="1" />
@@ -106,6 +109,30 @@
     <Style Selector="UserControl:focus-within:not(.inactive) controls|VirtualizingFileGrid ListBoxItem:selected Border.fileTile">
         <Setter Property="BorderBrush" Value="{DynamicResource HelixFocusBorderBrush}" />
         <Setter Property="BorderThickness" Value="2" />
+    </Style>
+
+    <!-- Text fields use Helix accent brushes so the omnibar, filter/search boxes, rename editors,
+         and the command palette match the row/chrome selection instead of the Windows accent. -->
+    <Style Selector="TextBox">
+        <Setter Property="SelectionBrush" Value="{DynamicResource HelixSelectionFillBrush}" />
+    </Style>
+    <Style Selector="TextBox:focus /template/ Border#PART_BorderElement, TextBox:focus-within /template/ Border#PART_BorderElement">
+        <Setter Property="BorderBrush" Value="{DynamicResource HelixFocusBorderBrush}" />
+    </Style>
+
+    <!-- Path suggestions and the command palette have no local item styles, so they would
+         otherwise keep Fluent's Windows-accent ListBoxItem selection colour. -->
+    <Style Selector="ListBox#SuggestionList ListBoxItem:pointerover:not(:selected) /template/ ContentPresenter, ListBox#ResultsList ListBoxItem:pointerover:not(:selected) /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource HelixHoverBrush}" />
+    </Style>
+    <Style Selector="ListBox#SuggestionList ListBoxItem:selected /template/ ContentPresenter, ListBox#ResultsList ListBoxItem:selected /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource HelixSelectionFillBrush}" />
+    </Style>
+    <Style Selector="ListBox#SuggestionList ListBoxItem:selected:pointerover /template/ ContentPresenter, ListBox#ResultsList ListBoxItem:selected:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource HelixSelectionFillBrush}" />
+    </Style>
+    <Style Selector="ListBox#SuggestionList ListBoxItem:selected:focus /template/ ContentPresenter, ListBox#ResultsList ListBoxItem:selected:focus /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource HelixSelectionFillBrush}" />
     </Style>
 
     <!-- Title colour itself meets 4.5:1; the inactive chip may keep its structural opacity. -->

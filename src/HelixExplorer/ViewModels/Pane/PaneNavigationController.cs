@@ -1,5 +1,6 @@
 using HelixExplorer.Core.Archives;
 using HelixExplorer.Core.FileSystem;
+using HelixExplorer.Core.Models;
 
 namespace HelixExplorer.ViewModels.Pane;
 
@@ -174,6 +175,17 @@ public sealed class PaneNavigationController(IFileSystemProvider fileSystem, IAr
             return parent is null
                 ? currentPath
                 : EnsureTrailingSeparator(parent.FullName);
+        }
+
+        // Relative paths like "subfolder" or "..\sibling" resolve against the current folder,
+        // not the process working directory.
+        if (!Path.IsPathRooted(path)
+            && !string.IsNullOrEmpty(currentPath)
+            && currentPath != PaneConstants.HomeRoute
+            && !ArchivePath.IsVirtual(currentPath)
+            && !ShellPath.IsShellPath(currentPath))
+        {
+            path = Path.Combine(currentPath, path);
         }
 
         var resolved = fileSystem.ResolvePath(path);

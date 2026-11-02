@@ -296,6 +296,22 @@ public class PaneNavigationControllerTests
     }
 
     [Fact]
+    public void ResolveDestination_shouldResolveAgainstTheCurrentFolder_whenThePathIsRelative()
+    {
+        var navigation = CreateController();
+
+        navigation.ResolveDestination("docs", @"C:\Work\").Must().Be(@"C:\Work\docs\");
+    }
+
+    [Fact]
+    public void ResolveDestination_shouldKeepAnAbsolutePath_whenThePathIsRooted()
+    {
+        var navigation = CreateController();
+
+        navigation.ResolveDestination(@"D:\Other", @"C:\Work\").Must().Be(@"D:\Other\");
+    }
+
+    [Fact]
     public void RecordForward_EnablesBackNavigation()
     {
         var navigation = new PaneNavigationController(new FakeFileSystem(), new FakeArchive());

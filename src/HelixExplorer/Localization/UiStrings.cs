@@ -99,6 +99,10 @@ public static class UiStrings
 
     public static string FolderColorCleared(string name) => $"Cleared color for {name}";
 
+    public static string PathIsNotADirectory => "The path is not a directory";
+
+    public static string FolderNotFound => "The folder could not be found";
+
     public static string NoItemsCopied => "No items copied";
 
     public static string NetworkDiscoveryBanner => "Discovering network shares…";

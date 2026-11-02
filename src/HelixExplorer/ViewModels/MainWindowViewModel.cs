@@ -1154,8 +1154,7 @@ public partial class MainWindowViewModel : ObservableObject, IDisposable, INetwo
 
     private bool CanEditPath()
         => !TextInputFocus.IsActive()
-           && ActivePane is { IsHome: false }
-           && !string.IsNullOrEmpty(ActivePane.CurrentPath);
+           && ActivePane is not null;
 
     [RelayCommand(CanExecute = nameof(CanEditPath))]
     private void EditPath()

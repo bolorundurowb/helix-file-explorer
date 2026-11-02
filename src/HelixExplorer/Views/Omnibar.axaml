@@ -30,7 +30,8 @@
                         VerticalAlignment="Center"
                         HorizontalAlignment="Stretch"
                         Background="{DynamicResource HelixContentCardBrush}"
-                        Margin="4,0">
+                        Margin="4,0"
+                        PointerPressed="OnBreadcrumbAreaPressed">
                 <PathIcon Data="{DynamicResource HelixHomeIconGeometry}"
                           Width="16" Height="16"
                           Foreground="{DynamicResource HelixAccentBrush}" />
@@ -42,10 +43,11 @@
             <TextBox x:Name="PathBox"
                      IsVisible="{Binding IsEditingPath}"
                      Text="{Binding EditablePath}"
-                     VerticalAlignment="Stretch"
+                     VerticalAlignment="Center"
                      BorderThickness="0"
                      Background="{DynamicResource HelixContentCardBrush}"
                      Padding="4,0"
+                     VerticalContentAlignment="Center"
                      LostFocus="OnPathBoxLostFocus"
                      TextChanged="OnPathBoxTextChanged"
                      PlaceholderText="Type a path and press Enter…" />
@@ -73,6 +75,7 @@
                          Background="Transparent"
                          Padding="0"
                          VerticalAlignment="Center"
+                         VerticalContentAlignment="Center"
                          KeyDown="OnSearchBoxKeyDown"
                          LostFocus="OnSearchBoxLostFocus" />
             </Grid>
@@ -100,6 +103,7 @@
                          Background="Transparent"
                          Padding="0"
                          VerticalAlignment="Center"
+                         VerticalContentAlignment="Center"
                          KeyDown="OnSearchBoxKeyDown"
                          LostFocus="OnSearchBoxLostFocus" />
             </Grid>

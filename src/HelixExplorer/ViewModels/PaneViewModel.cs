@@ -1267,7 +1267,55 @@ public sealed partial class PaneViewModel :
         if (NetworkPath.IsUnc(target))
             target = NetworkPath.Normalize(target);
 
+        // A local path that is not a folder stays on the current location and uses the unavailable
+        // state. An empty listing would look like a real folder. UNC, shell, and archive paths keep
+        // their existing navigation.
+        if (!ShellPath.IsShellPath(target)
+            && !ArchivePath.IsVirtual(target)
+            && !NetworkPath.IsUnc(target))
+        {
+            try
+            {
+                var localTarget = target;
+                if (!Path.IsPathRooted(localTarget))
+                {
+                    if (IsHome
+                        || string.IsNullOrEmpty(CurrentPath)
+                        || CurrentPath == PaneConstants.HomeRoute)
+                    {
+                        ShowUnavailablePath(UiStrings.FolderNotFound);
+                        return;
+                    }
+
+                    localTarget = Path.Combine(CurrentPath, localTarget);
+                }
+
+                var resolved = _fileSystem.ResolvePath(localTarget);
+                if (!_archive.IsArchiveFile(resolved) && !_fileSystem.DirectoryExists(resolved))
+                {
+                    var message = _fileSystem.FileExists(resolved)
+                        ? UiStrings.PathIsNotADirectory
+                        : UiStrings.FolderNotFound;
+                    ShowUnavailablePath(message);
+                    return;
+                }
+            }
+            catch
+            {
+                ShowUnavailablePath(UiStrings.FolderNotFound);
+                return;
+            }
+        }
+
         NavigateTo(target);
+    }
+
+    private void ShowUnavailablePath(string message)
+    {
+        _refreshFaultMessage = message;
+        _refreshFaultAccessDenied = false;
+        UpdateContentPresentation();
+        StatusText = message;
     }
 
     public void CancelEditablePath()

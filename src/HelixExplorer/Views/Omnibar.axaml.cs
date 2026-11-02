@@ -205,8 +205,17 @@ public sealed partial class Omnibar : UserControl
 
     private void OnBreadcrumbAreaPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (e.Source == BreadcrumbHost || e.Source == BreadcrumbScroll)
-            BeginEditPath();
+        // Clicking a breadcrumb segment or its chevron must keep its own navigation/flyout behaviour.
+        // Any other press in the address bar (empty scroll area, padding, or the Home label) enters
+        // path edit mode.
+        if (_pane is null || _pane.IsEditingPath)
+            return;
+
+        if (FindCrumb(e.Source) is not null)
+            return;
+
+        BeginEditPath();
+        e.Handled = true;
     }
 
     private void OnPathBoxKeyDown(object? sender, KeyEventArgs e)

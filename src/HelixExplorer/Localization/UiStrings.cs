@@ -99,6 +99,12 @@ public static class UiStrings
 
     public static string FolderColorCleared(string name) => $"Cleared color for {name}";
 
+    public static string FolderIconChanged(string name) => $"Set icon for {name}";
+
+    public static string FolderIconCleared(string name) => $"Cleared icon for {name}";
+
+    public static string SetFolderIconFailed => "Could not set folder icon";
+
     public static string NoItemsCopied => "No items copied";
 
     public static string NetworkDiscoveryBanner => "Discovering network shares…";

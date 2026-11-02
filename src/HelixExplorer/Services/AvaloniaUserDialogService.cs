@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using HelixExplorer.Core.Formatting;
 using HelixExplorer.Core.Infrastructure;
@@ -50,6 +51,9 @@ public sealed class AvaloniaUserDialogService(
 
     public Task<FileConflictResolution?> ResolveConflictAsync(FileConflictInfo conflict, bool canApplyToAll)
         => RunOnUiAsync(() => ShowConflictAsync(conflict, canApplyToAll));
+
+    public Task<string?> PickFolderIconAsync(CancellationToken cancellationToken = default)
+        => RunOnUiAsync(() => ShowPickFolderIconAsync(cancellationToken));
 
     private static async Task RunOnUiAsync(Func<Task> action)
     {
@@ -289,6 +293,39 @@ public sealed class AvaloniaUserDialogService(
         var trimmed = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         var name = Path.GetFileName(trimmed);
         return string.IsNullOrEmpty(name) ? path : name;
+    }
+
+    private async Task<string?> ShowPickFolderIconAsync(CancellationToken cancellationToken)
+    {
+        var owner = GetOwnerWindow();
+        if (owner is null)
+            return null;
+
+        var storage = owner.StorageProvider;
+        if (storage is null)
+            return null;
+
+        var options = new FilePickerOpenOptions
+        {
+            Title = "Choose a folder icon",
+            AllowMultiple = false,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("Images")
+                {
+                    Patterns = ["*.png", "*.jpg", "*.jpeg", "*.bmp", "*.ico", "*.webp"],
+                    AppleUniformTypeIdentifiers = ["public.image"],
+                    MimeTypes = ["image/*"]
+                }
+            ]
+        };
+
+        var files = await storage.OpenFilePickerAsync(options).ConfigureAwait(true);
+        if (files.Count == 0)
+            return null;
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return files[0].TryGetLocalPath();
     }
 
     private static Window BuildDialog(Window? owner, string title, double width)

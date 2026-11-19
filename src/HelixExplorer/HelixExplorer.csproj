@@ -41,6 +41,7 @@
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\Fonts\**\*.ttf" />
+    <None Update="Assets\Fonts\Figtree\OFL.txt" CopyToPublishDirectory="PreserveNewest" />
     <AvaloniaResource Include="..\..\assets\helix-explorer-icon.png" Link="Assets\helix-explorer-icon.png" />
     <AvaloniaResource Include="..\..\assets\helix-explorer-icon-dev.png" Link="Assets\helix-explorer-icon-dev.png" />
   </ItemGroup>

@@ -17,6 +17,9 @@ public sealed class UiFontFamilyJsonConverter : JsonConverter<UiFontFamily>
 
         var name = reader.GetString();
 
+        if (string.Equals(name, "SourceSans3", StringComparison.OrdinalIgnoreCase))
+            return UiFontFamily.Figtree;
+
         // Enum.TryParse also accepts numeric strings, which would resolve to an ordinal that no
         // longer identifies the same font, so only defined member names are accepted.
         if (string.IsNullOrEmpty(name) || char.IsAsciiDigit(name[0]))

@@ -13,8 +13,8 @@ public class UiFontCatalogTests
         UiFontCatalog.Options[0].Label.Must().Be("System default");
         UiFontCatalog.Options[1].Value.Must().Be(UiFontFamily.Inter);
         UiFontCatalog.Options[1].Label.Must().Be("Inter");
-        UiFontCatalog.Options[2].Value.Must().Be(UiFontFamily.SourceSans3);
-        UiFontCatalog.Options[2].Label.Must().Be("Source Sans 3");
+        UiFontCatalog.Options[2].Value.Must().Be(UiFontFamily.Figtree);
+        UiFontCatalog.Options[2].Label.Must().Be("Figtree");
         UiFontCatalog.Options[3].Value.Must().Be(UiFontFamily.IbmPlexSans);
         UiFontCatalog.Options[3].Label.Must().Be("IBM Plex Sans");
         UiFontCatalog.Options[4].Value.Must().Be(UiFontFamily.GeistSans);
@@ -36,7 +36,7 @@ public class UiFontCatalogTests
 
     [Theory]
     [InlineData(UiFontFamily.Inter, "fonts:Inter#Inter")]
-    [InlineData(UiFontFamily.SourceSans3, "fonts:HelixSourceSans#Source Sans 3")]
+    [InlineData(UiFontFamily.Figtree, "fonts:HelixFigtree#Figtree")]
     [InlineData(UiFontFamily.IbmPlexSans, "fonts:HelixPlex#IBM Plex Sans")]
     [InlineData(UiFontFamily.GeistSans, "fonts:HelixGeist#Geist")]
     public void ResolveFontFamilySource_shouldReturnTheBundledCollection_whenTheFontIsNotSystem(

@@ -8,12 +8,20 @@ public class UiFontFamilyJsonConverterTests
     [Theory]
     [InlineData("\"System\"", UiFontFamily.System)]
     [InlineData("\"Inter\"", UiFontFamily.Inter)]
-    [InlineData("\"SourceSans3\"", UiFontFamily.SourceSans3)]
+    [InlineData("\"Figtree\"", UiFontFamily.Figtree)]
     [InlineData("\"IbmPlexSans\"", UiFontFamily.IbmPlexSans)]
     [InlineData("\"GeistSans\"", UiFontFamily.GeistSans)]
     public void Read_shouldReturnTheStoredFont_whenTheNameIsStillInTheCatalog(string json, UiFontFamily expected)
     {
         JsonSerializer.Deserialize<UiFontFamily>(json).Must().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("\"SourceSans3\"")]
+    [InlineData("\"sourcesans3\"")]
+    public void Read_shouldReturnFigtree_whenTheStoredFontIsSourceSans3(string json)
+    {
+        JsonSerializer.Deserialize<UiFontFamily>(json).Must().Be(UiFontFamily.Figtree);
     }
 
     [Theory]

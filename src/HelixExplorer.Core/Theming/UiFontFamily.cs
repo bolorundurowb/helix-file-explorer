@@ -7,7 +7,7 @@ public enum UiFontFamily
 {
     System,
     Inter,
-    SourceSans3,
+    Figtree,
     IbmPlexSans,
     GeistSans
 }

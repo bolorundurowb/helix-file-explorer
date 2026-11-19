@@ -39,12 +39,12 @@ public class AppSettingsTests
     }
 
     [Fact]
-    public void JsonRoundTrip_PreservesChromePreferences()
+    public void JsonRoundTrip_shouldPreserveChromePreferences()
     {
         var original = new AppSettings
         {
             Theme = ThemeMode.Dark,
-            UiFont = UiFontFamily.SourceSans3,
+            UiFont = UiFontFamily.Figtree,
             SidebarWidth = 280,
             SizeDisplay = SizeDisplayMode.Decimal,
             ShowHiddenFiles = true,
@@ -71,7 +71,7 @@ public class AppSettingsTests
 
         loaded!.Must().NotBeNull();
         loaded!.Theme.Must().Be(ThemeMode.Dark);
-        loaded!.UiFont.Must().Be(UiFontFamily.SourceSans3);
+        loaded!.UiFont.Must().Be(UiFontFamily.Figtree);
         loaded!.SidebarWidth.Must().Be(280);
         loaded!.SizeDisplay.Must().Be(SizeDisplayMode.Decimal);
         loaded!.ShowHiddenFiles.Must().BeTrue();

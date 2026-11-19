@@ -33,8 +33,8 @@ internal static class Program
             .ConfigureFonts(fonts =>
             {
                 fonts.AddFontCollection(new EmbeddedFontCollection(
-                    new Uri("fonts:HelixSourceSans", UriKind.Absolute),
-                    new Uri("avares://HelixExplorer/Assets/Fonts/SourceSans3", UriKind.Absolute)));
+                    new Uri("fonts:HelixFigtree", UriKind.Absolute),
+                    new Uri("avares://HelixExplorer/Assets/Fonts/Figtree", UriKind.Absolute)));
                 fonts.AddFontCollection(new EmbeddedFontCollection(
                     new Uri("fonts:HelixPlex", UriKind.Absolute),
                     new Uri("avares://HelixExplorer/Assets/Fonts/IBMPlexSans", UriKind.Absolute)));

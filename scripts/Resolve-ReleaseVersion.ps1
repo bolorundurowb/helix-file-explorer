@@ -52,7 +52,7 @@ Set-StrictMode -Version Latest
 # Leading zeros are rejected on purpose: Helix Explorer has never produced a
 # version like "01.4.3", and silently coercing one would hide a typo in
 # Directory.Build.props instead of failing the run.
-$script:VersionPattern = '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-preview\.([1-9]\d*))?$'
+$script:VersionPattern = '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-preview\.(0|[1-9]\d*))?$'
 
 function ConvertFrom-HelixVersion {
     param([Parameter(Mandatory)][string]$Value)

@@ -7,11 +7,12 @@ public sealed class HelixVersionTests
     [Theory]
     [InlineData("1.4.3", 1, 4, 3, null)]
     [InlineData("0.0.0", 0, 0, 0, null)]
+    [InlineData("2.0.2-preview.0", 2, 0, 2, 0)]
     [InlineData("1.4.4-preview.1", 1, 4, 4, 1)]
     [InlineData("1.4.4-preview.12", 1, 4, 4, 12)]
     [InlineData("v1.4.3", 1, 4, 3, null)]
     [InlineData("V1.4.3", 1, 4, 3, null)]
-    public void TryParse_ValidVersion_ParsesComponents(
+    public void TryParse_shouldParseComponents_whenTheVersionIsValid(
         string value, int major, int minor, int patch, int? preview)
     {
         var parsed = HelixVersion.TryParse(value, out var version);
@@ -34,11 +35,11 @@ public sealed class HelixVersionTests
     [InlineData("1.04.3")]
     [InlineData("1.4.03")]
     [InlineData("1.4.3-preview")]
-    [InlineData("1.4.3-preview.0")]
+    [InlineData("1.4.3-preview.00")]
     [InlineData("1.4.3-preview.01")]
     [InlineData("1.4.3-alpha.1")]
     [InlineData("not-a-version")]
-    public void TryParse_InvalidVersion_ReturnsFalse(string? value)
+    public void TryParse_shouldReturnFalse_whenTheVersionIsInvalid(string? value)
     {
         var parsed = HelixVersion.TryParse(value, out _);
 

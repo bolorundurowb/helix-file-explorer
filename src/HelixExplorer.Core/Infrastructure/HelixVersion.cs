@@ -15,7 +15,7 @@ public readonly struct HelixVersion : IComparable<HelixVersion>, IEquatable<Heli
     // validation: this project has never published "01.4.3", so silently coercing one
     // would hide a typo rather than surface it.
     private static readonly Regex Pattern = new(
-        @"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-preview\.([1-9]\d*))?$",
+        @"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-preview\.(0|[1-9]\d*))?$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     public int Major { get; }

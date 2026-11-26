@@ -3,6 +3,8 @@ namespace HelixExplorer.Localization;
 /// <summary>Single table of user-facing strings for localization review.</summary>
 public static class UiStrings
 {
+    public static string PreviewBuildLabel => "Preview";
+
     public static string ClipboardHasNoFiles => "Clipboard has no files";
 
     public static string PasteFailed => "Paste failed";

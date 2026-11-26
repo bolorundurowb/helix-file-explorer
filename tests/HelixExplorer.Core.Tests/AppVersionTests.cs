@@ -63,13 +63,14 @@ public sealed class AppVersionTests
     }
 
     [Theory]
+    [InlineData("2.0.2-preview.0", true)]
     [InlineData("1.4.4-preview.3", true)]
     [InlineData("1.4.4-preview.1", true)]
     [InlineData("1.4.4", false)]
     [InlineData("0.0.0", false)]
     [InlineData("not-a-version", false)]
     [InlineData("", false)]
-    public void IsPreviewVersion_TrueOnlyForPreviewSuffix(string version, bool expected)
+    public void IsPreviewVersion_shouldRecognisePreviewVersions(string version, bool expected)
     {
         AppVersion.IsPreviewVersion(version).Must().Be(expected);
     }

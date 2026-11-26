@@ -1802,7 +1802,7 @@ public sealed partial class PaneView : UserControl
             return;
 
         editor.Focus();
-        var length = PaneViewModel.GetRenameBaseNameLength(editor.Text ?? string.Empty, entry.IsDirectory);
+        var length = PaneViewModel.GetRenameBaseNameLength(entry.Name, entry.IsDirectory);
         editor.SelectionStart = 0;
         editor.SelectionEnd = length;
         editor.BringIntoView();

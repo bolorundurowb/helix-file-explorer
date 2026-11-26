@@ -13,18 +13,21 @@ public interface IPaneInlineRenameHost
 public sealed class PaneInlineRenameCoordinator(PaneFileOperationCoordinator fileOperations)
 {
     private EntryItemViewModel? _entry;
+    private string _hiddenExtension = string.Empty;
     private bool _isCommitting;
 
     public void Begin(IPaneInlineRenameHost host)
     {
-        if (host.SelectedEntries.Count != 1)
+        if (_isCommitting || host.SelectedEntries.Count != 1)
             return;
 
         var entry = host.SelectedEntries[0];
         Clear(host);
         _entry = entry;
-        entry.RenameText = entry.Name;
-        host.RenameText = entry.Name;
+        var displayName = entry.DisplayName;
+        _hiddenExtension = entry.Name[displayName.Length..];
+        entry.RenameText = displayName;
+        host.RenameText = displayName;
         entry.IsRenaming = true;
         host.IsRenaming = true;
     }
@@ -42,7 +45,14 @@ public sealed class PaneInlineRenameCoordinator(PaneFileOperationCoordinator fil
 
         var entry = _entry;
         var newName = entry.RenameText.Trim();
-        if (string.IsNullOrWhiteSpace(newName) || newName == entry.Name)
+        if (string.IsNullOrWhiteSpace(newName))
+        {
+            Clear(host);
+            return;
+        }
+
+        newName += _hiddenExtension;
+        if (newName == entry.Name)
         {
             Clear(host);
             return;
@@ -70,6 +80,7 @@ public sealed class PaneInlineRenameCoordinator(PaneFileOperationCoordinator fil
         // Clearing the host before the entry prevents LostFocus from re-entering commit with stale state.
         var entry = _entry;
         _entry = null;
+        _hiddenExtension = string.Empty;
         host.IsRenaming = false;
         host.RenameText = string.Empty;
 

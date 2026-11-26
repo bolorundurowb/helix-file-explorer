@@ -55,21 +55,32 @@ public class PaneThumbnailCoordinatorTests
     }
 }
 
-public class PaneInlineRenameCoordinatorTests
+public sealed class PaneInlineRenameCoordinatorTests
 {
-    [Fact]
-    public void BeginAndClear_KeepPaneAndEntryStateInSync()
+    [Theory]
+    [InlineData(true, "document.txt")]
+    [InlineData(false, "document")]
+    public void Begin_shouldUseTheDisplayedName(bool showFileExtensions, string expectedName)
     {
-        var entry = CreateEntry();
+        var entry = CreateEntry(showFileExtensions);
         var host = new RenameHost([entry]);
         var coordinator = new PaneInlineRenameCoordinator(null!);
 
         coordinator.Begin(host);
 
         host.IsRenaming.Must().BeTrue();
-        host.RenameText.Must().Be(entry.Name);
+        host.RenameText.Must().Be(expectedName);
         entry.IsRenaming.Must().BeTrue();
-        entry.RenameText.Must().Be(entry.Name);
+        entry.RenameText.Must().Be(expectedName);
+    }
+
+    [Fact]
+    public void Clear_shouldResetBothPaneAndEntryState()
+    {
+        var entry = CreateEntry();
+        var host = new RenameHost([entry]);
+        var coordinator = new PaneInlineRenameCoordinator(null!);
+        coordinator.Begin(host);
 
         coordinator.Clear(host);
 
@@ -94,7 +105,21 @@ public class PaneInlineRenameCoordinatorTests
         entry.IsRenaming.Must().BeFalse();
     }
 
-    private static EntryItemViewModel CreateEntry()
+    [Fact]
+    public async Task CommitAsync_shouldSkipRename_whenTheNameWithHiddenExtensionIsUnchanged()
+    {
+        var entry = CreateEntry(showFileExtensions: false);
+        var host = new RenameHost([entry]);
+        var coordinator = new PaneInlineRenameCoordinator(null!);
+        coordinator.Begin(host);
+
+        await coordinator.CommitAsync(host);
+
+        host.IsRenaming.Must().BeFalse();
+        entry.IsRenaming.Must().BeFalse();
+    }
+
+    private static EntryItemViewModel CreateEntry(bool showFileExtensions = true)
         => new(
             new FileSystemEntry(
                 @"C:\folder\document.txt",
@@ -103,7 +128,7 @@ public class PaneInlineRenameCoordinatorTests
                 10,
                 DateTime.UtcNow,
                 ".txt"),
-            showFileExtensions: true);
+            showFileExtensions);
 
     private sealed class RenameHost(IReadOnlyList<EntryItemViewModel> entries) : IPaneInlineRenameHost
     {

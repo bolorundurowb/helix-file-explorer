@@ -376,12 +376,31 @@ public sealed class PaneFileOperationCoordinator(
     public async Task RenameAsync(
         string oldPath,
         string newName,
+        bool isDirectory,
         Func<Task> refreshAsync,
         Action onClearRename,
         Action<string> setStatusText)
     {
         try
         {
+            var oldName = Path.GetFileName(oldPath);
+            if (!isDirectory && !string.Equals(
+                    Path.GetExtension(oldName),
+                    Path.GetExtension(newName),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                var confirmed = await dialogs.ConfirmAsync(
+                    UiStrings.ChangeFileExtension,
+                    UiStrings.ConfirmFileExtensionChange(oldName, newName),
+                    confirmLabel: UiStrings.ConfirmRename,
+                    destructive: true).ConfigureAwait(true);
+                if (!confirmed)
+                {
+                    onClearRename();
+                    return;
+                }
+            }
+
             var result = await fileOps.RenameAsync(oldPath, newName).ConfigureAwait(true);
             if (result.Failed > 0)
             {

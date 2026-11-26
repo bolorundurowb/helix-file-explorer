@@ -65,6 +65,7 @@ public sealed class PaneInlineRenameCoordinator(PaneFileOperationCoordinator fil
             await fileOperations.RenameAsync(
                 oldPath,
                 newName,
+                entry.IsDirectory,
                 refreshAsync: () => host.RefreshAfterRenameAsync(oldPath),
                 onClearRename: () => Clear(host),
                 setStatusText: text => host.StatusText = text).ConfigureAwait(true);

@@ -362,7 +362,7 @@
                             <Grid ColumnDefinitions="Auto,*"
                                   VerticalAlignment="Center"
                                   Opacity="{Binding IsCut, Converter={StaticResource CutOpacityConverter}}"
-                                  ToolTip.Tip="{Binding Name}">
+                                  ToolTip.Tip="{Binding DisplayName}">
                                 <Border IsVisible="{Binding IsDropTarget}"
                                         BorderBrush="{DynamicResource HelixAccentBrush}"
                                         BorderThickness="2"
@@ -505,7 +505,7 @@
                 <DataTemplate x:DataType="vm:EntryItemViewModel">
                     <Grid ColumnDefinitions="Auto,*"
                           Opacity="{Binding IsCut, Converter={StaticResource CutOpacityConverter}}"
-                          ToolTip.Tip="{Binding Name}">
+                          ToolTip.Tip="{Binding DisplayName}">
                         <Border IsVisible="{Binding IsDropTarget}"
                                 BorderBrush="{DynamicResource HelixAccentBrush}"
                                 BorderThickness="1"
@@ -675,7 +675,7 @@
                                           Foreground="{DynamicResource HelixAccentBrush}"
                                           IsVisible="{Binding IsSelected}"
                                           IsHitTestVisible="False" />
-                                <StackPanel Margin="4" Spacing="4" ToolTip.Tip="{Binding Name}"
+                                <StackPanel Margin="4" Spacing="4" ToolTip.Tip="{Binding DisplayName}"
                                             Opacity="{Binding IsCut, Converter={StaticResource CutOpacityConverter}}">
                                 <controls:EntryVisualView Width="{Binding ItemSize, RelativeSource={RelativeSource AncestorType=controls:VirtualizingFileGrid}}"
                                                           Height="{Binding ItemSize, RelativeSource={RelativeSource AncestorType=controls:VirtualizingFileGrid}}"

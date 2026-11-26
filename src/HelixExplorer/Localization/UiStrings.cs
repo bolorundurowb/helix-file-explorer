@@ -20,6 +20,8 @@ public static class UiStrings
     public static string RenameFailed => "Rename failed";
     public static string ChangeFileExtension => "Change file extension?";
     public static string ConfirmRename => "Rename";
+    public static string FileHoverSize(string size) => $"Size: {size}";
+    public static string FileHoverModified(string modified) => $"Date modified: {modified}";
     public static string ConfirmFileExtensionChange(string oldName, string newName)
         => $"Renaming ‘{oldName}’ to ‘{newName}’ changes its file extension. The file may no longer open as expected.";
 

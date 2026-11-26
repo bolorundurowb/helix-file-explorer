@@ -1,8 +1,13 @@
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using HelixExplorer.Core.FileSystem;
+using HelixExplorer.Core.Formatting;
 using HelixExplorer.Core.Git;
 using HelixExplorer.Core.Models;
+using HelixExplorer.Core.Settings;
+using HelixExplorer.Localization;
 using HelixExplorer.Services;
+using HelixExplorer.ViewModels.Pane;
 using Avalonia.Media.Imaging;
 
 namespace HelixExplorer.ViewModels;
@@ -36,6 +41,23 @@ public sealed partial class EntryItemViewModel : ObservableObject
 
     public string Name => _entry.Name;
     public string DisplayName => EntryDisplayName.Format(_entry, _showFileExtensions);
+    public string HoverText
+    {
+        get
+        {
+            var text = DisplayName;
+            var size = FileSizeFormatter.Format(SizeBytes, SizeDisplayMode.Binary, IsDirectory);
+            if (size.Length > 0)
+                text += $"\n{UiStrings.FileHoverSize(size)}";
+
+            var modified = PanePresentation.FormatModifiedTooltip(
+                ModifiedUtc, TimeZoneInfo.Local, CultureInfo.CurrentCulture);
+            if (modified.Length > 0)
+                text += $"\n{UiStrings.FileHoverModified(modified)}";
+
+            return text;
+        }
+    }
     public bool IsDirectory => _entry.IsDirectory;
     public long SizeBytes => _entry.SizeBytes;
     public DateTime ModifiedUtc => _entry.ModifiedUtc;
@@ -60,6 +82,7 @@ public sealed partial class EntryItemViewModel : ObservableObject
 
         OnPropertyChanged(nameof(Name));
         OnPropertyChanged(nameof(DisplayName));
+        OnPropertyChanged(nameof(HoverText));
         OnPropertyChanged(nameof(IsDirectory));
         OnPropertyChanged(nameof(SizeBytes));
         OnPropertyChanged(nameof(ModifiedUtc));
@@ -78,6 +101,7 @@ public sealed partial class EntryItemViewModel : ObservableObject
 
         _showFileExtensions = showFileExtensions;
         OnPropertyChanged(nameof(DisplayName));
+        OnPropertyChanged(nameof(HoverText));
     }
 
     [ObservableProperty]

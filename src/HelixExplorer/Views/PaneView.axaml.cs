@@ -115,7 +115,12 @@ public sealed partial class PaneView : UserControl
         Grid.SetColumn(letter, 1);
         Grid.SetColumn(name, 2);
 
-        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("28,Auto,*") };
+        var row = new Grid
+        {
+            DataContext = item,
+            ColumnDefinitions = new ColumnDefinitions("28,Auto,*"),
+            [!ToolTip.TipProperty] = new Binding(nameof(EntryItemViewModel.HoverText))
+        };
         row.Children.Add(icon);
         row.Children.Add(letter);
         row.Children.Add(name);

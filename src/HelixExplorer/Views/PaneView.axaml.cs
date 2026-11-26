@@ -158,6 +158,8 @@ public sealed partial class PaneView : UserControl
         // clicks without handledEventsToo — arm marquee/clear here instead.
         GridView.AddHandler(PointerPressedEvent, OnGridBlankPointerPressed, RoutingStrategies.Bubble, handledEventsToo: true);
         AddHandler(PointerPressedEvent, OnBlankAreaPointerPressed, RoutingStrategies.Bubble, handledEventsToo: true);
+        AddHandler(PointerPressedEvent, OnGridRenamePointerPressed, RoutingStrategies.Tunnel);
+        AddHandler(KeyDownEvent, OnRenameEscape, RoutingStrategies.Tunnel);
 
         // TextInput is a bubble-only routed event, so this cannot be a tunnel handler. handledEventsToo
         // makes it run even when a list control already applied its own built-in text search, and the
@@ -484,10 +486,6 @@ public sealed partial class PaneView : UserControl
                 Pane.CommitRenameCommand.Execute(null);
                 e.Handled = true;
                 break;
-            case RenameKeyAction.Cancel:
-                Pane.CancelRenameCommand.Execute(null);
-                e.Handled = true;
-                break;
             case RenameKeyAction.Contain:
                 // The TextBox has already moved the caret via its own class handler; mark the event
                 // handled so it does not bubble to the list and change the item selection.
@@ -504,14 +502,27 @@ public sealed partial class PaneView : UserControl
 
     private void OnRenameTextBoxLostFocus(object? sender, RoutedEventArgs e)
     {
-        if (_pane?.IsRenaming != true)
+        if (_pane?.IsRenaming == true &&
+            sender is TextBox { DataContext: EntryItemViewModel { IsRenaming: true } })
+            _pane.CommitRenameCommand.Execute(null);
+    }
+
+    private void OnGridRenamePointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        // Grid tiles can handle presses without transferring focus, so LostFocus alone cannot finish editing.
+        if (Pane is { IsGridView: true, IsRenaming: true } pane &&
+            !IsTextBoxSource(e.Source) && TryGetEntryFromSource(e.Source) is null)
+            pane.CommitRenameCommand.Execute(null);
+    }
+
+    private void OnRenameEscape(object? sender, KeyEventArgs e)
+    {
+        if (Pane is not { IsRenaming: true } pane ||
+            RenameKeyGesture.Resolve(e.Key, e.KeyModifiers) != RenameKeyAction.Cancel)
             return;
 
-        var entry = _pane.Entries.FirstOrDefault(x => x.IsRenaming);
-        if (entry is not null && string.IsNullOrWhiteSpace(entry.RenameText))
-            _pane.CancelRenameCommand.Execute(null);
-        else
-            _pane.CommitRenameCommand.Execute(null);
+        pane.CancelRenameCommand.Execute(null);
+        e.Handled = true;
     }
 
     private void OnPaneKeyDown(object? sender, KeyEventArgs e)
@@ -545,11 +556,6 @@ public sealed partial class PaneView : UserControl
         else if (e.Key == Key.Escape && (Pane.IsFilterMode || Pane.IsSearchMode))
         {
             Pane.ClearFilter();
-            e.Handled = true;
-        }
-        else if (e.Key == Key.Escape && Pane.IsRenaming)
-        {
-            Pane.CancelRenameCommand.Execute(null);
             e.Handled = true;
         }
         else if (e.Key == Key.Escape && Pane.SelectedCount > 0)
@@ -879,6 +885,10 @@ public sealed partial class PaneView : UserControl
         if (Pane is null || TryGetEntryFromSource(sender) is not { } entry)
             return;
 
+        var wasRenaming = Pane.IsRenaming;
+        if (wasRenaming)
+            Pane.CommitRenameCommand.Execute(null);
+
         if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
         {
             CancelPendingRenameClick();
@@ -918,7 +928,7 @@ public sealed partial class PaneView : UserControl
             SelectGridEntry(entry, e.KeyModifiers);
         GridView.Focus();
 
-        if (alreadySelectedAlone)
+        if (alreadySelectedAlone && !wasRenaming)
             ScheduleRenameClick(entry);
         else
             CancelPendingRenameClick();
@@ -1795,7 +1805,8 @@ public sealed partial class PaneView : UserControl
     {
         var editor = this.GetVisualDescendants()
             .OfType<TextBox>()
-            .FirstOrDefault(x => x.DataContext is EntryItemViewModel { IsRenaming: true });
+            .FirstOrDefault(x => x.IsEffectivelyVisible &&
+                                 x.DataContext is EntryItemViewModel { IsRenaming: true });
 
         if (editor is not null)
             FocusRenameEditor(editor);
@@ -1803,10 +1814,11 @@ public sealed partial class PaneView : UserControl
 
     private void FocusRenameEditor(TextBox editor)
     {
-        if (editor.DataContext is not EntryItemViewModel entry || !entry.IsRenaming)
+        if (!editor.IsEffectivelyVisible ||
+            editor.DataContext is not EntryItemViewModel { IsRenaming: true } entry ||
+            !editor.Focus())
             return;
 
-        editor.Focus();
         var length = PaneViewModel.GetRenameBaseNameLength(entry.Name, entry.IsDirectory);
         editor.SelectionStart = 0;
         editor.SelectionEnd = length;

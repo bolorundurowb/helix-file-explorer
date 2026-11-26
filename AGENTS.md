@@ -119,26 +119,34 @@ Use `AppPaths` / `AppVersion` instead of hard-coding paths. Do not write anythin
 - **Exercise the production type/method under test, not BCL mechanics or an unrelated class.** Counter-examples to avoid in `DiAndRefreshRegressionTests.cs`: `PaneRefreshCoordinatorTests` actually drives `PaneListingCoordinator`/`PathUtilities`/`CancellationTokenSource` rather than `PaneRefreshCoordinator`; `PublishGate_*` only calls `PathUtilities.PathsEqual`; `AppSettingsTests` "atomic save" cases never call `JsonSettingsStore`. Assert observable behavior of the real subject.
 - **Do not reach into production internals with reflection.** `GetInjectedReporter` reflects over a private field of `PaneFileOperationCoordinator`; use an `InternalsVisibleTo` seam or assert through public behavior instead.
 - Anything touching Avalonia objects or `Dispatcher.UIThread` must build/show/measure/arrange/dispose on the headless UI thread (`HeadlessSession.RunOnUiThread`). The real `HelixExplorer.App` is loaded via `HeadlessAppBuilder`.
+- For every user-facing UI change, capture a screenshot of the changed behaviour using Avalonia Headless with the real view and app styles. Run the scenario on the headless UI thread, use Skia with `UseHeadlessDrawing = false`, and save the PNG with `CaptureRenderedFrame()`. Check that the screenshot visibly demonstrates the change and embed it in the pull request description. Capture each relevant state when a single image cannot show the behaviour.
 - Prefer injected clocks (`Func<DateTime>`) and schedulers (`ManualStatusCentreScheduler`) over wall-clock `Task.Delay`. Do not add timing-based performance assertions to the normal suite (`FilterAndSessionTests`' 10k-filter `<500 ms` case is the counter-example to avoid).
 - When changing DI lifetimes, pane refresh, or window close behavior, update or add regression tests (`DiAndRefreshRegressionTests.cs`) and run `dotnet test`.
 
-## Commits
+## Branches and commits
 
-The subject is a single line. Take it from the current branch name (`GIT_BRANCH_NAME`):
+Start every new branch name and every commit subject with one of these prefixes:
 
-- A Jira id is a project key and number already in the branch, such as `HELIX-14` in `feature/HELIX-14-crash-log`. Use that id alone.
-- Otherwise a GitHub issue id is `#` plus the issue number: a `#123` already in the branch, or the number in `123-…`, `issue-123`, `issues/123`, or `gh-123`. The subject is `#123`.
+- `ft/` for features
+- `bg/` for bug fixes
+- `ch/` for other code changes
+- `tst/` for test-only changes
+- `doc/` for documentation
 
-When the branch has neither, start with the type of the changeset, a colon, and one short summary of the whole change. Types are `ft` (feature), `ch` (any other code change), `tst` (tests), and `doc` (documentation).
+Use a short, hyphen-separated branch name after the prefix, such as `bg/HELIX-14-crash-log`. Do not use `codex/` or any other AI tool, model, or agent name as a prefix.
 
-Leave the next line blank, then list each change in the commit on its own line:
+Write a one-line commit subject with the prefix and a short summary. If the branch contains a Jira ID or GitHub issue number, include it after the prefix, as in `bg/HELIX-14 handle crash logging failures` or `bg/#123 handle crash logging failures`.
+
+Make each commit a logical, independently reviewable chunk. Keep code and the tests that verify it together when they form one change. Split unrelated fixes, refactors, tests, or documentation into separate commits so each can be reviewed or reverted on its own.
+
+Leave a blank line after the subject, then list each change in the commit on its own line:
 
 ```
-doc: describe how commit messages are written
+doc/describe how commit messages are written
 
-- take the subject from a Jira or GitHub id on the branch
-- fall back to a type prefix and a one-line summary
-- list each change on its own line under a blank line
+- define the branch and commit prefixes
+- retain Jira and GitHub issue references in commit subjects
+- require independently reviewable commits
 ```
 
 ## Do not

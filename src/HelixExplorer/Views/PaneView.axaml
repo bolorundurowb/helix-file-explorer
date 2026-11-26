@@ -680,16 +680,16 @@
                                 <controls:EntryVisualView Width="{Binding ItemSize, RelativeSource={RelativeSource AncestorType=controls:VirtualizingFileGrid}}"
                                                           Height="{Binding ItemSize, RelativeSource={RelativeSource AncestorType=controls:VirtualizingFileGrid}}"
                                                           HorizontalAlignment="Center" />
-                                <StackPanel Orientation="Horizontal"
-                                            HorizontalAlignment="Center"
-                                            Spacing="4"
-                                            IsVisible="{Binding IsNotRenaming}">
-                                    <TextBlock Text="{Binding GitStatus, Converter={StaticResource GitStatusLetterConverter}}"
+                                <Grid ColumnDefinitions="Auto,*"
+                                      IsVisible="{Binding IsNotRenaming}">
+                                    <TextBlock Grid.Column="0"
+                                               Text="{Binding GitStatus, Converter={StaticResource GitStatusLetterConverter}}"
                                                IsVisible="{Binding GitStatus, Converter={StaticResource GitStatusBadgeVisibleConverter}}"
                                                ToolTip.Tip="{Binding GitStatus, Converter={StaticResource GitStatusTooltipConverter}}"
                                                FontWeight="SemiBold"
                                                FontSize="{DynamicResource HelixEntryFontSize}"
-                                               VerticalAlignment="Center">
+                                               VerticalAlignment="Top"
+                                               Margin="0,0,4,0">
                                         <TextBlock.Foreground>
                                             <MultiBinding Converter="{StaticResource GitFileStatusBrushConverter}">
                                                 <Binding Path="GitStatus" />
@@ -697,11 +697,12 @@
                                             </MultiBinding>
                                         </TextBlock.Foreground>
                                     </TextBlock>
-                                    <TextBlock Text="{Binding DisplayName}"
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding DisplayName}"
                                                FontSize="{DynamicResource HelixEntryFontSize}"
                                                TextAlignment="Center"
                                                TextWrapping="Wrap"
-                                               MaxLines="2"
+                                               MaxLines="4"
                                                TextTrimming="CharacterEllipsis"
                                                HorizontalAlignment="Stretch">
                                         <TextBlock.Foreground>
@@ -711,7 +712,7 @@
                                             </MultiBinding>
                                         </TextBlock.Foreground>
                                     </TextBlock>
-                                </StackPanel>
+                                </Grid>
                                 <!-- Fixed tile width, wrap downward (Explorer/Files-style) — do not grow sideways. -->
                                 <TextBox Classes="gridRenameEditor"
                                          Text="{Binding RenameText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
